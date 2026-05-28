@@ -1,0 +1,15 @@
+.DS_Store
+node_modules/
+.next/
+.vercel/
+.env
+.env*.local
+server/.data/
+*.xcuserstate
+xcuserdata/
+DerivedData/
+.build/
+.swiftpm/
+dist/
+.dev-server.pid
+.dev-server.log

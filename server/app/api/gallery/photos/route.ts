@@ -1,0 +1,44 @@
+import { v4 as uuid } from "uuid";
+import { assertSyncPassword } from "@/lib/auth";
+import { upsertPhoto } from "@/lib/gallery";
+import { buildGalleryResponse } from "@/lib/gallery-service";
+import * as storage from "@/lib/storage";
+
+export async function POST(request: Request) {
+  const auth = await assertSyncPassword(request);
+  if (auth) return auth;
+
+  const form = await request.formData();
+  const file = form.get("image");
+  const filenameField = form.get("filename");
+  if (!(file instanceof Blob)) {
+    return new Response("image required", { status: 400 });
+  }
+
+  const bytes = Buffer.from(await file.arrayBuffer());
+  if (bytes.length === 0) {
+    return new Response("empty image", { status: 400 });
+  }
+
+  const id = uuid();
+  const filename =
+    typeof filenameField === "string" && filenameField.length > 0
+      ? filenameField
+      : `${id}.jpg`;
+  const blobPath = `photos/${id}.jpg`;
+  await storage.putPhotoBytes(blobPath, bytes);
+
+  const state = await storage.readManifest();
+  const now = new Date().toISOString();
+  const next = upsertPhoto(state, {
+    id,
+    filename,
+    blobPath,
+    sizeBytes: bytes.length,
+    updatedAt: now,
+    deletedAt: null,
+  });
+  await storage.writeManifest(next);
+  const gallery = await buildGalleryResponse(request, next);
+  return Response.json(gallery, { status: 201 });
+}
