@@ -27,9 +27,10 @@ description: Work on the Gattey Photos monorepo — macOS SwiftUI app, sync serv
 ## Local verify
 
 ```bash
-./scripts/dev-local.sh
-cd macos && swift build && swift run GatteyPhotos
+make dev
 ```
+
+Node comes from **mise** (`mise.toml`), not Homebrew.
 
 ## Common tasks
 

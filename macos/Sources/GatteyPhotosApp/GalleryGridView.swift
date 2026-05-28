@@ -1,45 +1,82 @@
 import AppKit
 import GatteyPhotosCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct GalleryGridView: View {
     @EnvironmentObject private var store: GalleryStore
+    @State private var isFileDropTargeted = false
 
     private let columns = [
         GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 12),
     ]
 
+    private let fileDropTypes: [UTType] = [.jpeg, .image, .fileURL]
+
     var body: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(store.activePhotos) { photo in
-                    PhotoThumb(photo: photo, isSelected: store.selectedID == photo.id)
-                        .onTapGesture {
-                            store.selectedID = photo.id
+        ZStack {
+            ScrollView {
+                if store.activePhotos.isEmpty {
+                    ContentUnavailableView {
+                        Label("Drop photos to upload", systemImage: "photo.badge.plus")
+                    } description: {
+                        Text("JPEG images from Finder, or use Add in the toolbar.")
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 280)
+                } else {
+                    LazyVGrid(columns: columns, spacing: 12) {
+                        ForEach(store.activePhotos) { photo in
+                            PhotoThumb(photo: photo, isSelected: store.selectedID == photo.id)
+                                .onTapGesture {
+                                    store.selectedID = photo.id
+                                }
+                                .onDrag {
+                                    NSItemProvider(object: photo.id as NSString)
+                                }
+                                .onDrop(of: [.plainText], isTargeted: nil) { providers, _ in
+                                    handleReorderDrop(providers: providers, onto: photo.id)
+                                }
                         }
-                        .onDrag {
-                            NSItemProvider(object: photo.id as NSString)
-                        }
+                    }
+                    .padding()
                 }
             }
-            .padding()
+
+            if isFileDropTargeted {
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [8]))
+                    .foregroundStyle(Color.accentColor)
+                    .padding(8)
+                    .allowsHitTesting(false)
+            }
         }
-        .navigationTitle("Photos")
-        .onDrop(of: [.plainText], isTargeted: nil) { providers, _ in
-            handleDrop(providers: providers)
+        .navigationTitle("Gattey Photos")
+        .onDrop(of: fileDropTypes, isTargeted: $isFileDropTargeted) { providers, _ in
+            handleFileDrop(providers: providers)
         }
     }
 
-    private func handleDrop(providers: [NSItemProvider]) -> Bool {
+    private func handleFileDrop(providers: [NSItemProvider]) -> Bool {
+        Task { @MainActor in
+            await store.uploadFromDrop(providers: providers)
+        }
+        return true
+    }
+
+    private func handleReorderDrop(providers: [NSItemProvider], onto targetID: PhotoID) -> Bool {
         guard let provider = providers.first else { return false }
-        let targetID = store.selectedID
-        provider.loadItem(forTypeIdentifier: "public.plain-text", options: nil) { item, _ in
-            guard let data = item as? Data,
-                  let draggedID = String(data: data, encoding: .utf8),
-                  let targetID,
-                  draggedID != targetID else { return }
+        provider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { item, _ in
+            let draggedID: String? = {
+                if let data = item as? Data { return String(data: data, encoding: .utf8) }
+                if let s = item as? String { return s }
+                if let s = item as? NSString { return s as String }
+                return nil
+            }()
+            guard let draggedID, draggedID != targetID else { return }
             Task { @MainActor in
-                await store.applyOrder(reorderIDs(draggedID: draggedID, before: targetID, in: store.activePhotos.map(\.id)))
+                await store.applyOrder(
+                    reorderIDs(draggedID: draggedID, before: targetID, in: store.activePhotos.map(\.id))
+                )
             }
         }
         return true
@@ -61,7 +98,7 @@ struct PhotoThumb: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            thumbImage
+            CachedPhotoImage(photoID: photo.id, maxPixelSize: 280, contentMode: .fill)
                 .frame(height: 140)
                 .frame(maxWidth: .infinity)
                 .clipped()
@@ -76,27 +113,6 @@ struct PhotoThumb: View {
         .overlay {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 3)
-        }
-    }
-
-    @ViewBuilder
-    private var thumbImage: some View {
-        let url = AppConfig.cacheURL(for: photo.id)
-        if let nsImage = NSImage(contentsOf: url) {
-            Image(nsImage: nsImage)
-                .resizable()
-                .scaledToFill()
-        } else if let remote = photo.downloadUrl, let remoteURL = URL(string: remote) {
-            AsyncImage(url: remoteURL) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().scaledToFill()
-                default:
-                    Color.gray.opacity(0.2)
-                }
-            }
-        } else {
-            Color.gray.opacity(0.2)
         }
     }
 }

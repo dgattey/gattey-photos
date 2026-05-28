@@ -4,21 +4,20 @@ struct GallerySidebar: View {
     @EnvironmentObject private var store: GalleryStore
 
     var body: some View {
-        List(selection: $store.selectedID) {
-            Section("Shared gallery") {
-                Label("\(store.activePhotos.count) photos", systemImage: "photo.stack")
-                if store.isBusy {
-                    ProgressView()
-                        .controlSize(.small)
+        VStack(spacing: 0) {
+            List(selection: $store.selectedID) {
+                Section("Gattey Photos") {
+                    Label("\(store.activePhotos.count) photos", systemImage: "photo.stack")
                 }
             }
-            Section("Tips") {
-                Text("Drag photos in the grid to reorder.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            .listStyle(.sidebar)
+
+            ConnectionStatusPill(
+                serverStatus: store.serverLinkStatus,
+                deviceStatus: store.deviceLinkStatus
+            )
+            .padding(12)
         }
-        .listStyle(.sidebar)
         .navigationTitle("Gattey Photos")
     }
 }

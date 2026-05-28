@@ -111,12 +111,18 @@ public struct SyncClient: Sendable {
         return decoded
     }
 
+    public func imageURL(for photo: PhotoEntry) -> URL {
+        if let urlString = photo.downloadUrl, let url = URL(string: urlString) {
+            return url
+        }
+        return baseURL.appending(path: "api/gallery/photos/\(photo.id)/image")
+    }
+
     public func downloadMissing(for state: GalleryState) async throws {
         for photo in state.activePhotos() {
             let dest = AppConfig.cacheURL(for: photo.id)
             if FileManager.default.fileExists(atPath: dest.path) { continue }
-            guard let urlString = photo.downloadUrl, let url = URL(string: urlString) else { continue }
-            var req = URLRequest(url: url)
+            var req = URLRequest(url: imageURL(for: photo))
             req.setValue("Bearer \(password)", forHTTPHeaderField: "Authorization")
             let (data, res) = try await session.data(for: req)
             guard let http = res as? HTTPURLResponse, (200...299).contains(http.statusCode) else { continue }

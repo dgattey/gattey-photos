@@ -10,8 +10,10 @@ export async function buildGalleryResponse(
   const photos = await Promise.all(
     ids.map(async (id) => {
       const entry = state.photos[id]!;
-      const downloadUrl =
-        (await storage.resolveDownloadUrl(request, entry.blobPath)) ?? "";
+      const base = new URL(request.url);
+      base.pathname = `/api/gallery/photos/${entry.id}/image`;
+      base.search = "";
+      const downloadUrl = base.toString();
       return { ...entry, downloadUrl };
     })
   );

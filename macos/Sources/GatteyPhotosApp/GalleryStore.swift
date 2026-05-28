@@ -8,10 +8,13 @@ final class GalleryStore: ObservableObject {
     @Published var settings: AppSettings = AppConfig.loadSettings()
     @Published var state: GalleryState = AppConfig.loadLocalState()
     @Published var selectedID: PhotoID?
-    @Published var statusMessage: String = "Ready"
+    @Published var serverLinkStatus: LinkStatus = .down
+    @Published var deviceLinkStatus: LinkStatus = .down
     @Published var isBusy = false
+    @Published var isSyncing = false
 
     private let engine = SyncEngine()
+    private var lastServerOK: Date?
 
     var activePhotos: [PhotoEntry] {
         state.activePhotos()
@@ -22,37 +25,135 @@ final class GalleryStore: ObservableObject {
     }
 
     func saveSettings() {
+        settings.galleryName = "default"
         try? AppConfig.saveSettings(settings)
-        reloadSettings()
+        Task { await updateDeviceStatus() }
+    }
+
+    func noteServerOK() {
+        lastServerOK = Date()
+        serverLinkStatus = .up
     }
 
     func refresh() async {
-        await run("Refreshing…") {
+        await run {
             let merged = try await engine.pullAndMerge(settings: settings)
             state = merged
-            statusMessage = "Synced v\(merged.version)"
+            noteServerOK()
         }
     }
 
-    func refreshAndPushDevice() async {
-        await run("Syncing gallery and device…") {
-            let merged = try await engine.fullSync(settings: settings)
-            state = merged
-            statusMessage = "Synced to server and device"
+    /// Pull family gallery from server, then push full gallery to the device.
+    func syncAll() async {
+        isSyncing = true
+        defer {
+            isSyncing = false
+            Task { await updateDeviceStatus() }
         }
+        isBusy = true
+        defer { isBusy = false }
+
+        do {
+            let merged = try await engine.pullAndMerge(settings: settings)
+            state = merged
+            noteServerOK()
+        } catch {
+            markServerUnreachableAfterSyncFailure(error)
+            return
+        }
+
+        do {
+            try await engine.pushToDevice(settings: settings, state: state)
+        } catch {
+            deviceLinkStatus = .down
+        }
+    }
+
+    private func markServerUnreachableAfterSyncFailure(_ error: Error) {
+        let ns = error as NSError
+        if ns.domain == NSURLErrorDomain,
+           [NSURLErrorCannotConnectToHost, NSURLErrorCannotFindHost, NSURLErrorNetworkConnectionLost]
+            .contains(ns.code) {
+            lastServerOK = nil
+            serverLinkStatus = .down
+        } else {
+            Task { await updateConnectionStatus() }
+        }
+    }
+
+    func updateDeviceStatus() async {
+        deviceLinkStatus = await Reachability.pingDevice(ip: settings.deviceIP) ? .up : .down
+    }
+
+    func updateConnectionStatus(showChecking: Bool = false) async {
+        if showChecking {
+            serverLinkStatus = .checking
+            deviceLinkStatus = .checking
+        }
+        async let serverUp = Reachability.pingServer(baseURL: settings.serverBaseURL)
+        async let deviceUp = Reachability.pingDevice(ip: settings.deviceIP)
+        let (server, device) = await (serverUp, deviceUp)
+        applyServerStatus(pingSucceeded: server)
+        deviceLinkStatus = device ? .up : .down
+    }
+
+    private func applyServerStatus(pingSucceeded: Bool) {
+        if pingSucceeded {
+            noteServerOK()
+            return
+        }
+        if let lastServerOK, Date().timeIntervalSince(lastServerOK) < 600 {
+            serverLinkStatus = .up
+            return
+        }
+        serverLinkStatus = .down
     }
 
     func uploadFromPanel() async {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.jpeg]
+        panel.allowedContentTypes = [.jpeg, .image]
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
         guard panel.runModal() == .OK else { return }
+        await uploadFiles(urls: panel.urls)
+    }
 
-        await run("Uploading…") {
+    func uploadFromDrop(providers: [NSItemProvider]) async {
+        var urls: [URL] = []
+        for provider in providers {
+            if let url = await loadFileURL(from: provider) {
+                urls.append(url)
+            }
+        }
+        guard !urls.isEmpty else { return }
+        await uploadFiles(urls: urls)
+    }
+
+    private func loadFileURL(from provider: NSItemProvider) async -> URL? {
+        let types = [UTType.fileURL.identifier, UTType.jpeg.identifier, UTType.image.identifier]
+        guard let type = types.first(where: { provider.hasItemConformingToTypeIdentifier($0) }) else {
+            return nil
+        }
+        return await withCheckedContinuation { continuation in
+            provider.loadItem(forTypeIdentifier: type, options: nil) { item, _ in
+                if let url = item as? URL {
+                    continuation.resume(returning: url)
+                    return
+                }
+                if let data = item as? Data, let path = String(data: data, encoding: .utf8) {
+                    continuation.resume(returning: URL(fileURLWithPath: path))
+                    return
+                }
+                continuation.resume(returning: nil)
+            }
+        }
+    }
+
+    func uploadFiles(urls: [URL]) async {
+        await run {
             let client = try SyncClient(settings: settings)
             var latest = state
-            for url in panel.urls {
+            for url in urls {
                 let data = try Data(contentsOf: url)
                 let name = url.lastPathComponent
                 let response = try await client.uploadPhoto(jpegData: data, filename: name)
@@ -61,51 +162,42 @@ final class GalleryStore: ObservableObject {
             try AppConfig.saveLocalState(latest)
             state = latest
             try await SyncClient(settings: settings).downloadMissing(for: latest)
-            statusMessage = "Upload complete"
+            noteServerOK()
+            await updateDeviceStatus()
         }
     }
 
     func deleteSelected() async {
         guard let id = selectedID else { return }
-        await run("Deleting…") {
+        await run {
             let client = try SyncClient(settings: settings)
             let response = try await client.deletePhoto(id: id)
             state = response.state
             try AppConfig.saveLocalState(state)
             selectedID = nil
-            statusMessage = "Deleted"
+            noteServerOK()
+            await updateDeviceStatus()
         }
     }
 
     func applyOrder(_ order: [PhotoID]) async {
-        await run("Saving order…") {
+        await run {
             let client = try SyncClient(settings: settings)
             let response = try await client.reorder(order)
             state = response.state
             try AppConfig.saveLocalState(state)
-            statusMessage = "Order saved"
+            noteServerOK()
+            await updateDeviceStatus()
         }
     }
 
-    func pushSelectedToDevice() async {
-        guard let id = selectedID,
-              let photo = state.photos[id],
-              let data = try? Data(contentsOf: AppConfig.cacheURL(for: id)) else { return }
-        await run("Sending to device…") {
-            let device = try Bloomin8Client(settings: settings)
-            try await device.upload(jpegData: data, filename: photo.filename, showNow: true)
-            statusMessage = "Sent to Bloomin8"
-        }
-    }
-
-    private func run(_ label: String, _ work: () async throws -> Void) async {
+    private func run(_ work: () async throws -> Void) async {
         isBusy = true
-        statusMessage = label
         defer { isBusy = false }
         do {
             try await work()
         } catch {
-            statusMessage = error.localizedDescription
+            await updateConnectionStatus()
         }
     }
 }

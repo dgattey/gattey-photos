@@ -4,15 +4,18 @@ Family-shared photo gallery that syncs through a Vercel API and pushes JPEGs to 
 
 ## Quick start (local)
 
-One command starts the sync API and opens the macOS app:
+One command builds the app (with icon), starts the sync API in the **background**, and opens Gattey Photos:
 
 ```bash
 make dev
 ```
 
-Or: `./scripts/dev.sh`
+The sync server **keeps running** after the script finishes. Stop it with `./scripts/stop-server.sh`.  
+If you only open the app without starting the server, **Server** in the sidebar will show offline.
 
-Configure **Settings** in the app: server `http://127.0.0.1:3000`, sync password from `server/.env.local`, and your Bloomin8 device IP.
+Uses **mise** for Node (see `mise.toml`). Do not use Homebrew `node` for this repo.
+
+On first run, settings are seeded from `server/.env.local`. Update the Bloomin8 device IP in **Settings** if needed.
 
 ## Package the macOS app
 

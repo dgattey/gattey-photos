@@ -11,5 +11,8 @@ DerivedData/
 .build/
 .swiftpm/
 dist/
+macos/AppIcon.iconset/
+macos/AppIcon-1024.png
 .dev-server.pid
+.dev-server-supervisor.pid
 .dev-server.log

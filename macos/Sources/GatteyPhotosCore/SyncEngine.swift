@@ -15,7 +15,7 @@ public struct SyncEngine: Sendable {
 
     public func pushToDevice(settings: AppSettings, state: GalleryState) async throws {
         let device = try Bloomin8Client(settings: settings)
-        try await device.syncDevice(from: state)
+        try await device.syncAllToDevice(from: state)
     }
 
     public func fullSync(settings: AppSettings) async throws -> GalleryState {

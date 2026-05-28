@@ -1,10 +1,11 @@
-.PHONY: dev package-macos build-server
+.PHONY: dev package-macos icon
 
+# Build everything and run (one sync server + opens the app).
 dev:
 	./scripts/dev.sh
 
 package-macos:
 	./scripts/package-macos.sh
 
-build-server:
-	cd server && npm run build
+icon:
+	./scripts/generate-app-icon.sh

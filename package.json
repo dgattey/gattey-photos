@@ -3,8 +3,6 @@
   "private": true,
   "scripts": {
     "dev": "./scripts/dev.sh",
-    "package:macos": "./scripts/package-macos.sh",
-    "build:server": "npm run build --prefix server",
-    "dev:server": "npm run dev --prefix server"
+    "package:macos": "./scripts/package-macos.sh"
   }
 }

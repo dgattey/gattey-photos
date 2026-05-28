@@ -22,25 +22,30 @@ struct RootView: View {
         }
         .navigationSplitViewStyle(.balanced)
         .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Add", systemImage: "plus") {
                     Task { await store.uploadFromPanel() }
-                } label: {
-                    Label("Upload", systemImage: "square.and.arrow.up")
                 }
                 .disabled(store.isBusy)
-
-                Button {
-                    Task { await store.refresh() }
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                if store.isSyncing {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Sync")
+                    }
+                    .frame(minWidth: 72)
+                } else {
+                    Button("Sync", systemImage: "arrow.clockwise") {
+                        Task { await store.syncAll() }
+                    }
+                    .disabled(store.isBusy)
                 }
-                .disabled(store.isBusy)
-
-                Button {
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button("Settings", systemImage: "gearshape") {
                     showSettings.toggle()
-                } label: {
-                    Label("Settings", systemImage: "gearshape")
                 }
                 .popover(isPresented: $showSettings, arrowEdge: .top) {
                     SettingsPopover(isPresented: $showSettings)
@@ -48,16 +53,10 @@ struct RootView: View {
                 }
             }
         }
-        .safeAreaInset(edge: .bottom) {
-            Text(store.statusMessage)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-        }
         .task {
-            await store.refresh()
+            async let status: Void = store.updateConnectionStatus(showChecking: true)
+            async let gallery: Void = store.refresh()
+            _ = await (status, gallery)
         }
     }
 }

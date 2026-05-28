@@ -21,7 +21,7 @@ public struct Bloomin8Client: Sendable {
         let ip = settings.deviceIP.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !ip.isEmpty else { throw Bloomin8Error.badDeviceIP }
         self.deviceIP = ip
-        self.gallery = settings.galleryName
+        self.gallery = "default"
         self.session = session
     }
 
@@ -52,11 +52,15 @@ public struct Bloomin8Client: Sendable {
         }
     }
 
-    public func syncDevice(from state: GalleryState) async throws {
-        for photo in state.activePhotos() {
+    /// Uploads the full gallery in order; only the final image uses show_now so the device refreshes once.
+    public func syncAllToDevice(from state: GalleryState) async throws {
+        let photos = state.activePhotos()
+        guard !photos.isEmpty else { return }
+        for (index, photo) in photos.enumerated() {
             let file = AppConfig.cacheURL(for: photo.id)
             guard let data = try? Data(contentsOf: file) else { continue }
-            try await upload(jpegData: data, filename: photo.filename, showNow: false)
+            let isLast = index == photos.count - 1
+            try await upload(jpegData: data, filename: photo.filename, showNow: isLast)
         }
     }
 }
