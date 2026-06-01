@@ -16,17 +16,14 @@ chmod +x "$ROOT/scripts/generate-app-icon.sh"
 
 cd "$MACOS"
 APP_BIN=".build/release/GatteyPhotos"
-# Swift PM sometimes skips the app target when only the helper looks stale.
 if [[ -f "$APP_BIN" ]]; then
-  stale="$(find Sources/GatteyPhotosApp Sources/GatteyPhotosCore -name '*.swift' -newer "$APP_BIN" -print -quit 2>/dev/null || true)"
+  stale="$(find Sources/GatteyPhotosApp Sources/GatteyPhotosCore Sources/GatteyPhotosUI -name '*.swift' -newer "$APP_BIN" -print -quit 2>/dev/null || true)"
   if [[ -n "${stale:-}" ]]; then
     echo "package-macos: app sources newer than binary — forcing GatteyPhotos rebuild" >&2
     rm -f "$APP_BIN"
   fi
 fi
-# Build app and helper separately so deleting the app binary always relinks GatteyPhotos.
 swift build -c release --product GatteyPhotos
-swift build -c release --product GatteyPhotosSyncHelper
 if [[ ! -f "$APP_BIN" ]]; then
   echo "package-macos: missing $APP_BIN after swift build" >&2
   exit 1
@@ -44,9 +41,8 @@ for bundle in GatteyPhotos_GatteyPhotosApp GatteyPhotos_GatteyPhotosUI; do
     cp -R "$src" "$MACOS_BIN/"
   fi
 done
-cp ".build/release/GatteyPhotosSyncHelper" "$MACOS_BIN/GatteyPhotosSyncHelper"
 cp "$ROOT/macos/Assets.car" "$RESOURCES/Assets.car"
-chmod +x "$MACOS_BIN/GatteyPhotos" "$MACOS_BIN/GatteyPhotosSyncHelper"
+chmod +x "$MACOS_BIN/GatteyPhotos"
 
 BUILD_NUMBER="$(date +%s)"
 cat > "$CONTENTS/Info.plist" <<PLIST
@@ -105,7 +101,6 @@ for nested in "$MACOS_BIN"/*.bundle; do
   [[ -d "$nested" ]] || continue
   codesign --force --sign - "$nested"
 done
-codesign --force --sign - "$MACOS_BIN/GatteyPhotosSyncHelper"
 # Ad-hoc dist builds: omit associated-domains (SIGKILL at launch). Production uses GatteyPhotos.entitlements + real cert.
 LOCAL_ENT="$ROOT/macos/GatteyPhotos.local.entitlements"
 codesign --force --sign - --entitlements "$LOCAL_ENT" "$APP"

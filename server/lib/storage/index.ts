@@ -21,13 +21,17 @@ export async function readManifest(): Promise<GalleryState> {
   return state;
 }
 
-export async function writeManifest(state: GalleryState): Promise<void> {
+/** Persist manifest after normalization; returns the stored state (API responses must use this). */
+export async function writeManifest(state: GalleryState): Promise<GalleryState> {
+  const { state: normalized } = normalizeManifest(state);
   if (useLocal()) {
     const local = await import("./local");
-    return local.writeManifest(state);
+    await local.writeManifest(normalized);
+    return normalized;
   }
   const blob = await import("./blob");
-  return blob.writeManifest(state);
+  await blob.writeManifest(normalized);
+  return normalized;
 }
 
 export async function putPhotoBytes(

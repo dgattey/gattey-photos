@@ -32,7 +32,7 @@ Prefer `launch.sh macos` (quit + rebuild + open). Use `./scripts/package-macos.s
 Both paths regenerate the dock icon every time (`generate-app-icon.sh` → `Assets.car` inside the bundle). After editing `macos/AppIcon.icon/`, relaunch is enough; no separate icon step.
 
 - Entry point: `./scripts/dev.sh` or `npm run dev` (no separate Make wrapper); no install to `/Applications`
-- `repo-root.txt` is written under `~/Library/Application Support/GatteyPhotos/` by `package-macos.sh` and `dev.sh` so the app can find the repo for local server control (`LocalSyncServer`)
+- `repo-root.txt` under Application Support is optional legacy from `dev.sh` / `package-macos.sh` (not used by the app)
 
 ### Changes not showing in the UI?
 
@@ -77,7 +77,7 @@ Restart the server after adding `CRON_SECRET`, changing cron-related server code
 ./scripts/start-server.sh
 ```
 
-Cron only updates the manifest on the server (`GET|POST /api/cron/advance-current`). Nothing talks to Bloomin8 from the server. The UI picks up a new `currentPhotoId` after **pull** via `GalleryStore.refresh()` / `syncAll()` (`SyncEngine.pullAndMerge`): unlock refresh, **⌘R Sync**, or background `SyncLoop` every **15 minutes** while unlocked (`EmbeddedSyncRunner` / sync helper). `refresh()` queues a device push when `currentPhotoId` changed on pull; `syncAll()` and background `fullSync` always push after pull. Foreground return only re-fetches the gallery when the server was previously down. When pull sees a new `currentPhotoId` (not from local Set as current), **Activity** logs e.g. **Gallery advanced** (`currentPhotoUpdatedBy: cron` on manifest) or **Server updated current photo** — only on actual change, not every 15m tick.
+Cron advances `currentPhotoId` and the **server** pushes to all registered frames (`commitManifest`). Clients **pull** via `GalleryStore` (`refresh`, `syncAll`, 15-minute timer while unlocked). No sync when locked or quit. Register frames in Settings (`POST /api/devices`).
 
 Fast local check: one-shot advance, then sync in the app:
 

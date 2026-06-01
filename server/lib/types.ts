@@ -29,3 +29,42 @@ export interface GalleryResponse {
   state: GalleryState;
   photos: GalleryPhotoView[];
 }
+
+export interface RegisteredDevice {
+  id: string;
+  displayName: string;
+  tokenCiphertext: string;
+  openApiBaseURL: string;
+  registeredBy: string;
+  registeredAt: string;
+  lastPushAt?: string;
+  lastPushError?: string;
+}
+
+export interface RegisteredDevicePublic {
+  id: string;
+  displayName: string;
+  registeredBy: string;
+  registeredAt: string;
+  lastPushAt?: string;
+  lastPushError?: string;
+}
+
+export interface DeviceRegistry {
+  version: number;
+  devices: RegisteredDevice[];
+}
+
+export interface DeviceLiveStatus {
+  id: string;
+  displayName: string;
+  reachable: boolean;
+  name?: string;
+  width?: number;
+  height?: number;
+  orientation?: string;
+  remoteImageOn?: boolean;
+  remoteImageInterval?: string;
+  lastPushAt?: string;
+  lastPushError?: string;
+}

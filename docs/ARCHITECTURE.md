@@ -25,7 +25,7 @@ interface GalleryState {
 }
 ```
 
-Clients cache JPEG bytes under `~/Library/Application Support/GatteyPhotos/cache/{id}.jpg`.
+Clients cache JPEG bytes under `~/Library/Application Support/GatteyPhotos/cache/{id}.jpg` (macOS) or the app container on iOS.
 
 ## Conflict merge (per photo)
 
@@ -39,38 +39,35 @@ After fetching remote `R` and comparing to local `L`:
 
 | Component | Role |
 |-----------|------|
-| `server/` | Next.js on Vercel. Blob + Edge Config in prod; filesystem under `.data/` when `GATTEY_LOCAL_STORAGE=1`. |
-| `macos/` SwiftUI app | Gallery UI, upload/delete/reorder, manual refresh, unlock gate, settings (Bloomin8 token, server URL; debug mode for local dev). |
-| `GatteyPhotosSyncHelper` (inside `.app`) | LaunchAgent while unlocked; polls every 15 minutes; merges; pushes to Bloomin8. |
+| `server/` | Next.js on Vercel. Blob + Edge Config in prod; filesystem under `.data/` when `GATTEY_LOCAL_STORAGE=1`. Owns gallery manifest, JPEG blobs, **device registry**, and **Bloomin8 push**. |
+| `GatteyPhotosUI` + `GatteyPhotosCore` | Shared on macOS, iOS, iPadOS: gallery browser, upload, reorder, set current, frame registration. **Pull-only** sync; no client Bloomin8 push. |
+| `GalleryStore` periodic pull | Same on macOS, iOS, iPadOS: `SyncEngine.pullAndMerge` every 15 minutes **while unlocked** (foreground refresh, ⌘R, and timer share one path). |
 
-## Bloomin8 device
+## Bloomin8 frames (server-owned)
 
-The macOS app uses the **Bloomin8 Open API** (einkshot) with a device Bearer token in `config.json` as `bloomin8ApiToken` (parsed from pasted setup text via `Bloomin8TokenParser`). There is no LAN discovery or subnet scan.
+- Frame tokens live in `devices/registry.json` (Vercel Blob or local `.data/`), encrypted with `SYNC_PASSWORD`.
+- Any signed-in family member can register or remove frames via `POST/GET/DELETE /api/devices`.
+- `GET /api/devices/status` pings each frame for the connection pill and preview aspect ratio.
+- On manifest commits that set `currentPhotoId` (`PUT /api/gallery/current`, cron advance), the server loads the current JPEG from blob storage and `POST`s to einkshot for **each** registered frame.
+- Offline frames are logged; the manifest **always** saves. Push failures on individual frames do not roll back the gallery write.
 
-`GET {einkshot}/open-api/device/status` — screen `width`/`height`, `remote_image_on`, wake interval. Preview defaults to 13.3" Eink Canvas (1200×1600) until status is fetched.
-
-**Push (app default):** `POST {einkshot}/open-api/push` with Bearer token (multipart `image`). Display on the next scheduled wake (`estimated_push_time`); last-wins queue. Requires `remote_image_on` on the device.
-
-**Device display:** Open API `POST /open-api/push` (queued for next wake). No LAN upload path in the app.
+Clients paste the Bloomin8 setup block in **Settings → Frames** (not at unlock). Use **Copy setup instructions** for the paste workflow.
 
 ## Auth
 
-`Authorization: Bearer` accepts either the family sync password or a signed session token minted by `POST /api/auth/session` (password only on that route). New session tokens do not expire; they remain valid until `SYNC_PASSWORD` changes on the server (HMAC secret rotation). Legacy tokens that included an `exp` field still honor that expiry. Server secret is `SYNC_PASSWORD` (env locally; Vercel env or Edge Config `syncPassword` in production). The macOS app stores `syncSessionToken` and `displayName` in `config.json` after unlock; the password is not persisted in the app bundle or settings UI. Uploads send `displayName` as manifest `uploadedBy`.
+`Authorization: Bearer` accepts either the family sync password or a signed session token minted by `POST /api/auth/session`. Session tokens do not expire until `SYNC_PASSWORD` rotates. The app stores `syncSessionToken` and `displayName` in `config.json` after unlock.
 
-**Background sync:** After unlock, the app installs `~/Library/LaunchAgents/com.gattey.photos.sync.plist` (`GatteyPhotosSyncHelper`, every **15 minutes**). Locking clears `syncSessionToken` and **stops** the LaunchAgent so nothing syncs while logged out. Dev `swift run` uses `EmbeddedSyncRunner` when no bundled helper exists (same interval, same auth gate).
+**Client sync:** Pull-only via `GalleryStore.pullFromServer` (foreground refresh, manual sync, 15-minute timer while unlocked). No sync when locked or quit; no separate macOS helper or LaunchAgent.
 
-**Server state:** The Next.js API is stateless (no in-memory gallery). Canonical state is one JSON manifest plus JPEG blobs in storage:
+**Server state:**
 
 | Artifact | Location (production) | Contents |
 |----------|------------------------|----------|
-| `gallery/manifest.json` | Vercel Blob | Full `GalleryState`: `version`, `order`, `photos`, **`currentPhotoId`** |
+| `gallery/manifest.json` | Vercel Blob | `GalleryState` |
 | `photos/{id}.jpg` | Vercel Blob | Image bytes |
+| `devices/registry.json` | Vercel Blob | Encrypted frame tokens + metadata |
 
-Local dev (`GATTEY_LOCAL_STORAGE=1`) mirrors the same layout under `server/.data/`. `currentPhotoId` is a field inside the manifest JSON, not a separate blob or server session.
-
-**Scheduled advance (production):** Vercel Cron hits `GET /api/cron/advance-current` once daily at **11:00 UTC** (`server/vercel.json`, `0 11 * * *`; Hobby allows at most one run per day; schedules are UTC-only). Chosen so the advance runs overnight US time and completes before a typical ~7 AM wake on both coasts (≈ 6 AM EST / 7 AM EDT / 3 AM PST / 4 AM PDT). Authenticated with `CRON_SECRET` (`Authorization: Bearer`). The handler advances `currentPhotoId` along manifest `order` among active photos (wrap at end). Local dev: `./scripts/local-advance-cron.sh` (default 30 minutes / 1800s; override `ADVANCE_CURRENT_INTERVAL_SECONDS`) or a manual `curl` to the same route.
-
-**Cron → device (not direct):** Cron only writes the manifest. The Mac (or sync helper) must pull, then `POST /open-api/push` to einkshot; the frame shows the image on its next scheduled wake. Background `SyncLoop` uses `fullSync` every 15 minutes while unlocked. The UI `refresh()` path also queues a device push when `currentPhotoId` changed on pull. Manual **Sync** (`syncAll`) always pushes the current photo after pull.
+**Scheduled advance (production):** Vercel Cron `GET|POST /api/cron/advance-current` once daily at **11:00 UTC** (`0 11 * * *`). Advances `currentPhotoId` and triggers server push to all frames.
 
 ## Local development
 
@@ -78,4 +75,4 @@ Local dev (`GATTEY_LOCAL_STORAGE=1`) mirrors the same layout under `server/.data
 ./scripts/dev.sh
 ```
 
-Starts the sync API on port 3000 (supervisor + `GATTEY_LOCAL_STORAGE=1`), packages the app, and opens `dist/Gattey Photos.app`. API only: `./scripts/start-server.sh`. Point the macOS app at `http://127.0.0.1:3000`.
+Starts the sync API on port 3000 (`GATTEY_LOCAL_STORAGE=1`). Point the app at `http://127.0.0.1:3000` via Debug mode. Do not start the API from inside the app; use `dev.sh` or `start-server.sh`.

@@ -145,6 +145,45 @@ public struct SyncClient: Sendable {
         return baseURL.appending(path: "api/gallery/photos/\(photo.id)/image")
     }
 
+    public func listDevices() async throws -> [RegisteredDevicePublic] {
+        let data = try await request(path: "/api/devices", method: "GET")
+        guard let decoded = try? JSONDecoder().decode(DeviceListResponse.self, from: data) else {
+            throw SyncError.decode
+        }
+        return decoded.devices
+    }
+
+    public func registerDevice(setupText: String, displayName: String?, registeredBy: String) async throws -> RegisteredDevicePublic {
+        struct Body: Encodable {
+            var setupText: String
+            var displayName: String?
+            var registeredBy: String
+        }
+        let encoded = try JSONEncoder().encode(Body(setupText: setupText, displayName: displayName, registeredBy: registeredBy))
+        let data = try await request(
+            path: "/api/devices",
+            method: "POST",
+            body: encoded,
+            contentType: "application/json"
+        )
+        guard let decoded = try? JSONDecoder().decode(DeviceRegisterResponse.self, from: data) else {
+            throw SyncError.decode
+        }
+        return decoded.device
+    }
+
+    public func deleteDevice(id: String) async throws {
+        _ = try await request(path: "/api/devices/\(id)", method: "DELETE")
+    }
+
+    public func fetchDeviceStatus() async throws -> [DeviceLiveStatus] {
+        let data = try await request(path: "/api/devices/status", method: "GET")
+        guard let decoded = try? JSONDecoder().decode(DeviceStatusResponse.self, from: data) else {
+            throw SyncError.decode
+        }
+        return decoded.devices
+    }
+
     public func downloadMissing(for state: GalleryState) async throws {
         for photo in state.activePhotos() {
             let dest = AppConfig.cacheURL(for: photo.id)

@@ -11,7 +11,6 @@ let package = Package(
         .library(name: "GatteyPhotosCore", targets: ["GatteyPhotosCore"]),
         .library(name: "GatteyPhotosUI", targets: ["GatteyPhotosUI"]),
         .executable(name: "GatteyPhotos", targets: ["GatteyPhotosApp"]),
-        .executable(name: "GatteyPhotosSyncHelper", targets: ["GatteyPhotosSyncHelper"]),
         .executable(name: "GatteyPhotosIOS", targets: ["GatteyPhotosIOS"]),
     ],
     targets: [
@@ -35,11 +34,6 @@ let package = Package(
             dependencies: ["GatteyPhotosCore", "GatteyPhotosUI"],
             path: "Sources/GatteyPhotosApp",
             swiftSettings: [.unsafeFlags(["-parse-as-library"], .when(configuration: .debug))]
-        ),
-        .executableTarget(
-            name: "GatteyPhotosSyncHelper",
-            dependencies: ["GatteyPhotosCore"],
-            path: "Sources/GatteyPhotosSyncHelper"
         ),
         .executableTarget(
             name: "GatteyPhotosIOS",

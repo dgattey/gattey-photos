@@ -5,7 +5,7 @@ description: Build and run the Gattey Photos iOS/iPad app. Use when changing Gat
 
 # Gattey Photos iOS / iPad
 
-The iOS app shares **GatteyPhotosCore** (sync, manifest, auth) and **GatteyPhotosUI** (unlock, gallery, lightbox, settings) with macOS. There is **no** local Node sync server or LaunchAgent helper on iOS.
+The iOS app shares **GatteyPhotosCore** (sync, manifest, auth) and **GatteyPhotosUI** (unlock, gallery, lightbox, settings) with macOS. Client pull is identical on all platforms (`GalleryStore` + `SyncEngine`); there is no local Node server or macOS LaunchAgent helper.
 
 ## Package layout (`macos/Package.swift`)
 
@@ -14,14 +14,14 @@ The iOS app shares **GatteyPhotosCore** (sync, manifest, auth) and **GatteyPhoto
 | `GatteyPhotosCore` | macOS + iOS | Models, `SyncEngine`, `AppConfig`, merge; macOS-only helpers behind `#if os(macOS)` |
 | `GatteyPhotosUI` | macOS + iOS | Shared SwiftUI (`AppRootContainer`, `GalleryStore`, grid, lightbox) |
 | `GatteyPhotosIOS` | iOS | `@main` — wires environment objects |
-| `GatteyPhotosApp` | macOS | `@main` + `AppDelegate`, Debug menu (local server start/stop when applicable) |
-| `GatteyPhotosSyncHelper` | macOS | LaunchAgent helper binary |
-
+| `GatteyPhotosApp` | macOS | `@main` + `AppDelegate` |
 Bundle ID: `com.gattey.photos`.
 
 Production sync URL: `https://photos.gattey.com`. **Debug mode** (Settings toggle on iOS; Debug menu on macOS) switches to local dev URL only — it does **not** start `scripts/start-server.sh` on iOS.
 
-Background sync on iOS: `EmbeddedSyncRunner` runs `SyncLoop` in-process while unlocked (15 minutes), same as `swift run` on macOS without the bundled helper.
+While unlocked: `GalleryStore` runs the same 15-minute periodic pull as macOS (shared code path with `refresh` and manual sync). No sync when locked or quit.
+
+Frames: same **Settings → Frames** UI as macOS — register Bloomin8 tokens on the server; server pushes to devices.
 
 ## Build (Simulator)
 
@@ -72,7 +72,6 @@ After `macos/` edits that affect the shipping macOS app (including shared `Gatte
 
 ## macOS-only (not on iOS)
 
-- `LocalSyncServer` / Debug **Start Server** / **Stop Server**
-- `SyncHelperLauncher` / `GatteyPhotosSyncHelper` / repo `scripts/start-server.sh`
 - macOS glass window chrome (`NSWindow` vibrancy)
-- Finder drop / `NSOpenPanel` upload (iOS uses **PhotosPicker** + share manifest sync)
+- Finder drop / `NSOpenPanel` upload (iOS uses **PhotosPicker**)
+- No gallery pull when the app is locked or quit (same on all platforms)

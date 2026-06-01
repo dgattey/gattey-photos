@@ -74,10 +74,10 @@ struct RootView: View {
         .background(WindowGlassBackground())
         .background(TransparentWindowConfigurator())
         .task {
-            store.applyBloomin8TokenFromPaste()
             async let status: Void = store.updateConnectionStatus()
             async let gallery: Void = store.refresh()
-            _ = await (status, gallery)
+            async let frames: Void = store.reloadRegisteredFrames()
+            _ = await (status, gallery, frames)
         }
         #if os(macOS)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willResignActiveNotification)) { _ in

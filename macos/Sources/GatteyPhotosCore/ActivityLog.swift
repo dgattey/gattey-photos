@@ -21,8 +21,26 @@ public struct CurrentPhotoPullDelta: Sendable, Equatable {
     public let newId: PhotoID?
     public let updatedBy: CurrentPhotoUpdatedBy?
 
+    public init(previousId: PhotoID?, newId: PhotoID?, updatedBy: CurrentPhotoUpdatedBy?) {
+        self.previousId = previousId
+        self.newId = newId
+        self.updatedBy = updatedBy
+    }
+
     public var didChange: Bool {
         previousId != newId && newId != nil
+    }
+
+    public static func ifCurrentChanged(
+        from previousId: PhotoID?,
+        to state: GalleryState
+    ) -> CurrentPhotoPullDelta? {
+        guard previousId != state.currentPhotoId else { return nil }
+        return CurrentPhotoPullDelta(
+            previousId: previousId,
+            newId: state.currentPhotoId,
+            updatedBy: state.currentPhotoUpdatedBy
+        )
     }
 }
 
@@ -53,25 +71,6 @@ public enum GalleryCurrentPhotoActivity {
         }
     }
 
-    public static func recordChangeIfNeeded(
-        delta: CurrentPhotoPullDelta,
-        photo: PhotoEntry?,
-        skipWhenNewIdEquals skipNewId: PhotoID?
-    ) {
-        guard delta.didChange, delta.newId != skipNewId else { return }
-        guard let pair = logEntry(delta: delta, photo: photo) else { return }
-        let entry = LogEntry(
-            category: .gallery,
-            level: .success,
-            message: pair.message,
-            detail: pair.detail
-        )
-        ActivityLogFile.append(entry)
-        fputs("[gallery] \(pair.message)\n", stderr)
-        if let detail = pair.detail, !detail.isEmpty {
-            fputs("\(detail)\n", stderr)
-        }
-    }
 }
 
 public struct LogEntry: Identifiable, Sendable, Equatable {
@@ -202,7 +201,7 @@ public final class ActivityLogStore: ObservableObject {
 
     private init() {}
 
-    /// Polls `activity.log` so background SyncHelper entries appear in the UI.
+    /// Polls `activity.log` so entries written from other processes appear in the UI.
     public func startLiveReload(intervalSeconds: TimeInterval = 4) {
         liveReloadTask?.cancel()
         bootstrapFromDiskIfNeeded()
@@ -220,7 +219,7 @@ public final class ActivityLogStore: ObservableObject {
         liveReloadTask = nil
     }
 
-    /// Merges new lines from disk (e.g. SyncHelper) without removing in-memory entries.
+    /// Merges new lines from disk without removing in-memory entries.
     public func reload() {
         mergeFromDisk()
     }

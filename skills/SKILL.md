@@ -12,17 +12,16 @@ description: Work on the Gattey Photos monorepo — macOS SwiftUI app, sync serv
 | `server/lib/types.ts` | `GalleryState`, `PhotoEntry` canonical JSON shape |
 | `server/lib/gallery.ts` | Manifest mutations (order, soft delete, version bump) |
 | `server/lib/storage/` | `GATTEY_LOCAL_STORAGE=1` → `.data/`; else Vercel Blob |
-| `macos/Sources/GatteyPhotosCore/` | Swift client, merge, Bloomin8 HTTP upload |
+| `macos/Sources/GatteyPhotosCore/` | Swift client, merge, gallery sync |
 | `macos/Sources/GatteyPhotosApp/` | SwiftUI UI only (macOS) |
 | `macos/Sources/GatteyPhotosIOS/` | iOS Simulator scaffold (placeholder UI) |
-| `macos/Sources/GatteyPhotosSyncHelper/` | Background sync helper (15 min while unlocked) |
-| `macos/Sources/GatteyPhotosCore/SyncHelperLauncher.swift` | LaunchAgent install on first app open |
+| `macos/Sources/GatteyPhotosUI/GalleryStore.swift` | Gallery UI + unified pull (`refresh` / `syncAll` / periodic timer) |
 
 ## Invariants
 
 1. **Auth:** API calls use `Authorization: Bearer` with `syncSessionToken` (or the sync password for session minting). Secret is `SYNC_PASSWORD` on the server only; unlock screen collects the password once per machine.
-2. **Merge:** `GalleryMerge.merge` in Swift mirrors server truth — remote wins except local-only active photo ids.
-3. **Device:** einkshot `POST /open-api/push` (Bearer Bloomin8 token; displays on next wake).
+2. **Merge:** `GalleryMerge.merge` in Swift mirrors server truth — remote wins except local-only active photo ids. Server `normalizeManifest` repairs `currentPhotoId` on read/write; client `withResolvedCurrentPhoto` is idempotent cache repair only.
+3. **Device:** Server pushes current JPEG via einkshot `POST /open-api/push` on manual set-current and cron advance (`commitManifest`).
 4. **Cache:** JPEG bytes live in `~/Library/Application Support/GatteyPhotos/cache/{id}.jpg`.
 
 ## Local verify

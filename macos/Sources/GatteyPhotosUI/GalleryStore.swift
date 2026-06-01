@@ -15,56 +15,37 @@ public final class GalleryStore: ObservableObject {
     public let selection = GallerySelectionStore()
 
     @Published public var settings: AppSettings = AppConfig.loadSettings()
-    @Published var state: GalleryState = AppConfig.loadLocalState()
+    @Published var state: GalleryState = AppConfig.loadLocalState().withResolvedCurrentPhoto()
     @Published var serverLinkStatus: LinkStatus = .down
     @Published var deviceLinkStatus: LinkStatus = .down
     @Published private(set) var isCheckingConnection = false
     /// Parsed from pasted setup text (`Device:` line); cosmetic only.
-    @Published private(set) var bloomin8DeviceLabel: String?
-    @Published private(set) var bloomin8SettingsStatus: String?
-    /// Normalized width ÷ height from device pixels (`Bloomin8Screen.aspectRatio`, always ≤ 1).
+    @Published private(set) var registeredFrames: [RegisteredDevicePublic] = []
+    @Published private(set) var framesStatusLine: String?
+    /// Normalized width ÷ height from first reachable frame (`Bloomin8Screen.aspectRatio`, always ≤ 1).
     @Published private(set) var deviceScreenAspectRatio: CGFloat = Bloomin8Screen.defaultAspectRatio
     /// Physical panel orientation for preview chrome (portrait default).
     @Published private(set) var deviceScreenIsLandscape = false
     @Published public var isBusy = false
     @Published public var isSyncing = false
-    @Published public var isManagingLocalServer = false
 
     #if os(iOS)
     /// Temp file for `PhotoActivityShareSheet` after `downloadPhoto(photoID:)`.
     @Published public var photoShareItem: PhotoShareItem?
     #endif
 
-    public var canControlLocalServer: Bool {
-        #if os(macOS)
-        LocalSyncServer.isLocalURL(settings.serverBaseURL) && LocalSyncServer.repoRoot() != nil
-        #else
-        false
-        #endif
-    }
-
-    public var localServerShowsStop: Bool {
-        #if os(macOS)
-        LocalSyncServer.isSupervisorRunning() || serverLinkStatus == .up
-        #else
-        false
-        #endif
-    }
-
-    /// macOS pushes to Bloomin8; iPhone/iPad use the family server only.
-    private var bloomin8DeviceSyncEnabled: Bool {
-        #if os(iOS)
-        false
-        #else
-        true
-        #endif
-    }
-
     private let engine = SyncEngine()
     private let log = ActivityLogStore.shared
     private var lastServerOK: Date?
     /// While `setAsCurrent` is in flight, skip pull logging for that id (avoids duplicate with "Set as current").
     private var setAsCurrentInFlight: PhotoID?
+    private var periodicPullTask: Task<Void, Never>?
+
+    private enum PullKind {
+        case foreground
+        case manual
+        case periodic
+    }
 
     var activePhotos: [PhotoEntry] {
         state.activePhotos()
@@ -86,6 +67,24 @@ public final class GalleryStore: ObservableObject {
         state = next.withResolvedCurrentPhoto()
     }
 
+    private func makeSyncClient() throws -> SyncClient {
+        try SyncClient(settings: settings)
+    }
+
+    /// Apply server manifest to UI + disk. Reuse `client` when the caller already has one for this operation.
+    private func commitServerState(
+        _ serverState: GalleryState,
+        client: SyncClient? = nil,
+        downloadMissing: Bool = false
+    ) async throws {
+        applyState(serverState)
+        try AppConfig.saveLocalState(state)
+        if downloadMissing {
+            let sync = try client ?? makeSyncClient()
+            try await sync.downloadMissing(for: state)
+        }
+    }
+
     func reloadSettings() {
         settings = AppConfig.loadSettings()
     }
@@ -93,7 +92,6 @@ public final class GalleryStore: ObservableObject {
     public func setDebugMode(_ enabled: Bool) {
         guard settings.debugMode != enabled else { return }
         let previousURL = settings.serverBaseURL
-        let shouldStopLocal = !enabled && canControlLocalServer && localServerShowsStop
         settings.debugMode = enabled
         settings.serverBaseURL = AppSettings.syncServerBaseURL(debugMode: enabled)
         try? AppConfig.saveSettings(settings)
@@ -104,13 +102,7 @@ public final class GalleryStore: ObservableObject {
             enabled ? "Debug mode on" : "Debug mode off",
             detail: settings.serverBaseURL
         )
-        Task {
-            if shouldStopLocal {
-                await stopLocalServer()
-            } else {
-                await updateConnectionStatus()
-            }
-        }
+        Task { await updateConnectionStatus() }
     }
 
     /// Clears in-memory gallery state, local manifest, and JPEG disk cache (used when locking).
@@ -128,61 +120,47 @@ public final class GalleryStore: ObservableObject {
     func saveSettings() {
         let previousServerURL = settings.serverBaseURL
         settings.serverBaseURL = AppSettings.syncServerBaseURL(debugMode: settings.debugMode)
-        applyBloomin8TokenFromPaste()
         settings.galleryName = "default"
         try? AppConfig.saveSettings(settings)
         session?.noteSettingsChanged(store: self, previousServerURL: previousServerURL)
-        let tokenSet = !settings.bloomin8ApiToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        log.log(
-            .system,
-            level: .info,
-            "Settings saved",
-            detail: "Server \(settings.serverBaseURL), Bloomin8 token \(tokenSet ? "set" : "missing")"
-        )
-        Task {
-            await refreshBloomin8SettingsStatus()
-            await updateDeviceStatus()
-            await updateConnectionStatus()
-        }
+        log.log(.system, level: .info, "Settings saved", detail: settings.serverBaseURL)
+        Task { await updateConnectionStatus() }
     }
 
-    /// Parses pasted setup block into `bloomin8ApiToken` and optional device label.
-    func applyBloomin8TokenFromPaste() {
-        let raw = settings.bloomin8ApiToken
-        bloomin8DeviceLabel = Bloomin8TokenParser.parseDeviceName(from: raw)
-        if let token = Bloomin8TokenParser.parseToken(from: raw) {
-            settings.bloomin8ApiToken = token
-        }
-    }
-
-    func refreshBloomin8SettingsStatus() async {
-        guard bloomin8DeviceSyncEnabled else {
-            bloomin8SettingsStatus = nil
-            return
-        }
-        let tok = settings.bloomin8ApiToken.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !tok.isEmpty else {
-            bloomin8SettingsStatus = "Paste Bloomin8 token from the device app"
-            return
-        }
+    public func reloadRegisteredFrames() async {
+        guard session?.isUnlocked == true else { return }
         do {
-            let client = try Bloomin8OpenAPIClient(settings: settings)
-            let status = try await client.fetchDeviceStatus()
-            let name = status.name ?? bloomin8DeviceLabel
-            var parts: [String] = []
-            if let name, !name.isEmpty { parts.append(name) }
-            if let interval = status.remoteImageInterval { parts.append("wake \(interval)") }
-            if status.remoteImageOn == false {
-                parts.append("enable remote push on device")
-            }
-            bloomin8SettingsStatus = parts.isEmpty ? "Token OK" : parts.joined(separator: " · ")
-            applyDeviceScreenGeometry(from: status)
+            let client = try makeSyncClient()
+            registeredFrames = try await client.listDevices()
         } catch {
-            bloomin8SettingsStatus = "Token saved — could not reach Open API"
+            registeredFrames = []
         }
     }
 
-    private func applyDeviceScreenGeometry(from status: Bloomin8CloudDeviceStatus) {
+    public func registerFrame(setupText: String, displayName: String?) async throws {
+        let client = try makeSyncClient()
+        let name = displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let parsed = name.flatMap { $0.isEmpty ? nil : $0 }
+            ?? Bloomin8TokenParser.parseDeviceName(from: setupText)
+        let device = try await client.registerDevice(
+            setupText: setupText,
+            displayName: parsed,
+            registeredBy: settings.displayName
+        )
+        registeredFrames = try await client.listDevices()
+        log.log(.device, level: .success, "Frame registered", detail: device.displayName)
+        await updateDeviceStatus(using: client)
+    }
+
+    public func unregisterFrame(id: String) async throws {
+        let client = try makeSyncClient()
+        try await client.deleteDevice(id: id)
+        registeredFrames = try await client.listDevices()
+        log.log(.device, level: .info, "Frame removed")
+        await updateDeviceStatus(using: client)
+    }
+
+    private func applyDeviceScreenGeometry(from status: DeviceLiveStatus) {
         if let w = status.width, let h = status.height, w > 0, h > 0 {
             deviceScreenAspectRatio = Bloomin8Screen.aspectRatio(width: w, height: h)
         }
@@ -193,47 +171,21 @@ public final class GalleryStore: ObservableObject {
         )
     }
 
-    public func toggleLocalServer() async {
-        guard canControlLocalServer else {
-            log.log(.server, level: .warning, "Cannot control server", detail: "Use a local URL and run ./scripts/dev.sh to register repo path.")
+    private func refreshFramesStatusLine(from statuses: [DeviceLiveStatus]) {
+        if statuses.isEmpty {
+            framesStatusLine = "Register a frame in Settings (paste Bloomin8 setup text)"
             return
         }
-        if localServerShowsStop {
-            await stopLocalServer()
-        } else {
-            await startLocalServer()
+        let reachable = statuses.filter(\.reachable)
+        if reachable.isEmpty {
+            framesStatusLine = "\(statuses.count) frame(s) registered — none reachable"
+            return
         }
-    }
-
-    func startLocalServer() async {
-        #if os(macOS)
-        isManagingLocalServer = true
-        defer { isManagingLocalServer = false }
-        log.log(.server, level: .info, "Starting local sync server…")
-        do {
-            try await LocalSyncServer.start()
-            log.log(.server, level: .success, "Local sync server started")
-        } catch {
-            log.log(error: error, category: .server, context: "Start server failed")
+        let names = reachable.map(\.displayName).joined(separator: ", ")
+        framesStatusLine = "\(reachable.count) frame(s): \(names)"
+        if let first = reachable.first {
+            applyDeviceScreenGeometry(from: first)
         }
-        await updateConnectionStatus()
-        #endif
-    }
-
-    func stopLocalServer() async {
-        #if os(macOS)
-        isManagingLocalServer = true
-        defer { isManagingLocalServer = false }
-        log.log(.server, level: .info, "Stopping local sync server…")
-        do {
-            try await LocalSyncServer.stop()
-            markServerUnreachable()
-            log.log(.server, level: .success, "Local sync server stopped")
-        } catch {
-            log.log(error: error, category: .server, context: "Stop server failed")
-        }
-        await updateConnectionStatus()
-        #endif
     }
 
     func noteServerOK() {
@@ -248,69 +200,98 @@ public final class GalleryStore: ObservableObject {
     }
 
     func refresh() async {
-        guard session?.isUnlocked == true else { return }
-        log.log(.gallery, level: .info, "Refreshing gallery from server")
-        await run(label: "Refresh gallery", category: .gallery) {
-            let previousCurrent = state.currentPhotoId
-            let (merged, delta) = try await engine.pullAndMerge(settings: settings)
-            let currentChanged = previousCurrent != merged.currentPhotoId
-            applyState(merged)
-            noteServerOK()
-            logPulledCurrentPhotoChange(delta: delta, merged: merged)
-            log.log(
-                .gallery,
-                level: .success,
-                "Gallery refreshed",
-                detail: "version=\(merged.version) active=\(merged.activePhotos().count)"
-            )
-            if currentChanged {
-                await pushCurrentToDeviceBestEffort()
-            }
-        }
+        await pullFromServer(kind: .foreground)
     }
 
-    /// Pull family gallery from server, then push full gallery to the device.
     public func syncAll() async {
-        guard session?.isUnlocked == true else { return }
-        isSyncing = true
-        defer {
-            isSyncing = false
-            Task { await updateDeviceStatus() }
-        }
-        isBusy = true
-        defer { isBusy = false }
+        await pullFromServer(kind: .manual)
+    }
 
-        log.log(.sync, level: .info, "Sync started")
-
-        do {
-            let (merged, delta) = try await engine.pullAndMerge(settings: settings)
-            applyState(merged)
-            noteServerOK()
-            logPulledCurrentPhotoChange(delta: delta, merged: merged)
-            log.log(
-                .server,
-                level: .success,
-                "Server sync OK",
-                detail: "version=\(merged.version) photos=\(merged.activePhotos().count)"
-            )
-        } catch {
-            markServerUnreachableAfterSyncFailure(error)
-            log.log(error: error, category: .server, context: "Server sync failed")
-            return
-        }
-
-        guard bloomin8DeviceSyncEnabled else { return }
-
-        do {
-            try await engine.pushToDevice(settings: settings, state: state)
-            if let photo = currentPhoto {
-                log.log(.device, level: .success, "Queued for device", detail: photo.filename)
+    /// In-app periodic gallery pull while unlocked (macOS, iOS, iPadOS). No sync when locked or quit.
+    func startPeriodicPullWhileUnlocked() {
+        periodicPullTask?.cancel()
+        periodicPullTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: GallerySyncSchedule.periodicIntervalNanoseconds)
+                guard !Task.isCancelled else { break }
+                await self?.pullFromServer(kind: .periodic)
             }
-        } catch {
-            deviceLinkStatus = .down
-            log.log(error: error, category: .device, context: "Bloomin8 push failed")
         }
     }
+
+    func stopPeriodicPullWhileUnlocked() {
+        periodicPullTask?.cancel()
+        periodicPullTask = nil
+    }
+
+    private func pullFromServer(kind: PullKind) async {
+        guard session?.isUnlocked == true else { return }
+
+        let failureContext: String
+        let logCategory: LogCategory
+        switch kind {
+        case .foreground:
+            failureContext = "Refresh gallery failed"
+            logCategory = .gallery
+            log.log(.gallery, level: .info, "Refreshing gallery from server")
+        case .manual:
+            failureContext = "Server sync failed"
+            logCategory = .server
+            log.log(.sync, level: .info, "Sync started")
+        case .periodic:
+            failureContext = "Scheduled sync failed"
+            logCategory = .sync
+            log.log(.sync, level: .info, "Scheduled sync started", detail: settings.serverBaseURL)
+        }
+
+        if kind == .manual { isSyncing = true }
+        if kind != .periodic { isBusy = true }
+        defer {
+            if kind == .manual {
+                isSyncing = false
+                Task { await updateDeviceStatus() }
+            }
+            if kind != .periodic { isBusy = false }
+        }
+
+        let previousCurrentId = state.currentPhotoId
+        do {
+            let merged = try await engine.pullRemoteMerged(settings: settings)
+            try await commitServerState(merged)
+            noteServerOK()
+            logPulledCurrentPhotoChange(
+                delta: CurrentPhotoPullDelta.ifCurrentChanged(from: previousCurrentId, to: state),
+                merged: state
+            )
+            switch kind {
+            case .foreground:
+                log.log(
+                    .gallery,
+                    level: .success,
+                    "Gallery refreshed",
+                    detail: "version=\(state.version) active=\(state.activePhotos().count)"
+                )
+            case .manual:
+                log.log(
+                    .server,
+                    level: .success,
+                    "Server sync OK",
+                    detail: "version=\(state.version) photos=\(state.activePhotos().count)"
+                )
+            case .periodic:
+                log.log(
+                    .sync,
+                    level: .success,
+                    "Scheduled sync OK",
+                    detail: "version=\(state.version) photos=\(state.activePhotos().count)"
+                )
+            }
+        } catch {
+            log.log(error: error, category: logCategory, context: failureContext)
+            markServerUnreachableAfterSyncFailure(error)
+        }
+    }
+
 
     private func markServerUnreachableAfterSyncFailure(_ error: Error) {
         if shouldLockForSyncError(error) {
@@ -345,51 +326,36 @@ public final class GalleryStore: ObservableObject {
         return false
     }
 
-    func refreshDeviceScreenAspectRatio() async {
-        guard bloomin8DeviceSyncEnabled else { return }
-        let tok = settings.bloomin8ApiToken.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !tok.isEmpty else {
-            resetDeviceScreenGeometry()
-            return
-        }
-        do {
-            let client = try Bloomin8OpenAPIClient(settings: settings)
-            let status = try await client.fetchDeviceStatus()
-            applyDeviceScreenGeometry(from: status)
-        } catch {
-            resetDeviceScreenGeometry()
-        }
-    }
-
     private func resetDeviceScreenGeometry() {
         deviceScreenAspectRatio = Bloomin8Screen.defaultAspectRatio
         deviceScreenIsLandscape = false
     }
 
-    func updateDeviceStatus() async {
-        guard bloomin8DeviceSyncEnabled else {
-            deviceLinkStatus = .notApplicable
-            bloomin8SettingsStatus = nil
-            return
-        }
-        let tok = settings.bloomin8ApiToken.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !tok.isEmpty else {
+    func updateDeviceStatus(using existing: SyncClient? = nil) async {
+        guard session?.isUnlocked == true else {
             deviceLinkStatus = .down
-            bloomin8SettingsStatus = "Paste Bloomin8 token from the device app"
             return
         }
-        let up = await Bloomin8OpenAPIClient.pingDevice(settings: settings)
-        deviceLinkStatus = up ? .up : .down
-        if up {
-            await refreshDeviceScreenAspectRatio()
-            await refreshBloomin8SettingsStatus()
+        do {
+            let client = try existing ?? makeSyncClient()
+            let statuses = try await client.fetchDeviceStatus()
+            refreshFramesStatusLine(from: statuses)
+            let anyReachable = statuses.contains(where: \.reachable)
+            deviceLinkStatus = statuses.isEmpty ? .down : (anyReachable ? .up : .down)
+            if !anyReachable, !statuses.isEmpty {
+                for item in statuses where !item.reachable {
+                    log.log(
+                        .device,
+                        level: .warning,
+                        "Frame offline",
+                        detail: "\(item.displayName): \(item.lastPushError ?? "unreachable")"
+                    )
+                }
+            }
+        } catch {
+            deviceLinkStatus = .down
+            framesStatusLine = "Could not load frames from server"
         }
-        log.log(
-            .device,
-            level: up ? .success : .error,
-            up ? "Bloomin8 token OK" : "Bloomin8 unreachable",
-            detail: "GET /open-api/device/status"
-        )
     }
 
     func updateConnectionStatus() async {
@@ -397,33 +363,15 @@ public final class GalleryStore: ObservableObject {
         isCheckingConnection = true
         defer { isCheckingConnection = false }
         serverLinkStatus = .checking
-        if bloomin8DeviceSyncEnabled {
-            deviceLinkStatus = .checking
-        } else {
-            deviceLinkStatus = .notApplicable
-        }
-        log.log(
-            .system,
-            level: .info,
-            bloomin8DeviceSyncEnabled ? "Checking server and device" : "Checking server"
-        )
+        deviceLinkStatus = .checking
+        log.log(.system, level: .info, "Checking server and frames")
         let server = await Reachability.pingServer(baseURL: settings.serverBaseURL)
         applyServerStatus(pingSucceeded: server)
-        if bloomin8DeviceSyncEnabled {
-            let device = await Bloomin8OpenAPIClient.pingDevice(settings: settings)
-            deviceLinkStatus = device ? .up : .down
-            if device {
-                await refreshDeviceScreenAspectRatio()
-                await refreshBloomin8SettingsStatus()
-            } else if settings.bloomin8ApiToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                bloomin8SettingsStatus = "Paste Bloomin8 token from the device app"
-            }
-            log.log(
-                .device,
-                level: device ? .success : .error,
-                device ? "Bloomin8 token OK" : "Bloomin8 unreachable or token missing",
-                detail: "GET /open-api/device/status"
-            )
+        if server, session?.isUnlocked == true {
+            await reloadRegisteredFrames()
+            await updateDeviceStatus()
+        } else if !server {
+            deviceLinkStatus = .down
         }
         log.log(
             .server,
@@ -434,7 +382,7 @@ public final class GalleryStore: ObservableObject {
         if session?.isUnlocked == true, server {
             await session?.revalidateIfUnlocked(store: self)
             if serverWasDown {
-                await refresh()
+                await pullFromServer(kind: .foreground)
             }
         }
     }
@@ -499,7 +447,7 @@ public final class GalleryStore: ObservableObject {
         guard session?.isUnlocked == true else { return }
         log.log(.gallery, level: .info, "Uploading \(urls.count) file(s)")
         await run(label: "Upload", category: .gallery) {
-            let client = try SyncClient(settings: settings)
+            let client = try makeSyncClient()
             var latest = state
             for url in urls {
                 let data = try PhotoCacheJPEG.normalizedJPEGData(fromFileURL: url)
@@ -511,11 +459,9 @@ public final class GalleryStore: ObservableObject {
                 )
                 latest = response.state
             }
-            try AppConfig.saveLocalState(latest.withResolvedCurrentPhoto())
-            try await SyncClient(settings: settings).downloadMissing(for: latest)
-            applyState(latest)
+            try await commitServerState(latest, client: client, downloadMissing: true)
             noteServerOK()
-            log.log(.gallery, level: .success, "Upload complete", detail: "version=\(latest.version)")
+            log.log(.gallery, level: .success, "Upload complete", detail: "version=\(state.version)")
             await updateDeviceStatus()
         }
     }
@@ -529,7 +475,7 @@ public final class GalleryStore: ObservableObject {
         }
         log.log(.gallery, level: .info, "Deleting \(ids.count) photo(s)")
         await run(label: "Delete", category: .gallery) {
-            let client = try SyncClient(settings: settings)
+            let client = try makeSyncClient()
             var latest = state
             let orderedIDs = latest.order.filter { ids.contains($0) }
             let trailing = ids.subtracting(orderedIDs)
@@ -537,8 +483,7 @@ public final class GalleryStore: ObservableObject {
                 let response = try await client.deletePhoto(id: id)
                 latest = response.state
             }
-            applyState(latest)
-            try AppConfig.saveLocalState(state)
+            try await commitServerState(latest)
             selection.subtractSelection(ids)
             noteServerOK()
             log.log(.gallery, level: .success, "Delete complete")
@@ -548,10 +493,9 @@ public final class GalleryStore: ObservableObject {
 
     func applyOrder(_ order: [PhotoID]) async {
         await run(label: "Reorder", category: .gallery) {
-            let client = try SyncClient(settings: settings)
+            let client = try makeSyncClient()
             let response = try await client.reorder(order)
-            applyState(response.state)
-            try AppConfig.saveLocalState(state)
+            try await commitServerState(response.state)
             noteServerOK()
         }
     }
@@ -606,7 +550,7 @@ public final class GalleryStore: ObservableObject {
         if FileManager.default.fileExists(atPath: cacheURL.path) {
             return try Data(contentsOf: cacheURL)
         }
-        let client = try SyncClient(settings: settings)
+        let client = try makeSyncClient()
         var req = URLRequest(url: client.imageURL(for: photo))
         req.setValue("Bearer \(client.bearer)", forHTTPHeaderField: "Authorization")
         let (data, res) = try await URLSession.shared.data(for: req)
@@ -645,14 +589,17 @@ public final class GalleryStore: ObservableObject {
         setAsCurrentInFlight = photoID
         defer { setAsCurrentInFlight = nil }
         await run(label: "Set current", category: .gallery) {
-            let client = try SyncClient(settings: settings)
+            let client = try makeSyncClient()
             let response = try await client.setCurrentPhoto(id: photoID)
-            applyState(response.state)
-            try AppConfig.saveLocalState(state)
+            try await commitServerState(response.state, client: client, downloadMissing: true)
             noteServerOK()
-            try await client.downloadMissing(for: response.state)
-            let pushOutcome = await pushCurrentToDeviceBestEffort(logSuccess: false)
-            logSetAsCurrentSuccess(pushOutcome: pushOutcome)
+            log.log(
+                .gallery,
+                level: .success,
+                "Set as current",
+                detail: "Server pushes the current JPEG to all registered frames."
+            )
+            await updateDeviceStatus()
         }
     }
 
@@ -660,46 +607,6 @@ public final class GalleryStore: ObservableObject {
         guard let delta, delta.didChange, delta.newId != setAsCurrentInFlight else { return }
         guard let pair = GalleryCurrentPhotoActivity.logEntry(delta: delta, photo: merged.currentPhoto()) else { return }
         log.log(.gallery, level: .success, pair.message, detail: pair.detail)
-    }
-
-    private func logSetAsCurrentSuccess(pushOutcome: Bloomin8PushOutcome?) {
-        var detail = "Saved as current photo."
-        if bloomin8DeviceSyncEnabled {
-            if pushOutcome != nil {
-                detail += " Your device will update on its next scheduled wake."
-            } else {
-                detail += " Saved on the server; use Sync to update your device."
-            }
-        }
-        log.log(.gallery, level: .success, "Set as current", detail: detail)
-    }
-
-    /// Server `currentPhotoId` is already saved; device push is best-effort (Open API queue).
-    @discardableResult
-    private func pushCurrentToDeviceBestEffort(logSuccess: Bool = true) async -> Bloomin8PushOutcome? {
-        guard bloomin8DeviceSyncEnabled else { return nil }
-        guard let photo = currentPhoto else { return nil }
-        do {
-            let outcome = try await Bloomin8DevicePush.pushCurrentPhoto(photo, settings: settings)
-            if logSuccess {
-                switch outcome {
-                case .queuedRemote(let eta, let rid):
-                    log.log(
-                        .device,
-                        level: .success,
-                        "Queued for device",
-                        detail: [eta.map { "wake \($0)" }, rid.map { "id \($0)" }, photo.filename]
-                            .compactMap { $0 }
-                            .joined(separator: " · ")
-                    )
-                }
-            }
-            return outcome
-        } catch {
-            log.log(error: error, category: .device, context: "Device push skipped (current saved on server)")
-            await updateDeviceStatus()
-            return nil
-        }
     }
 
     private func run(

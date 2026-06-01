@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var extraWindowObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        LegacySyncLaunchAgent.uninstallIfPresent()
         configureGlassWindows()
         observeExtraWindows()
         DispatchQueue.main.async { [weak self] in
@@ -24,7 +25,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let extraWindowObserver {
             NotificationCenter.default.removeObserver(extraWindowObserver)
         }
-        EmbeddedSyncRunner.shared.stop()
         ActivityLogStore.shared.stopLiveReload()
     }
 

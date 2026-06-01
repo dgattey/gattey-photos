@@ -47,7 +47,7 @@ public final class AppSession: ObservableObject {
             isUnlocked = true
             sessionPhase = .unlocked
             unlockError = nil
-            resumeBackgroundSync()
+            resumePeriodicPull(store: store)
         case .unauthorized:
             lock(store: store)
         case .unreachable:
@@ -56,7 +56,7 @@ public final class AppSession: ObservableObject {
             sessionPhase = .unlocked
             unlockError = nil
             store.markServerUnreachable()
-            resumeBackgroundSync()
+            resumePeriodicPull(store: store)
         }
     }
 
@@ -88,7 +88,7 @@ public final class AppSession: ObservableObject {
         isUnlocked = true
         sessionPhase = .unlocked
         unlockError = nil
-        resumeBackgroundSync()
+        resumePeriodicPull(store: store)
         return true
     }
 
@@ -97,23 +97,18 @@ public final class AppSession: ObservableObject {
         sessionPhase = .locked
         unlockedServerBaseURL = nil
         unlockError = nil
-        pauseBackgroundSync()
+        pausePeriodicPull(store: store)
         clearSessionToken(store: store)
         store.clearLockedGalleryData()
     }
 
-    private func resumeBackgroundSync() {
-        #if os(macOS)
-        SyncHelperLauncher.installLaunchAgentIfBundled()
-        #endif
-        EmbeddedSyncRunner.shared.startIfNeeded()
+    /// Periodic gallery pull while unlocked (all platforms). No sync when locked or quit.
+    private func resumePeriodicPull(store: GalleryStore) {
+        store.startPeriodicPullWhileUnlocked()
     }
 
-    private func pauseBackgroundSync() {
-        #if os(macOS)
-        SyncHelperLauncher.stopLaunchAgent()
-        #endif
-        EmbeddedSyncRunner.shared.stop()
+    private func pausePeriodicPull(store: GalleryStore) {
+        store.stopPeriodicPullWhileUnlocked()
     }
 
     func lockAndClearCaches(store: GalleryStore) {

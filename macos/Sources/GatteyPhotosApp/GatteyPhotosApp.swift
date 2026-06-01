@@ -52,13 +52,6 @@ struct GatteyPhotosApp: App {
                         set: { store.setDebugMode($0) }
                     )
                 )
-                if store.settings.debugMode, store.canControlLocalServer {
-                    Divider()
-                    Button(store.localServerShowsStop ? "Stop Server" : "Start Server") {
-                        Task { await store.toggleLocalServer() }
-                    }
-                    .disabled(store.isManagingLocalServer)
-                }
             }
         }
     }

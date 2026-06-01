@@ -1,5 +1,6 @@
 import { assertCronSecret } from "@/lib/auth";
 import { advanceCurrentPhoto } from "@/lib/gallery";
+import { commitManifest } from "@/lib/manifest-commit";
 import * as storage from "@/lib/storage";
 
 async function handleAdvance(request: Request) {
@@ -10,16 +11,14 @@ async function handleAdvance(request: Request) {
   const after = advanceCurrentPhoto(before);
   const changed = after.version !== before.version;
 
-  if (changed) {
-    await storage.writeManifest(after);
-  }
+  const saved = changed ? await commitManifest(after) : after;
 
   return Response.json({
     ok: true,
     advanced: changed,
     previousPhotoId: before.currentPhotoId ?? null,
-    currentPhotoId: after.currentPhotoId ?? null,
-    version: after.version,
+    currentPhotoId: saved.currentPhotoId ?? null,
+    version: saved.version,
   });
 }
 

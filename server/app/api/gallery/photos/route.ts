@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     deletedAt: null,
     uploadedBy,
   });
-  await storage.writeManifest(next);
-  const gallery = await buildGalleryResponse(request, next);
+  const saved = await storage.writeManifest(next);
+  const gallery = await buildGalleryResponse(request, saved);
   return Response.json(gallery, { status: 201 });
 }

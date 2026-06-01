@@ -1,6 +1,6 @@
 ---
 name: macos
-description: Change the Gattey Photos macOS SwiftUI app or sync helper binary. Use for UI, SyncClient, Bloomin8 uploads, LaunchAgent install, or Application Support config.
+description: Change the Gattey Photos macOS SwiftUI app. Use for UI, SyncClient, Application Support config, or shared GatteyPhotosUI behavior.
 ---
 
 # Gattey Photos macOS
@@ -13,12 +13,8 @@ The sync API is **not** bundled in the app. Run the server separately (`./script
 
 - `GatteyPhotosCore` — networking and merge; no SwiftUI
 - `GatteyPhotosUI` — shared SwiftUI (gallery, unlock, settings); used by macOS and iOS
-- `GatteyPhotosApp` — `@main` macOS shell (`AppDelegate`, Debug menu, local server controls)
-- `GatteyPhotosSyncHelper` — background sync binary bundled in `Gattey Photos.app/Contents/MacOS/` (every 15 minutes while unlocked)
-
-`SyncHelperLauncher` installs `~/Library/LaunchAgents/com.gattey.photos.sync.plist` on unlock / auto-unlock and removes it on lock. Helper reads `config.json`; no sync without `syncSessionToken`.
-
-`EmbeddedSyncRunner` runs the same loop in-process when developing via `swift run` (no bundled helper).
+- `GatteyPhotosApp` — `@main` macOS shell (`AppDelegate`, Debug menu)
+Gallery pull while unlocked matches iOS: `AppSession` starts `GalleryStore.startPeriodicPullWhileUnlocked()` (15 min, same code path as refresh and ⌘R Sync). No LaunchAgent or bundled helper binary.
 
 Open `macos/Package.swift` in Xcode for debugging UI.
 
@@ -51,19 +47,16 @@ Full-width `GalleryGridView`: left `DeviceCurrentPreview` (on-device photo, blac
 
 ## Settings popover
 
-`UnlockView` / `AppSession` — family password and Bloomin8 setup paste on the lock screen (full block via `Bloomin8TokenParser`; plain `TextField`, **?** popover covers API token + enabling Remote Image Push every 1 hour in the Bloomin8 app). Password field uses macOS Password AutoFill (`textContentType` + `AutofillPasswordField`); `GatteyPhotos.entitlements` includes `webcredentials:photos.gattey.com` (production also needs `/.well-known/apple-app-site-association` listing `TEAMID.com.gattey.photos`). `POST /api/auth/session` → `syncSessionToken` in `config.json` (legacy `syncPassword` ignored).
+`UnlockView` / `AppSession` — name + family password only. `POST /api/auth/session` → `syncSessionToken` in `config.json`.
 
-`SettingsPopover.swift` — read-only sync server caption and Bloomin8 status only. Local **Start/Stop server** when `repo-root.txt` exists. **Debug → Toggle Debug Mode** switches between `http://127.0.0.1:3000` and production; turning debug off stops the local server when it was running.
+`SettingsPopover.swift` + `FramesSettingsSection.swift` — register frames on the server (paste Bloomin8 setup block; tokens encrypted in `devices/registry.json` on Blob). **Debug → Toggle Debug Mode** switches API URL; start local server with `./scripts/dev.sh` (not from the app).
+
+**Frames:** `GET /api/devices`, `POST /api/devices`, `GET /api/devices/status`. Server pushes to einkshot after `currentPhotoId` changes. No client pull when locked or quit.
 
 Activity log inspector (toolbar / ⌘B) only when debug mode is on.
 
-**Device auth & status:** Bearer `bloomin8ApiToken` → `GET /open-api/device/status` for connection pill and screen aspect ratio. No Bonjour/subnet scan.
-
-**Device push:** `Bloomin8DevicePush.pushCurrentPhoto` → `Bloomin8OpenAPIClient` `POST /open-api/push` (queued for next wake). Set current saves server `currentPhotoId` even if device push fails.
-
 ## Sync flows
 
-- Refresh toolbar → `SyncEngine.pullAndMerge`
-- Packaged helper / embedded runner → `SyncLoop` → `SyncEngine.fullSync`
+- `GalleryStore.pullFromServer` — one path for foreground refresh, ⌘R Sync, and the 15-minute timer while unlocked (`SyncEngine.syncFromServer` underneath)
 
-When adding Bloomin8 behavior, use `Bloomin8OpenAPIClient.swift` and `Bloomin8DevicePush`.
+Server Bloomin8: `server/lib/bloomin8/`, `server/lib/devices/`.

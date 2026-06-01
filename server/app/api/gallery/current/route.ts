@@ -1,6 +1,7 @@
 import { assertSyncPassword } from "@/lib/auth";
 import { setCurrentPhoto } from "@/lib/gallery";
 import { buildGalleryResponse } from "@/lib/gallery-service";
+import { commitManifest } from "@/lib/manifest-commit";
 import * as storage from "@/lib/storage";
 import type { PhotoId } from "@/lib/types";
 
@@ -18,7 +19,7 @@ export async function PUT(request: Request) {
   if (next.currentPhotoId !== body.photoId) {
     return new Response("photo not active", { status: 400 });
   }
-  await storage.writeManifest(next);
-  const gallery = await buildGalleryResponse(request, next);
+  const saved = await commitManifest(next);
+  const gallery = await buildGalleryResponse(request, saved);
   return Response.json(gallery);
 }

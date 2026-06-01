@@ -123,13 +123,36 @@ export function setOrder(state: GalleryState, order: PhotoId[]): GalleryState {
   return bump({ ...state, order: [...filtered, ...missing] });
 }
 
-/** Ensures every photo has `uploadedBy`; returns whether the manifest changed. */
+/**
+ * Ensures `currentPhotoId` is null when empty, or the first active id in `order`
+ * when missing or invalid (matches macOS `withResolvedCurrentPhoto`).
+ */
+export function resolveCurrentPhoto(state: GalleryState): {
+  state: GalleryState;
+  dirty: boolean;
+} {
+  const active = activeOrder(state);
+  if (active.length === 0) {
+    if (state.currentPhotoId == null) {
+      return { state, dirty: false };
+    }
+    return { state: bump({ ...state, currentPhotoId: null }), dirty: true };
+  }
+  const current = state.currentPhotoId;
+  if (current && active.includes(current)) {
+    return { state, dirty: false };
+  }
+  return { state: bump({ ...state, currentPhotoId: active[0]! }), dirty: true };
+}
+
+/** Backfill `uploadedBy` and repair `currentPhotoId`; returns whether persistence is needed. */
 export function normalizeManifest(state: GalleryState): {
   state: GalleryState;
   dirty: boolean;
 } {
+  let next = state;
   let dirty = false;
-  const photos = { ...state.photos };
+  const photos = { ...next.photos };
   for (const id of Object.keys(photos)) {
     const photo = photos[id]!;
     if (!photo.uploadedBy) {
@@ -137,7 +160,14 @@ export function normalizeManifest(state: GalleryState): {
       dirty = true;
     }
   }
-  return dirty ? { state: { ...state, photos }, dirty: true } : { state, dirty: false };
+  if (dirty) {
+    next = { ...next, photos };
+  }
+  const resolved = resolveCurrentPhoto(next);
+  return {
+    state: resolved.state,
+    dirty: dirty || resolved.dirty,
+  };
 }
 
 export function upsertPhoto(state: GalleryState, entry: PhotoEntry): GalleryState {

@@ -17,6 +17,7 @@ export async function writeManifest(state: GalleryState): Promise<void> {
   await put(MANIFEST_PATH, JSON.stringify(state), {
     access: "public",
     addRandomSuffix: false,
+    allowOverwrite: true,
     contentType: "application/json",
   });
 }
@@ -25,6 +26,7 @@ export async function putBytes(blobPath: string, bytes: Buffer): Promise<string>
   const result = await put(blobPath, bytes, {
     access: "public",
     addRandomSuffix: false,
+    allowOverwrite: true,
     contentType: "image/jpeg",
   });
   return result.url;

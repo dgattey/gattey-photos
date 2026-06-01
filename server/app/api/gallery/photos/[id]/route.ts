@@ -18,7 +18,7 @@ export async function DELETE(request: Request, { params }: Params) {
   if (next === null) {
     return new Response("cannot delete last photo", { status: 400 });
   }
-  await storage.writeManifest(next);
-  const gallery = await buildGalleryResponse(request, next);
+  const saved = await storage.writeManifest(next);
+  const gallery = await buildGalleryResponse(request, saved);
   return Response.json(gallery);
 }

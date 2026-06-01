@@ -6,9 +6,7 @@ struct UnlockView: View {
     @EnvironmentObject private var session: AppSession
     @State private var displayName = AppSettings.defaultDisplayName
     @State private var password = ""
-    @State private var bloomin8SetupText = ""
     @State private var showPassword = false
-    @State private var showBloomin8Help = false
     @State private var showPasswordHelp = false
     @State private var isUnlocking = false
     @State private var unlockFormHeight: CGFloat = 0
@@ -39,11 +37,6 @@ struct UnlockView: View {
             if !savedName.isEmpty {
                 displayName = savedName
             }
-            #if os(macOS)
-            if bloomin8SetupText.isEmpty, !store.settings.bloomin8ApiToken.isEmpty {
-                bloomin8SetupText = store.settings.bloomin8ApiToken
-            }
-            #endif
         }
     }
 
@@ -162,10 +155,6 @@ struct UnlockView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    #if os(macOS)
-                    bloomin8TokenField
-                    #endif
-
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 6) {
                             Text("Family password")
@@ -252,53 +241,13 @@ struct UnlockView: View {
     }
 
     private var unlockSubtitle: String {
-        #if os(iOS)
-        "Enter your name and the family password to open the gallery."
-        #else
-        "Enter your name, the family password, and your device API token to open the gallery."
-        #endif
+        "Enter your name and the family password to open the gallery. Register frames in Settings after you sign in."
     }
 
     private var canSubmitUnlock: Bool {
         let nameOK = !displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        guard nameOK, !password.isEmpty else { return false }
-        #if os(macOS)
-        return !bloomin8SetupText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        #else
-        return true
-        #endif
+        return nameOK && !password.isEmpty
     }
-
-    #if os(macOS)
-    private var bloomin8TokenField: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Text("Your device API token")
-                    .font(AppTypography.unlockBody)
-                Button {
-                    showBloomin8Help = true
-                } label: {
-                    Image(systemName: "questionmark.circle")
-                }
-                .buttonStyle(.borderless)
-                .help("How to get your API token")
-                .popover(isPresented: $showBloomin8Help, arrowEdge: .top) {
-                    Bloomin8TokenHelpPopover()
-                }
-                Spacer(minLength: 0)
-            }
-            TextField(
-                "Paste the full block from the Bloomin8 app",
-                text: $bloomin8SetupText,
-                axis: .vertical
-            )
-            .textFieldStyle(.roundedBorder)
-            .font(AppTypography.unlockBody)
-            .lineLimit(3...8)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-    #endif
 
     private func attemptUnlock() async {
         session.unlockError = nil
@@ -308,26 +257,16 @@ struct UnlockView: View {
             return
         }
         store.settings.displayName = trimmedName
-        #if os(macOS)
-        store.settings.bloomin8ApiToken = bloomin8SetupText
-        store.applyBloomin8TokenFromPaste()
-        guard !store.settings.bloomin8ApiToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            session.unlockError = "Paste your device API token (full block from the device app)."
-            return
-        }
-        #endif
         isUnlocking = true
         defer { isUnlocking = false }
         let ok = await session.unlock(password: password, store: store)
         if ok {
             password = ""
-            #if os(macOS)
-            bloomin8SetupText = store.settings.bloomin8ApiToken
-            #endif
             store.saveSettings()
             async let status: Void = store.updateConnectionStatus()
             async let gallery: Void = store.refresh()
-            _ = await (status, gallery)
+            async let frames: Void = store.reloadRegisteredFrames()
+            _ = await (status, gallery, frames)
         }
     }
 }

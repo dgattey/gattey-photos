@@ -76,7 +76,7 @@ public struct GalleryState: Codable, Equatable, Sendable {
         return currentPhotoId != photoID
     }
 
-    /// Ensures `currentPhotoId` points at an active photo when the gallery is non-empty.
+    /// Local cache repair; server normalizes `currentPhotoId` on read/write (same rules).
     public func withResolvedCurrentPhoto() -> GalleryState {
         let active = activePhotos()
         guard !active.isEmpty else {
@@ -108,16 +108,13 @@ public struct AppSettings: Codable, Sendable {
     }
 
     public var serverBaseURL: String
-    /// When true, `serverBaseURL` is forced to `LocalSyncServer.defaultBaseURL` and local server controls are available.
+    /// When true, `serverBaseURL` points at local dev (`http://127.0.0.1:3000`). Start API via `./scripts/dev.sh`.
     public var debugMode: Bool
     /// Opaque server-issued session token (persisted). Never the sync password.
     public var syncSessionToken: String
     public var galleryName: String
-    /// Shown on unlock; sent as `uploadedBy` on gallery uploads.
+    /// Shown on unlock; sent as `uploadedBy` on gallery uploads and frame registration.
     public var displayName: String
-    /// Bearer token for Bloomin8 Open API (`GET /open-api/device/status`, `POST /open-api/push`). Paste full setup block; app stores token only.
-    public var bloomin8ApiToken: String
-    public var bloomin8OpenApiBaseURL: String
     /// iPad split: left pane width as a fraction of the gallery split (0.28…0.72). macOS uses intrinsic width from device aspect + height.
     public var previewPaneSplitFraction: Double
     /// Photos per row in the gallery thumbnail grid (fixed column count).
@@ -142,9 +139,7 @@ public struct AppSettings: Codable, Sendable {
             debugMode: false,
             syncSessionToken: "",
             galleryName: "default",
-            displayName: defaultDisplayName,
-            bloomin8ApiToken: "",
-            bloomin8OpenApiBaseURL: Bloomin8OpenAPIClient.defaultBaseURL
+            displayName: defaultDisplayName
         )
     }
 
@@ -152,7 +147,7 @@ public struct AppSettings: Codable, Sendable {
         case serverBaseURL, debugMode, syncSessionToken, galleryName, displayName
         // Legacy; never written. Dropped on load.
         case deviceIP
-        case bloomin8ApiToken, bloomin8OpenApiBaseURL
+        case bloomin8ApiToken, bloomin8OpenApiBaseURL // legacy; dropped on load, never written
         case previewPaneSplitFraction
         case galleryGridColumnCount
         /// Legacy adaptive minimum width; migrated to `galleryGridColumnCount` on load.
@@ -167,8 +162,6 @@ public struct AppSettings: Codable, Sendable {
         syncSessionToken: String,
         galleryName: String,
         displayName: String = AppSettings.defaultDisplayName,
-        bloomin8ApiToken: String = "",
-        bloomin8OpenApiBaseURL: String = Bloomin8OpenAPIClient.defaultBaseURL,
         previewPaneSplitFraction: Double = AppSettings.previewPaneSplitFractionDefault,
         galleryGridColumnCount: Int = AppSettings.galleryGridColumnCountDefault
     ) {
@@ -179,8 +172,6 @@ public struct AppSettings: Codable, Sendable {
         self.displayName = displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? Self.defaultDisplayName
             : displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.bloomin8ApiToken = bloomin8ApiToken
-        self.bloomin8OpenApiBaseURL = bloomin8OpenApiBaseURL
         self.previewPaneSplitFraction = Self.clampedPreviewPaneSplitFraction(previewPaneSplitFraction)
         self.galleryGridColumnCount = Self.clampedGalleryGridColumnCount(galleryGridColumnCount)
     }
@@ -212,8 +203,8 @@ public struct AppSettings: Codable, Sendable {
         displayName = nameRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? Self.defaultDisplayName
             : nameRaw.trimmingCharacters(in: .whitespacesAndNewlines)
-        bloomin8ApiToken = try c.decodeIfPresent(String.self, forKey: .bloomin8ApiToken) ?? d.bloomin8ApiToken
-        bloomin8OpenApiBaseURL = try c.decodeIfPresent(String.self, forKey: .bloomin8OpenApiBaseURL) ?? d.bloomin8OpenApiBaseURL
+        _ = try c.decodeIfPresent(String.self, forKey: .bloomin8ApiToken)
+        _ = try c.decodeIfPresent(String.self, forKey: .bloomin8OpenApiBaseURL)
         let splitRaw = try c.decodeIfPresent(Double.self, forKey: .previewPaneSplitFraction)
             ?? Self.previewPaneSplitFractionDefault
         previewPaneSplitFraction = Self.clampedPreviewPaneSplitFraction(splitRaw)
@@ -235,8 +226,6 @@ public struct AppSettings: Codable, Sendable {
         try c.encode(syncSessionToken, forKey: .syncSessionToken)
         try c.encode(galleryName, forKey: .galleryName)
         try c.encode(displayName, forKey: .displayName)
-        try c.encode(bloomin8ApiToken, forKey: .bloomin8ApiToken)
-        try c.encode(bloomin8OpenApiBaseURL, forKey: .bloomin8OpenApiBaseURL)
         try c.encode(previewPaneSplitFraction, forKey: .previewPaneSplitFraction)
         try c.encode(galleryGridColumnCount, forKey: .galleryGridColumnCount)
     }
