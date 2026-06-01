@@ -68,7 +68,7 @@ The macOS app uses the **Bloomin8 Open API** (einkshot) with a device Bearer tok
 
 Local dev (`GATTEY_LOCAL_STORAGE=1`) mirrors the same layout under `server/.data/`. `currentPhotoId` is a field inside the manifest JSON, not a separate blob or server session.
 
-**Scheduled advance (production):** Vercel Cron hits `GET /api/cron/advance-current` every 4 hours (`server/vercel.json`), authenticated with `CRON_SECRET` (`Authorization: Bearer`). The handler advances `currentPhotoId` along manifest `order` among active photos (wrap at end). Local dev: `./scripts/local-advance-cron.sh` (default 30 minutes / 1800s; override `ADVANCE_CURRENT_INTERVAL_SECONDS`) or a manual `curl` to the same route.
+**Scheduled advance (production):** Vercel Cron hits `GET /api/cron/advance-current` once daily at 12:00 UTC (`server/vercel.json`, `0 12 * * *`; Hobby allows at most one run per day). Authenticated with `CRON_SECRET` (`Authorization: Bearer`). The handler advances `currentPhotoId` along manifest `order` among active photos (wrap at end). Local dev: `./scripts/local-advance-cron.sh` (default 30 minutes / 1800s; override `ADVANCE_CURRENT_INTERVAL_SECONDS`) or a manual `curl` to the same route.
 
 **Cron → device (not direct):** Cron only writes the manifest. The Mac (or sync helper) must pull, then `POST /open-api/push` to einkshot; the frame shows the image on its next scheduled wake. Background `SyncLoop` uses `fullSync` every 15 minutes while unlocked. The UI `refresh()` path also queues a device push when `currentPhotoId` changed on pull. Manual **Sync** (`syncAll`) always pushes the current photo after pull.
 
