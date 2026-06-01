@@ -24,7 +24,7 @@ Manifest path is always `gallery/manifest.json` (`MANIFEST_PATH` in `lib/gallery
 
 `lib/auth.ts` — `assertSyncPassword` on gallery routes (Bearer = password or signed session token). `POST /api/auth/session` mints tokens (`assertPasswordOnly`). `GET /api/auth/verify` checks Bearer auth.
 
-`GET|POST /api/cron/advance-current` — `assertCronSecret` (`Authorization: Bearer` = `CRON_SECRET`). Vercel Cron schedule in `vercel.json` (`0 12 * * *`, once daily for Hobby). Local loop: `./scripts/local-advance-cron.sh`.
+`GET|POST /api/cron/advance-current` — `assertCronSecret` (`Authorization: Bearer` = `CRON_SECRET`). Vercel Cron schedule in `vercel.json` (`0 11 * * *` = 11:00 UTC daily; Hobby limit; ≈ 6 AM EST / 7 AM EDT / 3 AM PST / 4 AM PDT). Local loop: `./scripts/local-advance-cron.sh`.
 
 ## Local dev
 

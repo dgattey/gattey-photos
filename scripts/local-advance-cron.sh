@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Local stand-in for Vercel Cron: advance currentPhotoId on an interval.
-# Production uses vercel.json (every 4h). Default here: 30 minutes (1800s).
+# Production uses vercel.json (0 11 * * * = once daily at 11:00 UTC). Default here: 30 minutes (1800s).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SERVER="$ROOT/server"

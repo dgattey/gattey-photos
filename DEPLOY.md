@@ -22,7 +22,16 @@ Do **not** set `GATTEY_LOCAL_STORAGE` in production.
 
 ## Scheduled current photo
 
-`server/vercel.json` runs **`0 12 * * *`** (once daily at 12:00 UTC; Hobby plan limit) against `/api/cron/advance-current`, advancing `currentPhotoId` to the next active id in manifest `order` (wraps at end). Mac apps and Bloomin8 pick this up on their normal sync.
+`server/vercel.json` runs **`0 11 * * *`** (once daily at **11:00 UTC**; Hobby plan limit; Vercel crons are UTC-only) against `/api/cron/advance-current`, advancing `currentPhotoId` to the next active id in manifest `order` (wraps at end). Mac apps and Bloomin8 pick this up on their normal sync.
+
+That time is overnight in the US and finishes before a typical ~7 AM wake on both coasts:
+
+| Zone | Local time (11:00 UTC) |
+|------|-------------------------|
+| EST | 6:00 AM |
+| EDT | 7:00 AM |
+| PST | 3:00 AM |
+| PDT | 4:00 AM |
 
 Local verification (1-hour loop while the dev API is up):
 
