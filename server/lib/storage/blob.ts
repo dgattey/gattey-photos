@@ -1,44 +1,29 @@
-import { head, list, put } from "@vercel/blob";
+import { list } from "@vercel/blob";
 import type { GalleryState } from "../types";
 import { MANIFEST_PATH, emptyGallery } from "../gallery";
+import { readBlobBytes, writeBlob } from "./blob-access";
 
 export async function readManifest(): Promise<GalleryState> {
+  const bytes = await readBlobBytes(MANIFEST_PATH);
+  if (!bytes) return emptyGallery();
   try {
-    const meta = await head(MANIFEST_PATH);
-    const res = await fetch(meta.url);
-    if (!res.ok) return emptyGallery();
-    return (await res.json()) as GalleryState;
+    return JSON.parse(bytes.toString("utf8")) as GalleryState;
   } catch {
     return emptyGallery();
   }
 }
 
 export async function writeManifest(state: GalleryState): Promise<void> {
-  await put(MANIFEST_PATH, JSON.stringify(state), {
-    access: "public",
-    addRandomSuffix: false,
-    allowOverwrite: true,
-    contentType: "application/json",
-  });
+  await writeBlob(MANIFEST_PATH, JSON.stringify(state), "application/json");
 }
 
 export async function putBytes(blobPath: string, bytes: Buffer): Promise<string> {
-  const result = await put(blobPath, bytes, {
-    access: "public",
-    addRandomSuffix: false,
-    allowOverwrite: true,
-    contentType: "image/jpeg",
-  });
-  return result.url;
+  await writeBlob(blobPath, bytes, "image/jpeg");
+  return blobPath;
 }
 
-export async function getBytesUrl(blobPath: string): Promise<string | null> {
-  try {
-    const meta = await head(blobPath);
-    return meta.url;
-  } catch {
-    return null;
-  }
+export async function readPhotoBytes(blobPath: string): Promise<Buffer | null> {
+  return readBlobBytes(blobPath);
 }
 
 export async function listPhotoBlobs(): Promise<string[]> {

@@ -47,18 +47,16 @@ export async function putPhotoBytes(
   return blob.putBytes(blobPath, bytes);
 }
 
+/** Local dev only; production serves bytes via `/api/gallery/photos/[id]/image`. */
 export async function resolveDownloadUrl(
   request: Request,
   blobPath: string
 ): Promise<string | null> {
-  if (useLocal()) {
-    const local = await import("./local");
-    const bytes = await local.getBytes(blobPath);
-    if (!bytes) return null;
-    return local.localDownloadUrl(request, blobPath);
-  }
-  const blob = await import("./blob");
-  return blob.getBytesUrl(blobPath);
+  if (!useLocal()) return null;
+  const local = await import("./local");
+  const bytes = await local.getBytes(blobPath);
+  if (!bytes) return null;
+  return local.localDownloadUrl(request, blobPath);
 }
 
 export async function readPhotoBytes(blobPath: string): Promise<Buffer | null> {
@@ -66,10 +64,6 @@ export async function readPhotoBytes(blobPath: string): Promise<Buffer | null> {
     const local = await import("./local");
     return local.getBytes(blobPath);
   }
-  const meta = await import("./blob");
-  const url = await meta.getBytesUrl(blobPath);
-  if (!url) return null;
-  const res = await fetch(url);
-  if (!res.ok) return null;
-  return Buffer.from(await res.arrayBuffer());
+  const blob = await import("./blob");
+  return blob.readPhotoBytes(blobPath);
 }

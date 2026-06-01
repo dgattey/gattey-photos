@@ -20,7 +20,7 @@ description: Change the Gattey Photos Next.js sync API on Vercel (gallery routes
 
 ## Storage
 
-`lib/storage/index.ts` picks backend via `GATTEY_LOCAL_STORAGE` (Vercel Blob in production).
+`lib/storage/index.ts` picks backend via `GATTEY_LOCAL_STORAGE` (Vercel Blob in production). Blob `put`/`get` use `access: private` by default (`GATTEY_BLOB_ACCESS=public` only for a public store). Prod downloads: `/api/gallery/photos/[id]/image`, not direct Blob URLs.
 
 - `gallery/manifest.json` — `GalleryState`
 - `devices/registry.json` — frame tokens (AES-GCM with `SYNC_PASSWORD`)

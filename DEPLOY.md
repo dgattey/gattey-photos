@@ -20,6 +20,8 @@ Vercel only deploys `server/` when root directory is set. No monorepo rewrite is
 
 Do **not** set `GATTEY_LOCAL_STORAGE` in production.
 
+Blob uploads use **`access: private`** by default (required when the linked Blob store is private). Optional `GATTEY_BLOB_ACCESS=public` only if the store is configured for public access. Gallery JPEGs are not served from raw Blob URLs in production; clients use authenticated `GET /api/gallery/photos/{id}/image` (`downloadUrl` in API responses). Re-upload photos if an old manifest still points at obsolete public Blob URLs.
+
 ## Scheduled current photo
 
 `server/vercel.json` runs **`0 11 * * *`** (once daily at **11:00 UTC**; Hobby plan limit; Vercel crons are UTC-only) against `/api/cron/advance-current`, advancing `currentPhotoId` to the next active id in manifest `order` (wraps at end). Mac apps and Bloomin8 pick this up on their normal sync.

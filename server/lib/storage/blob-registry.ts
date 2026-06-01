@@ -1,23 +1,17 @@
-import { head, put } from "@vercel/blob";
 import type { DeviceRegistry } from "../types";
 import { emptyRegistry, REGISTRY_PATH } from "./registry-storage";
+import { readBlobBytes, writeBlob } from "./blob-access";
 
 export async function readRegistry(): Promise<DeviceRegistry> {
+  const bytes = await readBlobBytes(REGISTRY_PATH);
+  if (!bytes) return emptyRegistry();
   try {
-    const meta = await head(REGISTRY_PATH);
-    const res = await fetch(meta.url);
-    if (!res.ok) return emptyRegistry();
-    return (await res.json()) as DeviceRegistry;
+    return JSON.parse(bytes.toString("utf8")) as DeviceRegistry;
   } catch {
     return emptyRegistry();
   }
 }
 
 export async function writeRegistry(registry: DeviceRegistry): Promise<void> {
-  await put(REGISTRY_PATH, JSON.stringify(registry), {
-    access: "public",
-    addRandomSuffix: false,
-    allowOverwrite: true,
-    contentType: "application/json",
-  });
+  await writeBlob(REGISTRY_PATH, JSON.stringify(registry), "application/json");
 }
