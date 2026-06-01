@@ -19,7 +19,7 @@ description: Work on the Gattey Photos monorepo — macOS SwiftUI app, sync serv
 
 ## Invariants
 
-1. **Auth:** API calls use `Authorization: Bearer` with `syncSessionToken` (or the sync password for session minting). Secret is `SYNC_PASSWORD` on the server only; unlock screen collects the password once per machine.
+1. **Auth:** Gallery/device API calls use `Authorization: Bearer` with `syncSessionToken` only. The family password is sent once to `POST /api/auth/session` to mint the token; `SYNC_PASSWORD` stays on the server.
 2. **Merge:** `GalleryMerge.merge` in Swift mirrors server truth — remote wins except local-only active photo ids. Server `normalizeManifest` repairs `currentPhotoId` on read/write; client `withResolvedCurrentPhoto` is idempotent cache repair only.
 3. **Device:** Server pushes current JPEG via einkshot `POST /open-api/push` on manual set-current and cron advance (`commitManifest`).
 4. **Cache:** JPEG bytes live in `~/Library/Application Support/GatteyPhotos/cache/{id}.jpg`.

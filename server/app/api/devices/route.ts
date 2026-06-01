@@ -1,15 +1,15 @@
-import { assertSyncPassword } from "@/lib/auth";
+import { assertSessionToken } from "@/lib/auth";
 import { listDevices, registerDevice } from "@/lib/devices/registry";
 
 export async function GET(request: Request) {
-  const auth = await assertSyncPassword(request);
+  const auth = await assertSessionToken(request);
   if (auth) return auth;
   const devices = await listDevices();
   return Response.json({ devices });
 }
 
 export async function POST(request: Request) {
-  const auth = await assertSyncPassword(request);
+  const auth = await assertSessionToken(request);
   if (auth) return auth;
 
   const body = (await request.json()) as {

@@ -68,17 +68,14 @@ public final class AppSession: ObservableObject {
             unlockError = "Enter the password."
             return false
         }
-        switch await AuthVerifier.verify(settings: store.settings, bearer: trimmed) {
-        case .ok:
-            break
-        case .unauthorized:
+        let sessionToken: String
+        switch await AuthVerifier.createSession(password: trimmed, settings: store.settings) {
+        case .success(let token):
+            sessionToken = token
+        case .wrongPassword:
             unlockError = "Wrong password. Grab the latest from 1Password."
             return false
         case .unreachable:
-            unlockError = ServerConnectivityCopy.serverDown(at: store.settings.serverBaseURL)
-            return false
-        }
-        guard let sessionToken = await AuthVerifier.createSession(password: trimmed, settings: store.settings) else {
             unlockError = ServerConnectivityCopy.serverDown(at: store.settings.serverBaseURL)
             return false
         }

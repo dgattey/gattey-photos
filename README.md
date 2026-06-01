@@ -51,4 +51,4 @@ Stop the dev supervisor:
 
 ## API
 
-`Authorization: Bearer` with the sync password or an opaque session token from `POST /api/auth/session`. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+`Authorization: Bearer` with a session token from `POST /api/auth/session` (family password only on that route). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).

@@ -33,16 +33,14 @@ struct GatteyPhotosApp: App {
                 .keyboardShortcut("r", modifiers: .command)
                 .disabled(!session.isUnlocked || store.isBusy || store.isSyncing)
             }
-            if store.settings.debugMode {
-                CommandGroup(replacing: .sidebar) {
-                    Button(
-                        chrome.showActivityInspector ? "Hide Activity" : "Show Activity",
-                        systemImage: AppChromeState.activityInspectorSymbolName
-                    ) {
-                        chrome.showActivityInspector.toggle()
-                    }
-                    .keyboardShortcut("b", modifiers: .command)
+            CommandGroup(replacing: .sidebar) {
+                Button(
+                    chrome.showActivityInspector ? "Hide Activity" : "Show Activity",
+                    systemImage: AppChromeState.activityInspectorSymbolName
+                ) {
+                    chrome.showActivityInspector.toggle()
                 }
+                .keyboardShortcut("b", modifiers: .command)
             }
             CommandMenu("Debug") {
                 Toggle(

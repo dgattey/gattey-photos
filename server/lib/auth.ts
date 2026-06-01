@@ -64,26 +64,25 @@ export function verifySessionToken(secret: string, token: string): boolean {
   return true;
 }
 
-async function tokenMatchesSyncAuth(token: string): Promise<boolean> {
+async function bearerIsValidSession(token: string): Promise<boolean> {
   const secret = await syncSecret();
   if (!secret) return false;
-  if (token === secret) return true;
   return verifySessionToken(secret, token);
 }
 
-/** Accepts Bearer = sync password or a valid signed session token. */
-export async function assertSyncPassword(request: Request): Promise<Response | null> {
+/** Gallery/devices routes: Bearer must be a session token from `POST /api/auth/session`. */
+export async function assertSessionToken(request: Request): Promise<Response | null> {
   const token = bearerToken(request);
   if (!token) {
     return new Response("Unauthorized", { status: 401 });
   }
-  if (!(await tokenMatchesSyncAuth(token))) {
+  if (!(await bearerIsValidSession(token))) {
     return new Response("Unauthorized", { status: 401 });
   }
   return null;
 }
 
-/** Session minting: Bearer must be the sync password only (not an existing session). */
+/** `POST /api/auth/session`: Bearer must be the family sync password (not a session token). */
 export async function assertPasswordOnly(request: Request): Promise<Response | null> {
   const token = bearerToken(request);
   if (!token) {

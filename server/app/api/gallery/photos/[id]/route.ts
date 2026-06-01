@@ -1,4 +1,4 @@
-import { assertSyncPassword } from "@/lib/auth";
+import { assertSessionToken } from "@/lib/auth";
 import { softDelete } from "@/lib/gallery";
 import { buildGalleryResponse } from "@/lib/gallery-service";
 import * as storage from "@/lib/storage";
@@ -6,7 +6,7 @@ import * as storage from "@/lib/storage";
 type Params = { params: Promise<{ id: string }> };
 
 export async function DELETE(request: Request, { params }: Params) {
-  const auth = await assertSyncPassword(request);
+  const auth = await assertSessionToken(request);
   if (auth) return auth;
 
   const { id } = await params;

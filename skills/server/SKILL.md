@@ -7,7 +7,7 @@ description: Change the Gattey Photos Next.js sync API on Vercel (gallery routes
 
 ## Entry points
 
-- `app/route.ts` — `GET /` returns `text/plain` (`available` / `unavailable`; 503 when manifest storage is unreachable; same check as `/api/health`)
+- `app/route.ts` — `GET /` returns `404` with empty body (no public home page; use `/api/health` for status)
 - `app/api/gallery/route.ts` — GET manifest
 - `app/api/gallery/photos/route.ts` — POST upload
 - `app/api/gallery/photos/[id]/route.ts` — DELETE
@@ -30,7 +30,7 @@ description: Change the Gattey Photos Next.js sync API on Vercel (gallery routes
 
 ## Auth
 
-`lib/auth.ts` — `assertSyncPassword` on gallery routes (Bearer = password or signed session token). `POST /api/auth/session` mints tokens (`assertPasswordOnly`). `GET /api/auth/verify` checks Bearer auth.
+`lib/auth.ts` — `assertSessionToken` on gallery/devices routes (Bearer = signed session only). `POST /api/auth/session` mints tokens (`assertPasswordOnly`, password Bearer). `GET /api/auth/verify` validates session Bearer.
 
 `GET|POST /api/cron/advance-current` — `assertCronSecret` (`Authorization: Bearer` = `CRON_SECRET`). Vercel Cron schedule in `vercel.json` (`0 11 * * *` = 11:00 UTC daily; Hobby limit; ≈ 6 AM EST / 7 AM EDT / 3 AM PST / 4 AM PDT). Local loop: `./scripts/local-advance-cron.sh`.
 

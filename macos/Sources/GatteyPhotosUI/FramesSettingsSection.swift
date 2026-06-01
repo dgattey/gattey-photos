@@ -5,77 +5,60 @@ import SwiftUI
 struct FramesSettingsSection: View {
     @EnvironmentObject private var store: GalleryStore
     @State private var setupPasteText = ""
-    @State private var frameDisplayName = ""
     @State private var showBloomin8Help = false
     @State private var registerError: String?
     @State private var isRegistering = false
+    @FocusState private var isPasteFieldFocused: Bool
 
     var body: some View {
-        GroupBox("Frames") {
-            VStack(alignment: .leading, spacing: 10) {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 8) {
                 ConnectionPill(
                     title: "Frames",
-                    subtitle: store.framesStatusLine,
                     status: store.deviceLinkStatus
                 )
 
-                if store.registeredFrames.isEmpty {
-                    Text("No frames registered yet. Any family member can add one.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
+                if !store.registeredFrames.isEmpty {
                     ForEach(store.registeredFrames) { frame in
                         frameRow(frame)
                     }
                 }
 
-                Text(Bloomin8SetupClipboard.pasteInstructions)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                HStack(spacing: 8) {
-                    Button("Copy setup instructions") {
-                        Bloomin8SetupClipboard.copyPasteInstructions()
-                    }
-                    Button {
-                        showBloomin8Help = true
-                    } label: {
-                        Image(systemName: "questionmark.circle")
-                    }
-                    .buttonStyle(.borderless)
-                    .help("How to get the setup block from Bloomin8")
-                    .popover(isPresented: $showBloomin8Help, arrowEdge: .top) {
-                        Bloomin8TokenHelpPopover()
-                    }
-                    Spacer(minLength: 0)
-                }
-
-                TextField("Frame name (optional)", text: $frameDisplayName)
-                    .textFieldStyle(.roundedBorder)
-
                 pasteField
+
+                if isRegistering {
+                    ProgressView()
+                        .controlSize(.small)
+                }
 
                 if let registerError {
                     Text(registerError)
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
-
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text("Frames")
                 Button {
-                    Task { await registerFrame() }
+                    showBloomin8Help = true
                 } label: {
-                    if isRegistering {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Text("Register frame")
-                    }
+                    Image(systemName: "questionmark.circle")
                 }
-                .disabled(isRegistering || setupPasteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .buttonStyle(.borderless)
+                .help("How to register a Bloomin8 frame")
+                .popover(isPresented: $showBloomin8Help, arrowEdge: .top) {
+                    Bloomin8TokenHelpPopover()
+                }
             }
         }
         .onAppear {
             Task { await store.reloadRegisteredFrames() }
+        }
+        .onChange(of: isPasteFieldFocused) { wasFocused, isFocused in
+            if wasFocused, !isFocused {
+                Task { await registerOnBlurIfNeeded() }
+            }
         }
     }
 
@@ -109,40 +92,36 @@ struct FramesSettingsSection: View {
         }
     }
 
-    #if os(macOS)
-    private var pasteField: some View {
-        TextEditor(text: $setupPasteText)
-            .font(.system(.caption, design: .monospaced))
-            .frame(height: 56)
-            .scrollDisabled(true)
-            .padding(6)
-            .background {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
-            }
-    }
-    #else
     private var pasteField: some View {
         TextField(
-            "Paste Bloomin8 setup block",
+            "Paste Bloomin8 setup block or API key",
             text: $setupPasteText,
             axis: .vertical
         )
         .textFieldStyle(.roundedBorder)
         .lineLimit(3...6)
+        #if os(macOS)
+        .font(.system(.caption, design: .monospaced))
+        #endif
+        .focused($isPasteFieldFocused)
+        .disabled(isRegistering)
     }
-    #endif
 
-    private func registerFrame() async {
+    private func registerOnBlurIfNeeded() async {
         registerError = nil
+        let paste = setupPasteText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !paste.isEmpty else { return }
+
+        guard Bloomin8TokenParser.parseToken(from: paste) != nil else {
+            registerError = "Could not find a Bloomin8 API token. Paste the setup block or token only."
+            return
+        }
+
         isRegistering = true
         defer { isRegistering = false }
-        let paste = setupPasteText
-        let name = frameDisplayName
         do {
-            try await store.registerFrame(setupText: paste, displayName: name.isEmpty ? nil : name)
+            try await store.registerFrame(setupText: paste)
             setupPasteText = ""
-            frameDisplayName = ""
         } catch {
             registerError = error.localizedDescription
         }
@@ -151,6 +130,7 @@ struct FramesSettingsSection: View {
     private func removeFrame(_ id: String) async {
         do {
             try await store.unregisterFrame(id: id)
+            registerError = nil
         } catch {
             registerError = error.localizedDescription
         }

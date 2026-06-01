@@ -1,10 +1,10 @@
-import { assertSyncPassword } from "@/lib/auth";
+import { assertSessionToken } from "@/lib/auth";
 import { fetchDeviceStatus } from "@/lib/bloomin8/open-api";
 import { listDevicesDecrypted, toPublicDevice } from "@/lib/devices/registry";
 import type { DeviceLiveStatus } from "@/lib/types";
 
 export async function GET(request: Request) {
-  const auth = await assertSyncPassword(request);
+  const auth = await assertSessionToken(request);
   if (auth) return auth;
 
   const devices = await listDevicesDecrypted();

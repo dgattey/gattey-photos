@@ -6,6 +6,8 @@ struct UnlockView: View {
     @EnvironmentObject private var session: AppSession
     @State private var displayName = AppSettings.defaultDisplayName
     @State private var password = ""
+    @State private var bloomin8SetupText = ""
+    @State private var showBloomin8Help = false
     @State private var showPassword = false
     @State private var showPasswordHelp = false
     @State private var isUnlocking = false
@@ -155,6 +157,8 @@ struct UnlockView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
+                    bloomin8SetupField
+
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 6) {
                             Text("Family password")
@@ -249,6 +253,41 @@ struct UnlockView: View {
         return nameOK && !password.isEmpty
     }
 
+    private var bloomin8SetupField: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("Frame setup (optional)")
+                    .font(AppTypography.unlockBody)
+                Button {
+                    showBloomin8Help = true
+                } label: {
+                    Image(systemName: "questionmark.circle")
+                }
+                .buttonStyle(.borderless)
+                .help("How to get the Bloomin8 setup block")
+                #if os(macOS)
+                .popover(isPresented: $showBloomin8Help, arrowEdge: .top) {
+                    Bloomin8TokenHelpPopover()
+                }
+                #else
+                .unlockHelpSheet(isPresented: $showBloomin8Help, title: "Device setup") {
+                    Bloomin8TokenHelpPopover(showsInlineTitle: false)
+                }
+                #endif
+                Spacer(minLength: 0)
+            }
+            TextField(
+                "Paste Bloomin8 setup block",
+                text: $bloomin8SetupText,
+                axis: .vertical
+            )
+            .textFieldStyle(.roundedBorder)
+            .font(AppTypography.unlockBody)
+            .lineLimit(3...8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private func attemptUnlock() async {
         session.unlockError = nil
         let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -262,11 +301,21 @@ struct UnlockView: View {
         let ok = await session.unlock(password: password, store: store)
         if ok {
             password = ""
+            let setupPaste = bloomin8SetupText.trimmingCharacters(in: .whitespacesAndNewlines)
+            bloomin8SetupText = ""
             store.saveSettings()
             async let status: Void = store.updateConnectionStatus()
             async let gallery: Void = store.refresh()
             async let frames: Void = store.reloadRegisteredFrames()
             _ = await (status, gallery, frames)
+            if !setupPaste.isEmpty {
+                do {
+                    try await store.registerFrame(setupText: setupPaste)
+                } catch {
+                    session.unlockError =
+                        "Signed in, but frame registration failed: \(error.localizedDescription)"
+                }
+            }
         }
     }
 }
@@ -325,11 +374,11 @@ struct Bloomin8TokenHelpPopover: View {
                 )
                 helpStep(
                     4,
-                    "Scroll to API token, click it, then click Generate in the window that opens."
+                    "Scroll to API token. If you already created a key for this frame, open Bloomin8 on another signed-in device and copy that token’s value—you cannot generate a second key here. Otherwise tap the token row and Generate, then copy the block."
                 )
                 helpStep(
                     5,
-                    "Paste the text copied to your clipboard into this API token field."
+                    "Paste the full setup block (device name + token) into Frame setup on sign-in or into Settings → Frames."
                 )
             }
         }

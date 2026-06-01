@@ -10,6 +10,7 @@ xcuserdata/
 DerivedData/
 macos/.derivedData-ios/
 .build/
+.build-ios-check/
 .swiftpm/
 dist/
 macos/.icon-build/

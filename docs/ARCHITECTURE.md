@@ -55,7 +55,7 @@ Clients paste the Bloomin8 setup block in **Settings → Frames** (not at unlock
 
 ## Auth
 
-`Authorization: Bearer` accepts either the family sync password or a signed session token minted by `POST /api/auth/session`. Session tokens do not expire until `SYNC_PASSWORD` rotates. The app stores `syncSessionToken` and `displayName` in `config.json` after unlock.
+Gallery and device routes accept `Authorization: Bearer` with a signed session token from `POST /api/auth/session` only (password is not accepted on those routes). `GET /api/auth/verify` checks the stored session token. Session tokens do not expire until `SYNC_PASSWORD` rotates. The app stores `syncSessionToken` and `displayName` in `config.json` after unlock.
 
 **Client sync:** Pull-only via `GalleryStore.pullFromServer` (foreground refresh, manual sync, 15-minute timer while unlocked). No sync when locked or quit; no separate macOS helper or LaunchAgent.
 

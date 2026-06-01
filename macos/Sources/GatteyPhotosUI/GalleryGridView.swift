@@ -24,15 +24,11 @@ struct GalleryGridView: View {
 
     var body: some View {
         @Bindable var chrome = chrome
-        if store.settings.debugMode {
-            galleryShell
-                .inspector(isPresented: $chrome.showActivityInspector) {
-                    ActivityLogPaneView()
-                        .inspectorColumnWidth(min: 280, ideal: 320, max: 420)
-                }
-        } else {
-            galleryShell
-        }
+        galleryShell
+            .inspector(isPresented: $chrome.showActivityInspector) {
+                ActivityLogPaneView()
+                    .inspectorColumnWidth(min: 280, ideal: 320, max: 420)
+            }
     }
 
     private var galleryShell: some View {
@@ -71,12 +67,8 @@ struct GalleryGridView: View {
         .modifier(GalleryMacOSToolbarChrome())
         .modifier(GalleryMacOSToolbarTitleRemoval())
         #endif
-        .onChange(of: store.settings.debugMode) { _, enabled in
-            if !enabled {
-                chrome.showActivityInspector = false
-            }
-        }
         #if os(macOS)
+        // Fallback for chrome outside the grid; populated grids use AppKit targets (see thumbnailGridColumn).
         .onDrop(of: fileDropTypes, isTargeted: $isFileDropTargeted) { providers, _ in
             handleFileDrop(providers: providers)
         }
@@ -102,6 +94,14 @@ struct GalleryGridView: View {
             GeometryReader { viewport in
                 ScrollView {
                     ZStack(alignment: .top) {
+                        #if os(macOS)
+                        GalleryFileDropTarget(
+                            onDrop: handleFileURLDrop,
+                            isTargeted: $isFileDropTargeted
+                        )
+                        .frame(maxWidth: .infinity, minHeight: viewport.size.height)
+                        #endif
+
                         Color.clear
                             .frame(maxWidth: .infinity, minHeight: viewport.size.height)
                             .contentShape(Rectangle())
@@ -115,6 +115,19 @@ struct GalleryGridView: View {
                             }
                             .frame(maxWidth: .infinity, minHeight: 280)
                         } else {
+                            #if os(macOS)
+                            GalleryPhotoGrid(
+                                gridContainerWidth: viewport.size.width,
+                                currentPhotoID: store.state.currentPhotoId,
+                                deviceScreenAspectRatio: store.deviceScreenAspectRatio,
+                                dropInsertionIndex: $dropInsertionIndex,
+                                onSelectPhoto: handleGridPhotoTap,
+                                onOpenLightbox: { store.selection.openLightbox($0) },
+                                onReorderDrop: handleReorderDrop,
+                                onFileDrop: handleFileURLDrop,
+                                onFileDropTargeted: { isFileDropTargeted = $0 }
+                            )
+                            #else
                             GalleryPhotoGrid(
                                 gridContainerWidth: viewport.size.width,
                                 currentPhotoID: store.state.currentPhotoId,
@@ -124,14 +137,18 @@ struct GalleryGridView: View {
                                 onOpenLightbox: { store.selection.openLightbox($0) },
                                 onReorderDrop: handleReorderDrop
                             )
+                            #endif
                         }
                     }
                     .frame(maxWidth: .infinity, minHeight: viewport.size.height)
                 }
                 .scrollContentBackground(.hidden)
+                #if os(macOS)
                 .galleryMacOSGridScrollEdgeEffect()
+                #endif
             }
 
+            #if os(macOS)
             if isFileDropTargeted {
                 RoundedRectangle(cornerRadius: 12)
                     .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [8]))
@@ -139,6 +156,7 @@ struct GalleryGridView: View {
                     .padding(8)
                     .allowsHitTesting(false)
             }
+            #endif
         }
         .overlay(alignment: .bottom) {
             ThumbnailGridSelectionChrome()
@@ -197,6 +215,13 @@ struct GalleryGridView: View {
         }
         return true
     }
+
+    private func handleFileURLDrop(_ urls: [URL]) -> Bool {
+        Task { @MainActor in
+            await store.uploadFiles(urls: urls)
+        }
+        return true
+    }
     #endif
 
     private func handleReorderDrop(draggedIDs: [String], insertionIndex: Int) -> Bool {
@@ -247,6 +272,10 @@ private struct GalleryPhotoGrid: View {
     let onSelectPhoto: (PhotoID, GridTapModifiers) -> Void
     let onOpenLightbox: (PhotoID) -> Void
     let onReorderDrop: ([String], Int) -> Bool
+    #if os(macOS)
+    let onFileDrop: ([URL]) -> Bool
+    let onFileDropTargeted: (Bool) -> Void
+    #endif
 
     /// Width used for thumb downsample budget; lags live geometry during window resize.
     @State private var settledGridWidth: CGFloat = 0
@@ -288,21 +317,7 @@ private struct GalleryPhotoGrid: View {
     var body: some View {
         LazyVGrid(columns: gridColumns, spacing: 0) {
             ForEach(Array(store.activePhotos.enumerated()), id: \.element.id) { index, photo in
-                PhotoGridItem(
-                    photo: photo,
-                    photoIndex: index,
-                    photoCount: store.activePhotos.count,
-                    thumbAspectRatio: thumbAspectRatio,
-                    thumbMaxPixelSize: thumbMaxPixelSize,
-                    isCurrentOnDevice: currentPhotoID == photo.id,
-                    dropInsertionIndex: dropInsertionIndex,
-                    onSelectPhoto: onSelectPhoto,
-                    onOpenLightbox: onOpenLightbox,
-                    onReorderDrop: onReorderDrop,
-                    onDropInsertionIndexChange: { gap in
-                        dropInsertionIndex = gap
-                    }
-                )
+                gridItem(index: index, photo: photo)
             }
         }
         .padding(.bottom, selectionBarBottomPadding)
@@ -326,6 +341,45 @@ private struct GalleryPhotoGrid: View {
             settledGridWidth = width
         }
     }
+
+    @ViewBuilder
+    private func gridItem(index: Int, photo: PhotoEntry) -> some View {
+        #if os(macOS)
+        PhotoGridItem(
+            photo: photo,
+            photoIndex: index,
+            photoCount: store.activePhotos.count,
+            thumbAspectRatio: thumbAspectRatio,
+            thumbMaxPixelSize: thumbMaxPixelSize,
+            isCurrentOnDevice: currentPhotoID == photo.id,
+            dropInsertionIndex: dropInsertionIndex,
+            onSelectPhoto: onSelectPhoto,
+            onOpenLightbox: onOpenLightbox,
+            onReorderDrop: onReorderDrop,
+            onFileDrop: onFileDrop,
+            onFileDropTargeted: onFileDropTargeted,
+            onDropInsertionIndexChange: { gap in
+                dropInsertionIndex = gap
+            }
+        )
+        #else
+        PhotoGridItem(
+            photo: photo,
+            photoIndex: index,
+            photoCount: store.activePhotos.count,
+            thumbAspectRatio: thumbAspectRatio,
+            thumbMaxPixelSize: thumbMaxPixelSize,
+            isCurrentOnDevice: currentPhotoID == photo.id,
+            dropInsertionIndex: dropInsertionIndex,
+            onSelectPhoto: onSelectPhoto,
+            onOpenLightbox: onOpenLightbox,
+            onReorderDrop: onReorderDrop,
+            onDropInsertionIndexChange: { gap in
+                dropInsertionIndex = gap
+            }
+        )
+        #endif
+    }
 }
 
 /// One grid cell: observes selection for this photo only.
@@ -341,6 +395,10 @@ private struct PhotoGridItem: View {
     let onSelectPhoto: (PhotoID, GridTapModifiers) -> Void
     let onOpenLightbox: (PhotoID) -> Void
     let onReorderDrop: ([String], Int) -> Bool
+    #if os(macOS)
+    let onFileDrop: ([URL]) -> Bool
+    let onFileDropTargeted: (Bool) -> Void
+    #endif
     let onDropInsertionIndexChange: (Int?) -> Void
 
     private var isSelected: Bool {
@@ -376,6 +434,8 @@ private struct PhotoGridItem: View {
                 onSelect: { onSelectPhoto(photo.id, GridTapModifiers($0)) },
                 onOpenLightbox: { onOpenLightbox(photo.id) },
                 onReorderDrop: onReorderDrop,
+                onFileDrop: onFileDrop,
+                onFileDropTargeted: onFileDropTargeted,
                 onDropInsertionIndexChange: onDropInsertionIndexChange,
                 onReorderDragEnded: { onDropInsertionIndexChange(nil) }
             )
@@ -443,6 +503,8 @@ private struct PhotoGridClickTarget: NSViewRepresentable {
     var onSelect: (NSEvent.ModifierFlags) -> Void
     var onOpenLightbox: () -> Void
     var onReorderDrop: ([String], Int) -> Bool
+    var onFileDrop: ([URL]) -> Bool
+    var onFileDropTargeted: (Bool) -> Void
     var onDropInsertionIndexChange: (Int?) -> Void
     var onReorderDragEnded: () -> Void
 
@@ -463,6 +525,8 @@ private struct PhotoGridClickTarget: NSViewRepresentable {
         view.onSelect = onSelect
         view.onOpenLightbox = onOpenLightbox
         view.onReorderDrop = onReorderDrop
+        view.onFileDrop = onFileDrop
+        view.onFileDropTargeted = onFileDropTargeted
         view.onDropInsertionIndexChange = onDropInsertionIndexChange
         view.onReorderDragEnded = onReorderDragEnded
     }
@@ -477,6 +541,8 @@ private final class PhotoGridClickNSView: NSView, NSDraggingSource {
     var onSelect: ((NSEvent.ModifierFlags) -> Void)?
     var onOpenLightbox: (() -> Void)?
     var onReorderDrop: (([String], Int) -> Bool)?
+    var onFileDrop: (([URL]) -> Bool)?
+    var onFileDropTargeted: ((Bool) -> Void)?
     var onDropInsertionIndexChange: ((Int?) -> Void)?
     var onReorderDragEnded: (() -> Void)?
 
@@ -486,14 +552,18 @@ private final class PhotoGridClickNSView: NSView, NSDraggingSource {
 
     private static let reorderDragThreshold: CGFloat = 4
 
+    private static var draggedTypes: [NSPasteboard.PasteboardType] {
+        PhotoDragPasteboard.draggedTypes + GalleryFilePasteboard.draggedTypes
+    }
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        registerForDraggedTypes(PhotoDragPasteboard.draggedTypes)
+        registerForDraggedTypes(Self.draggedTypes)
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
-        registerForDraggedTypes(PhotoDragPasteboard.draggedTypes)
+        registerForDraggedTypes(Self.draggedTypes)
     }
 
     override var isFlipped: Bool { true }
@@ -570,27 +640,44 @@ private final class PhotoGridClickNSView: NSView, NSDraggingSource {
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        let fileURLs = GalleryFilePasteboard.urls(from: sender)
+        if !fileURLs.isEmpty {
+            onFileDropTargeted?(true)
+            return .copy
+        }
         guard PhotoDragPasteboard.photoID(from: sender) != nil else { return [] }
         updateInsertionIndex(from: sender)
         return .move
     }
 
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        let fileURLs = GalleryFilePasteboard.urls(from: sender)
+        if !fileURLs.isEmpty {
+            onFileDropTargeted?(true)
+            return .copy
+        }
         guard PhotoDragPasteboard.photoID(from: sender) != nil else { return [] }
         updateInsertionIndex(from: sender)
         return .move
     }
 
     override func draggingExited(_ sender: NSDraggingInfo?) {
+        onFileDropTargeted?(false)
         pendingInsertionIndex = nil
         onDropInsertionIndexChange?(nil)
     }
 
     override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        PhotoDragPasteboard.photoID(from: sender) != nil
+        !GalleryFilePasteboard.urls(from: sender).isEmpty
+            || PhotoDragPasteboard.photoID(from: sender) != nil
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let fileURLs = GalleryFilePasteboard.urls(from: sender)
+        if !fileURLs.isEmpty {
+            onFileDropTargeted?(false)
+            return onFileDrop?(fileURLs) ?? false
+        }
         guard let dragged = PhotoDragPasteboard.photoID(from: sender) else { return false }
         updateInsertionIndex(from: sender)
         let insertionIndex = pendingInsertionIndex ?? photoIndex

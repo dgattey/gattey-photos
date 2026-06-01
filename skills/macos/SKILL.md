@@ -47,7 +47,7 @@ Full-width `GalleryGridView`: left `DeviceCurrentPreview` (on-device photo, blac
 
 ## Settings popover
 
-`UnlockView` / `AppSession` — name + family password only. `POST /api/auth/session` → `syncSessionToken` in `config.json`.
+`UnlockView` / `AppSession` — name + family password only at unlock (`POST /api/auth/session` → `syncSessionToken`). All sync calls use session Bearer only.
 
 `SettingsPopover.swift` + `FramesSettingsSection.swift` — register frames on the server (paste Bloomin8 setup block; tokens encrypted in `devices/registry.json` on Blob). **Debug → Toggle Debug Mode** switches API URL; start local server with `./scripts/dev.sh` (not from the app).
 

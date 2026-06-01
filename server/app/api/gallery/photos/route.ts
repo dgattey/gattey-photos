@@ -1,11 +1,11 @@
 import { v4 as uuid } from "uuid";
-import { assertSyncPassword } from "@/lib/auth";
+import { assertSessionToken } from "@/lib/auth";
 import { upsertPhoto } from "@/lib/gallery";
 import { buildGalleryResponse } from "@/lib/gallery-service";
 import * as storage from "@/lib/storage";
 
 export async function POST(request: Request) {
-  const auth = await assertSyncPassword(request);
+  const auth = await assertSessionToken(request);
   if (auth) return auth;
 
   const form = await request.formData();

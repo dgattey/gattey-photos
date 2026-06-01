@@ -93,6 +93,10 @@ struct DeviceCurrentPreview: View {
                     Task { await store.setAsCurrent(photoID: id) }
                     return true
                 },
+                onFileDrop: { urls in
+                    Task { await store.uploadFiles(urls: urls) }
+                    return true
+                },
                 isTargeted: $isDropTargeted
             )
         }
@@ -133,7 +137,7 @@ struct DeviceCurrentPreview: View {
             Text("No current photo")
                 .font(AppTypography.sectionTitle)
                 .foregroundStyle(.primary)
-            Text("Select a photo and choose Set as current, or drag a thumbnail here.")
+            Text("Select a photo and choose Set as current, or drag a thumbnail or image file here.")
                 .font(AppTypography.secondary)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

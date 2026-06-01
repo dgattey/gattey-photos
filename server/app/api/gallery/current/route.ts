@@ -1,4 +1,4 @@
-import { assertSyncPassword } from "@/lib/auth";
+import { assertSessionToken } from "@/lib/auth";
 import { setCurrentPhoto } from "@/lib/gallery";
 import { buildGalleryResponse } from "@/lib/gallery-service";
 import { commitManifest } from "@/lib/manifest-commit";
@@ -6,7 +6,7 @@ import * as storage from "@/lib/storage";
 import type { PhotoId } from "@/lib/types";
 
 export async function PUT(request: Request) {
-  const auth = await assertSyncPassword(request);
+  const auth = await assertSessionToken(request);
   if (auth) return auth;
 
   const body = (await request.json()) as { photoId?: PhotoId };

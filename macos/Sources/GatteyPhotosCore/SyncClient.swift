@@ -2,7 +2,7 @@ import Foundation
 
 public enum SyncError: Error, LocalizedError {
     case badURL(String)
-    case http(Int, String, baseURL: String)
+    case http(SyncHTTPFailure)
     case decode
     case missingSyncAuth
 
@@ -10,11 +10,21 @@ public enum SyncError: Error, LocalizedError {
         switch self {
         case .badURL(let baseURL):
             return ServerConnectivityCopy.serverDown(at: baseURL)
-        case .http(let code, let body, let baseURL):
-            if code < 0 {
-                return ServerConnectivityCopy.serverDown(at: baseURL)
-            }
-            return "HTTP \(code): \(body)"
+        case .http(let failure):
+            return failure.shortSummary
+        case .decode:
+            return "Could not decode server response"
+        case .missingSyncAuth:
+            return "Unlock the gallery to sync (session not set)"
+        }
+    }
+
+    public var activityLogDetail: String? {
+        switch self {
+        case .http(let failure):
+            return failure.activityLogDetail
+        case .badURL(let baseURL):
+            return ServerConnectivityCopy.serverDown(at: baseURL)
         case .decode:
             return "Could not decode server response"
         case .missingSyncAuth:
@@ -41,7 +51,13 @@ public struct SyncClient: Sendable {
         self.session = session
     }
 
-    private func request(path: String, method: String, body: Data? = nil, contentType: String? = nil) async throws -> Data {
+    private func request(
+        path: String,
+        method: String,
+        body: Data? = nil,
+        contentType: String? = nil,
+        context: String? = nil
+    ) async throws -> Data {
         var url = baseURL
         url.append(path: path.hasPrefix("/") ? String(path.dropFirst()) : path)
         var req = URLRequest(url: url)
@@ -54,13 +70,26 @@ public struct SyncClient: Sendable {
             }
         }
         let (data, res) = try await session.data(for: req)
-        let baseLabel = baseURL.absoluteString
         guard let http = res as? HTTPURLResponse else {
-            throw SyncError.http(-1, "no response", baseURL: baseLabel)
+            throw SyncError.http(SyncHTTPFailure(
+                statusCode: -1,
+                method: method,
+                url: url.absoluteString,
+                responseBody: "no response",
+                requestBodyBytes: body?.count,
+                context: context
+            ))
         }
         guard (200...299).contains(http.statusCode) else {
             let text = String(data: data, encoding: .utf8) ?? ""
-            throw SyncError.http(http.statusCode, text, baseURL: baseLabel)
+            throw SyncError.http(SyncHTTPFailure(
+                statusCode: http.statusCode,
+                method: method,
+                url: url.absoluteString,
+                responseBody: text,
+                requestBodyBytes: body?.count,
+                context: context
+            ))
         }
         return data
     }
@@ -92,7 +121,8 @@ public struct SyncClient: Sendable {
             path: "/api/gallery/photos",
             method: "POST",
             body: body,
-            contentType: "multipart/form-data; boundary=\(boundary)"
+            contentType: "multipart/form-data; boundary=\(boundary)",
+            context: "upload: \(filename) (JPEG \(body.count) bytes)"
         )
         guard let decoded = try? JSONDecoder().decode(GalleryResponse.self, from: data) else {
             throw SyncError.decode

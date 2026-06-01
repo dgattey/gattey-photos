@@ -3,6 +3,9 @@ import SwiftUI
 
 struct ActivityLogListView: View {
     @EnvironmentObject private var logStore: ActivityLogStore
+    @State private var expandedEntryIDs: Set<UUID> = []
+
+    private static let collapsedDetailLimit = 160
 
     private static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -47,13 +50,59 @@ struct ActivityLogListView: View {
                     .monospacedDigit()
             }
             if let detail = entry.detail, !detail.isEmpty {
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                detailView(detail, entry: entry)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func detailView(_ detail: String, entry: LogEntry) -> some View {
+        let needsExpansion = detail.count > Self.collapsedDetailLimit || detail.contains("\n")
+        if needsExpansion {
+            DisclosureGroup(isExpanded: expansionBinding(for: entry.id)) {
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } label: {
+                Text(collapsedDetailPreview(detail))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        } else {
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func expansionBinding(for id: UUID) -> Binding<Bool> {
+        Binding(
+            get: { expandedEntryIDs.contains(id) },
+            set: { expanded in
+                if expanded {
+                    expandedEntryIDs.insert(id)
+                } else {
+                    expandedEntryIDs.remove(id)
+                }
+            }
+        )
+    }
+
+    private func collapsedDetailPreview(_ detail: String) -> String {
+        let firstLine = detail.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? detail
+        if firstLine.count <= Self.collapsedDetailLimit {
+            return firstLine
+        }
+        return String(firstLine.prefix(Self.collapsedDetailLimit)) + "…"
     }
 }

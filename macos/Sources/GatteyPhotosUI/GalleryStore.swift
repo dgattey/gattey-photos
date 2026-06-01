@@ -21,7 +21,6 @@ public final class GalleryStore: ObservableObject {
     @Published private(set) var isCheckingConnection = false
     /// Parsed from pasted setup text (`Device:` line); cosmetic only.
     @Published private(set) var registeredFrames: [RegisteredDevicePublic] = []
-    @Published private(set) var framesStatusLine: String?
     /// Normalized width ÷ height from first reachable frame (`Bloomin8Screen.aspectRatio`, always ≤ 1).
     @Published private(set) var deviceScreenAspectRatio: CGFloat = Bloomin8Screen.defaultAspectRatio
     /// Physical panel orientation for preview chrome (portrait default).
@@ -137,11 +136,9 @@ public final class GalleryStore: ObservableObject {
         }
     }
 
-    public func registerFrame(setupText: String, displayName: String?) async throws {
+    public func registerFrame(setupText: String) async throws {
         let client = try makeSyncClient()
-        let name = displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let parsed = name.flatMap { $0.isEmpty ? nil : $0 }
-            ?? Bloomin8TokenParser.parseDeviceName(from: setupText)
+        let parsed = Bloomin8TokenParser.parseDeviceName(from: setupText)
         let device = try await client.registerDevice(
             setupText: setupText,
             displayName: parsed,
@@ -171,19 +168,8 @@ public final class GalleryStore: ObservableObject {
         )
     }
 
-    private func refreshFramesStatusLine(from statuses: [DeviceLiveStatus]) {
-        if statuses.isEmpty {
-            framesStatusLine = "Register a frame in Settings (paste Bloomin8 setup text)"
-            return
-        }
-        let reachable = statuses.filter(\.reachable)
-        if reachable.isEmpty {
-            framesStatusLine = "\(statuses.count) frame(s) registered — none reachable"
-            return
-        }
-        let names = reachable.map(\.displayName).joined(separator: ", ")
-        framesStatusLine = "\(reachable.count) frame(s): \(names)"
-        if let first = reachable.first {
+    private func applyDeviceScreenGeometryIfReachable(from statuses: [DeviceLiveStatus]) {
+        if let first = statuses.first(where: \.reachable) {
             applyDeviceScreenGeometry(from: first)
         }
     }
@@ -306,7 +292,7 @@ public final class GalleryStore: ObservableObject {
     }
 
     private func shouldLockForSyncError(_ error: Error) -> Bool {
-        if case SyncError.http(let code, _, _) = error, code == 401 {
+        if case SyncError.http(let failure) = error, failure.statusCode == 401 {
             return true
         }
         return false
@@ -314,7 +300,8 @@ public final class GalleryStore: ObservableObject {
 
     private func isTransientServerConnectionError(_ error: Error) -> Bool {
         if case SyncError.badURL = error { return true }
-        if case SyncError.http(let code, _, _) = error {
+        if case SyncError.http(let failure) = error {
+            let code = failure.statusCode
             if code == 401 { return false }
             if code < 0 { return true }
             if [408, 502, 503, 504].contains(code) { return true }
@@ -339,7 +326,7 @@ public final class GalleryStore: ObservableObject {
         do {
             let client = try existing ?? makeSyncClient()
             let statuses = try await client.fetchDeviceStatus()
-            refreshFramesStatusLine(from: statuses)
+            applyDeviceScreenGeometryIfReachable(from: statuses)
             let anyReachable = statuses.contains(where: \.reachable)
             deviceLinkStatus = statuses.isEmpty ? .down : (anyReachable ? .up : .down)
             if !anyReachable, !statuses.isEmpty {
@@ -354,7 +341,6 @@ public final class GalleryStore: ObservableObject {
             }
         } catch {
             deviceLinkStatus = .down
-            framesStatusLine = "Could not load frames from server"
         }
     }
 
@@ -444,12 +430,25 @@ public final class GalleryStore: ObservableObject {
     #endif
 
     func uploadFiles(urls: [URL]) async {
-        guard session?.isUnlocked == true else { return }
+        guard session?.isUnlocked == true else {
+            log.log(.gallery, level: .warning, "Upload skipped", detail: "Unlock the gallery first")
+            return
+        }
+        guard !urls.isEmpty else {
+            log.log(.gallery, level: .warning, "Upload skipped", detail: "No supported image files in drop")
+            return
+        }
         log.log(.gallery, level: .info, "Uploading \(urls.count) file(s)")
         await run(label: "Upload", category: .gallery) {
             let client = try makeSyncClient()
             var latest = state
             for url in urls {
+                let accessed = url.startAccessingSecurityScopedResource()
+                defer {
+                    if accessed {
+                        url.stopAccessingSecurityScopedResource()
+                    }
+                }
                 let data = try PhotoCacheJPEG.normalizedJPEGData(fromFileURL: url)
                 let name = url.lastPathComponent
                 let response = try await client.uploadPhoto(
@@ -556,7 +555,13 @@ public final class GalleryStore: ObservableObject {
         let (data, res) = try await URLSession.shared.data(for: req)
         guard let http = res as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let code = (res as? HTTPURLResponse)?.statusCode ?? -1
-            throw SyncError.http(code, "image download failed", baseURL: client.baseURL.absoluteString)
+            throw SyncError.http(SyncHTTPFailure(
+                statusCode: code,
+                method: "GET",
+                url: req.url?.absoluteString ?? client.baseURL.absoluteString,
+                responseBody: "image download failed",
+                context: "download image \(photo.id)"
+            ))
         }
         try data.write(to: cacheURL, options: .atomic)
         return data

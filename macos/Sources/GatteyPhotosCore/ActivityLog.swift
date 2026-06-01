@@ -265,13 +265,18 @@ public final class ActivityLogStore: ObservableObject {
     }
 
     public nonisolated static func describe(_ error: Error) -> String {
+        if let sync = error as? SyncError, let detail = sync.activityLogDetail {
+            return detail
+        }
         var parts: [String] = []
         if let localized = error as? LocalizedError {
             if let d = localized.errorDescription { parts.append(d) }
             if let r = localized.recoverySuggestion { parts.append("Recovery: \(r)") }
         }
         let ns = error as NSError
-        parts.append("Domain: \(ns.domain) code=\(ns.code)")
+        if ns.domain != NSCocoaErrorDomain || ns.code != 0 {
+            parts.append("Domain: \(ns.domain) code=\(ns.code)")
+        }
         if !ns.localizedDescription.isEmpty, !parts.contains(ns.localizedDescription) {
             parts.append(ns.localizedDescription)
         }

@@ -35,22 +35,39 @@ public enum AuthVerifier {
         return .unreachable
     }
 
+    public enum CreateSessionOutcome: Sendable {
+        case success(String)
+        case wrongPassword
+        case unreachable
+    }
+
     /// `POST /api/auth/session` with password Bearer; returns opaque session token on success.
-    public static func createSession(password: String, settings: AppSettings) async -> String? {
+    public static func createSession(password: String, settings: AppSettings) async -> CreateSessionOutcome {
         let trimmedURL = settings.serverBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedPassword = password.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedURL.isEmpty, !trimmedPassword.isEmpty,
               let base = URL(string: trimmedURL) else {
-            return nil
+            return .unreachable
         }
-        if let token = await probeCreateSession(base: base, password: trimmedPassword) {
-            return token
+        switch await probeCreateSession(base: base, password: trimmedPassword) {
+        case .success(let token):
+            return .success(token)
+        case .wrongPassword:
+            return .wrongPassword
+        case .unreachable:
+            break
         }
-        if let alt = alternateLoopbackURL(from: base),
-           let token = await probeCreateSession(base: alt, password: trimmedPassword) {
-            return token
+        if let alt = alternateLoopbackURL(from: base) {
+            switch await probeCreateSession(base: alt, password: trimmedPassword) {
+            case .success(let token):
+                return .success(token)
+            case .wrongPassword:
+                return .wrongPassword
+            case .unreachable:
+                break
+            }
         }
-        return nil
+        return .unreachable
     }
 
     private static func verifyURL(base: URL) -> URL? {
@@ -102,23 +119,37 @@ public enum AuthVerifier {
         }
     }
 
-    private static func probeCreateSession(base: URL, password: String) async -> String? {
-        guard let url = sessionURL(base: base) else { return nil }
+    private enum ProbeCreateSessionResult {
+        case success(String)
+        case wrongPassword
+        case unreachable
+    }
+
+    private static func probeCreateSession(base: URL, password: String) async -> ProbeCreateSessionResult {
+        guard let url = sessionURL(base: base) else { return .unreachable }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("Bearer \(password)", forHTTPHeaderField: "Authorization")
         do {
             let (data, res) = try await session.data(for: req)
-            guard let http = res as? HTTPURLResponse, http.statusCode == 200,
+            guard let http = res as? HTTPURLResponse else { return .unreachable }
+            if http.statusCode == 401 {
+                return .wrongPassword
+            }
+            guard http.statusCode == 200,
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   json["ok"] as? Bool == true,
                   let token = json["sessionToken"] as? String,
                   !token.isEmpty else {
-                return nil
+                return .unreachable
             }
-            return token
+            return .success(token)
         } catch {
-            return nil
+            let ns = error as NSError
+            if ns.domain == NSURLErrorDomain {
+                return .unreachable
+            }
+            return .unreachable
         }
     }
 
