@@ -15,6 +15,9 @@ export async function DELETE(request: Request, { params }: Params) {
     return new Response("not found", { status: 404 });
   }
   const next = softDelete(state, id);
+  if (next === null) {
+    return new Response("cannot delete last photo", { status: 400 });
+  }
   await storage.writeManifest(next);
   const gallery = await buildGalleryResponse(request, next);
   return Response.json(gallery);

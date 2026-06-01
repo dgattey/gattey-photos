@@ -2,6 +2,8 @@ import Foundation
 
 public enum SyncHelperLauncher {
     public static let launchdLabel = "com.gattey.photos.sync"
+
+    #if os(macOS)
     private static let helperName = "GatteyPhotosSyncHelper"
 
     public static func bundledHelperURL() -> URL? {
@@ -22,6 +24,7 @@ public enum SyncHelperLauncher {
             "ProgramArguments": [helper.path],
             "RunAtLoad": true,
             "KeepAlive": true,
+            "ProcessType": "Background",
             "StandardOutPath": "/tmp/gattey-photos-sync.log",
             "StandardErrorPath": "/tmp/gattey-photos-sync.err",
         ]
@@ -32,6 +35,16 @@ public enum SyncHelperLauncher {
         ) else { return }
         guard (try? data.write(to: plistURL, options: .atomic)) != nil else { return }
         reloadLaunchAgent(plistURL: plistURL)
+    }
+
+    /// Stops the background helper (e.g. when the user locks the app).
+    public static func stopLaunchAgent() {
+        let uid = getuid()
+        let bootout = Process()
+        bootout.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        bootout.arguments = ["bootout", "gui/\(uid)", launchdLabel]
+        try? bootout.run()
+        bootout.waitUntilExit()
     }
 
     private static func reloadLaunchAgent(plistURL: URL) {
@@ -50,4 +63,11 @@ public enum SyncHelperLauncher {
         try? bootstrap.run()
         bootstrap.waitUntilExit()
     }
+    #else
+    public static func bundledHelperURL() -> URL? { nil }
+
+    public static func installLaunchAgentIfBundled() {}
+
+    public static func stopLaunchAgent() {}
+    #endif
 }

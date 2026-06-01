@@ -7,7 +7,9 @@ public final class EmbeddedSyncRunner: @unchecked Sendable {
     private init() {}
 
     public func startIfNeeded() {
+        #if os(macOS)
         guard SyncHelperLauncher.bundledHelperURL() == nil else { return }
+        #endif
         guard task == nil else { return }
         task = Task.detached(priority: .utility) {
             await SyncLoop.runForever()

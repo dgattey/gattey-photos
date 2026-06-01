@@ -23,11 +23,34 @@ public enum AppConfig {
     }
 
     public static func loadSettings() -> AppSettings {
-        guard let data = try? Data(contentsOf: settingsURL),
-              let decoded = try? JSONDecoder().decode(AppSettings.self, from: data) else {
-            return .defaults
+        var settings: AppSettings
+        if let data = try? Data(contentsOf: settingsURL),
+           let decoded = try? JSONDecoder().decode(AppSettings.self, from: data) {
+            settings = decoded
+        } else {
+            settings = .defaults
         }
-        return decoded
+        let expected = AppSettings.syncServerBaseURL(debugMode: settings.debugMode)
+        if settings.serverBaseURL != expected {
+            settings.serverBaseURL = expected
+            try? saveSettings(settings)
+        }
+        if settings.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            settings.displayName = AppSettings.defaultDisplayName
+            try? saveSettings(settings)
+        }
+        return settings
+    }
+
+    /// Removes JPEG cache files under Application Support.
+    public static func clearPhotoCache() {
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: cacheFolder,
+            includingPropertiesForKeys: nil
+        ) else { return }
+        for url in entries {
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 
     public static func saveSettings(_ settings: AppSettings) throws {

@@ -1,62 +1,54 @@
 # Gattey Photos
 
-Family-shared photo gallery that syncs through a Vercel API and pushes JPEGs to a Bloomin8 e-ink display on your LAN.
+Family-shared photo gallery: Vercel sync API, macOS app, Bloomin8 display uploads.
 
-## Quick start (local)
+## Quick start
 
-One command builds the app (with icon), starts the sync API in the **background**, and opens Gattey Photos:
-
-```bash
-make dev
-```
-
-The sync server **keeps running** after the script finishes. Stop it with `./scripts/stop-server.sh`.  
-If you only open the app without starting the server, **Server** in the sidebar will show offline.
-
-Uses **mise** for Node (see `mise.toml`). Do not use Homebrew `node` for this repo.
-
-On first run, settings are seeded from `server/.env.local`. Update the Bloomin8 device IP in **Settings** if needed.
-
-## Package the macOS app
-
-Builds `dist/Gattey Photos.app` with the main app and a bundled background sync helper.
+Uses **mise** for Node (`mise.toml`). Do not use Homebrew `node`.
 
 ```bash
-make package-macos
-cp -R "dist/Gattey Photos.app" /Applications/
-open "/Applications/Gattey Photos.app"
+./scripts/dev.sh
 ```
 
-On first launch the app installs a per-user LaunchAgent (`com.gattey.photos.sync`) that runs the helper inside the app bundle. It starts at login and keeps running. No separate daemon install.
+Starts the local sync API (`http://127.0.0.1:3000`), builds `dist/Gattey Photos.app`, and opens the app. On first run it seeds `~/Library/Application Support/GatteyPhotos/config.json` with the local server URL (empty session token). Unlock with the family password from `server/.env.local` (`SYNC_PASSWORD`; default in `.env.example` is `change-me-family-only` until you change it).
 
-When you run via `swift run` during development, the app uses an in-process hourly sync instead (stops when you quit the app).
+Rebuild the app only:
 
-## Repository layout
+```bash
+./scripts/package-macos.sh
+```
+
+Run the sync API alone (two-terminal flow):
+
+```bash
+./scripts/start-server.sh   # or: cd server && GATTEY_LOCAL_STORAGE=1 npm run dev
+./scripts/package-macos.sh  # rebuilds and opens dist/Gattey Photos.app
+```
+
+After macOS UI changes, rebuild and relaunch:
+
+```bash
+./scripts/relaunch-app.sh
+```
+
+Stop the dev supervisor:
+
+```bash
+./scripts/stop-server.sh
+```
+
+## Layout
 
 | Path | Purpose |
 |------|---------|
-| `server/` | Next.js sync API (Vercel project root) |
-| `macos/` | SwiftUI app + bundled `GatteyPhotosSyncHelper` |
-| `skills/` | Cursor agent skills |
-| `scripts/` | `dev.sh`, `package-macos.sh` |
+| `server/` | Next.js sync API |
+| `macos/` | SwiftUI app |
+| `scripts/` | `dev.sh` (full stack), `package-macos.sh`, `relaunch-app.sh`, `start-server.sh`, `stop-server.sh`, `local-advance-cron.sh`, `generate-app-icon.sh` (via package) |
 
-## Vercel deploy
+## Deploy
 
-See [DEPLOY.md](DEPLOY.md). Set the Vercel project **Root Directory** to `server`.
-
-## Conflict policy
-
-Per-photo merge: remote wins for order, updates, and deletes. Local-only uploads are kept.
+[DEPLOY.md](DEPLOY.md) — Vercel root directory `server`.
 
 ## API
 
-All routes require `Authorization: Bearer <password>`.
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/api/gallery` | Manifest + download URLs |
-| POST | `/api/gallery/photos` | Upload JPEG |
-| DELETE | `/api/gallery/photos/:id` | Soft-delete |
-| PUT | `/api/gallery/order` | Reorder |
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+`Authorization: Bearer` with the sync password or an opaque session token from `POST /api/auth/session`. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).

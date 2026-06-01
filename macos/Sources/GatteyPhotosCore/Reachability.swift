@@ -19,23 +19,6 @@ public enum Reachability {
         return false
     }
 
-    public static func pingDevice(ip: String) async -> Bool {
-        let trimmed = ip.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let url = URL(string: "http://\(trimmed)/") else {
-            return false
-        }
-        var req = URLRequest(url: url)
-        req.httpMethod = "HEAD"
-        req.timeoutInterval = 1
-        do {
-            let (_, res) = try await session.data(for: req)
-            guard let http = res as? HTTPURLResponse else { return false }
-            return (200...499).contains(http.statusCode)
-        } catch {
-            return false
-        }
-    }
-
     private static func healthURL(base: URL) -> URL? {
         guard var parts = URLComponents(url: base, resolvingAgainstBaseURL: false) else {
             return nil

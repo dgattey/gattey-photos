@@ -1,14 +1,24 @@
+import { normalizeManifest } from "../gallery";
 import type { GalleryState } from "../types";
 
 const useLocal = () => process.env.GATTEY_LOCAL_STORAGE === "1";
 
-export async function readManifest(): Promise<GalleryState> {
+async function readRawManifest(): Promise<GalleryState> {
   if (useLocal()) {
     const local = await import("./local");
     return local.readManifest();
   }
   const blob = await import("./blob");
   return blob.readManifest();
+}
+
+export async function readManifest(): Promise<GalleryState> {
+  const raw = await readRawManifest();
+  const { state, dirty } = normalizeManifest(raw);
+  if (dirty) {
+    await writeManifest(state);
+  }
+  return state;
 }
 
 export async function writeManifest(state: GalleryState): Promise<void> {

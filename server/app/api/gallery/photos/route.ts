@@ -20,6 +20,12 @@ export async function POST(request: Request) {
     return new Response("empty image", { status: 400 });
   }
 
+  const uploadedByField = form.get("uploadedBy");
+  const uploadedBy =
+    typeof uploadedByField === "string" && uploadedByField.trim().length > 0
+      ? uploadedByField.trim()
+      : "Unknown";
+
   const id = uuid();
   const filename =
     typeof filenameField === "string" && filenameField.length > 0
@@ -37,6 +43,7 @@ export async function POST(request: Request) {
     sizeBytes: bytes.length,
     updatedAt: now,
     deletedAt: null,
+    uploadedBy,
   });
   await storage.writeManifest(next);
   const gallery = await buildGalleryResponse(request, next);

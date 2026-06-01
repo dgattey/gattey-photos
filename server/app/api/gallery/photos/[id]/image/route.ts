@@ -17,7 +17,7 @@ export async function GET(request: Request, { params }: Params) {
   if (!bytes) {
     return new Response("not found", { status: 404 });
   }
-  return new Response(bytes, {
+  return new Response(new Uint8Array(bytes), {
     headers: {
       "Content-Type": "image/jpeg",
       "Cache-Control": "private, max-age=3600",
