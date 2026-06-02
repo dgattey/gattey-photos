@@ -1088,6 +1088,14 @@ struct PhotoThumb: View {
     var showsInsertionLineBefore: Bool = false
     var showsInsertionLineAfter: Bool = false
 
+    /// Bucketed server thumbnail width so small grid-size changes reuse one cached variant (no refetch
+    /// churn). The cell still downsamples this to `thumbMaxPixelSize` for display.
+    private var thumbnailDownloadWidth: Int {
+        let bucket = 256
+        let steps = max(1, Int((Double(thumbMaxPixelSize) / Double(bucket)).rounded(.up)))
+        return min(steps * bucket, 1024)
+    }
+
     var body: some View {
         thumbImage
             .overlay {
@@ -1133,7 +1141,7 @@ struct PhotoThumb: View {
                     photoID: photo.id,
                     maxPixelSize: thumbMaxPixelSize,
                     contentMode: .fill,
-                    thumbnailWidth: thumbMaxPixelSize
+                    thumbnailWidth: thumbnailDownloadWidth
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }

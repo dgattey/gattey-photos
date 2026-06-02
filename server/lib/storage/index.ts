@@ -47,11 +47,18 @@ export async function readManifest(): Promise<GalleryState> {
   return assemble(lib, current);
 }
 
-/** Just the currently shown photo (cheap poll). Falls back to the assembled state until first write. */
+/** Catalog version only (one blob read) for the conditional-GET ETag, so a 304 is a single op. */
+export async function readGalleryVersion(): Promise<string> {
+  const lib = await readLibraryRaw();
+  return lib.updatedAt?.trim() || emptyGalleryUpdatedAt();
+}
+
+/** Sync token (one blob read) for cheap client polling. Falls back to assembled state until first write. */
 export async function readCurrent(): Promise<CurrentManifest> {
   const raw = await readCurrentRaw();
-  if (raw && raw.currentPhotoId !== undefined) {
+  if (raw && raw.galleryVersion !== undefined) {
     return {
+      galleryVersion: raw.galleryVersion?.trim() || emptyGalleryUpdatedAt(),
       currentPhotoId: raw.currentPhotoId ?? null,
       currentPhotoUpdatedBy: raw.currentPhotoUpdatedBy ?? null,
       updatedAt: raw.updatedAt?.trim() || emptyGalleryUpdatedAt(),
@@ -59,6 +66,7 @@ export async function readCurrent(): Promise<CurrentManifest> {
   }
   const state = await readManifest();
   return {
+    galleryVersion: state.updatedAt,
     currentPhotoId: state.currentPhotoId ?? null,
     currentPhotoUpdatedBy: state.currentPhotoUpdatedBy ?? null,
     updatedAt: state.updatedAt,

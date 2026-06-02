@@ -55,7 +55,7 @@ public final class GalleryStore: ObservableObject {
     private var pullRetryNotBefore: Date?
     private var pullFailureStreak = 0
 
-    private static let periodicPullNanos: UInt64 = 900_000_000_000
+    private static let periodicPullNanos: UInt64 = 1_800_000_000_000
 
     /// True while a gallery fetch is in flight and the grid is still empty (first load after unlock).
     var isBootstrappingGallery: Bool {
@@ -216,6 +216,7 @@ public final class GalleryStore: ObservableObject {
             let client = try makeSyncClient()
             try await client.cachePhotoIfMissing(photo)
         } catch {
+            guard !Self.isCancellation(error) else { return }
             log.log(error: error, category: .gallery, context: "Cache photo \(photoID)")
         }
     }
@@ -232,8 +233,16 @@ public final class GalleryStore: ObservableObject {
             let client = try makeSyncClient()
             try await client.cacheThumbnailIfMissing(photo, width: width)
         } catch {
+            guard !Self.isCancellation(error) else { return }
             log.log(error: error, category: .gallery, context: "Cache thumbnail \(photoID)")
         }
+    }
+
+    /// A superseded image fetch (grid re-rendered at a new size) surfaces as URL cancellation; benign.
+    private static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        let ns = error as NSError
+        return ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled
     }
 
     func reloadSettings() {
@@ -422,10 +431,21 @@ public final class GalleryStore: ObservableObject {
 
     private func pullFromServer(kind: PullKind) async {
         guard session?.isUnlocked == true else { return }
-        if kind == .periodic, shouldSkipPeriodicPull() { return }
+        if kind == .periodic {
+            #if os(macOS)
+            // Only poll while the window is frontmost; on reactivation we trigger a one-off pull.
+            guard NSApplication.shared.isActive else { return }
+            #endif
+            if shouldSkipPeriodicPull() { return }
+        }
         await galleryMutationSerial.perform { [weak self] in
             await self?.executePullFromServer(kind: kind)
         }
+    }
+
+    /// Fresh pull when the app returns to the foreground (periodic polling pauses while backgrounded).
+    func pullOnReactivation() async {
+        await pullFromServer(kind: .periodic)
     }
 
     private func executePullFromServer(kind: PullKind) async {
@@ -459,17 +479,23 @@ public final class GalleryStore: ObservableObject {
         let previousCurrentId = state.currentPhotoId
         do {
             let client = try makeSyncClient()
-            // Periodic pulls are conditional: 304 when the catalog is unchanged transfers nothing.
-            let conditionalETag = kind == .periodic ? state.updatedAt : nil
-            switch try await client.fetchGallery(ifNoneMatch: conditionalETag) {
-            case .modified(let response):
-                try await commit(response, client: client, downloadMissing: true)
-            case .notModified:
-                break
-            }
-            // Cheap current-photo poll catches cron rotations even when the catalog is unchanged.
-            if let current = try? await client.fetchCurrentPhoto() {
-                applyCurrentPhoto(current)
+            if kind == .periodic {
+                // One blob read: the sync token tells us the catalog version + current photo. Only
+                // do a full catalog pull when the version actually changed.
+                let token = try await client.fetchCurrentPhoto()
+                if token.galleryVersion != state.updatedAt,
+                   case .modified(let response) = try await client.fetchGallery() {
+                    try await commit(response, client: client, downloadMissing: true)
+                }
+                applyCurrentPhoto(token)
+            } else {
+                // Foreground / manual: always fetch the latest catalog.
+                if case .modified(let response) = try await client.fetchGallery() {
+                    try await commit(response, client: client, downloadMissing: true)
+                }
+                if let token = try? await client.fetchCurrentPhoto() {
+                    applyCurrentPhoto(token)
+                }
             }
             notePullSuccess()
             noteServerOK()

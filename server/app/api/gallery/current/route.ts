@@ -34,6 +34,7 @@ export async function PUT(request: Request) {
       return jsonApiError(400, "photo not active");
     }
     await storage.writeCurrent({
+      galleryVersion: state.updatedAt,
       currentPhotoId: next.currentPhotoId ?? null,
       currentPhotoUpdatedBy: "manual",
       updatedAt: new Date().toISOString(),

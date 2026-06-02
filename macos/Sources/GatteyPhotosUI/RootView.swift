@@ -97,6 +97,7 @@ struct RootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshConnectionIfInactiveLongEnough()
+            Task { await store.pullOnReactivation() }
         }
         #else
         .onChange(of: scenePhase) { _, phase in

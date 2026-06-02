@@ -247,17 +247,21 @@ public struct GalleryResponse: Codable, Sendable {
     }
 }
 
-/// Lightweight `/api/gallery/current` payload: just which photo is showing, for cheap polling.
+/// Lightweight `/api/gallery/current` sync token, polled cheaply (one blob read). `galleryVersion`
+/// is the catalog `updatedAt`; the client does a full pull only when it differs from local state.
 public struct CurrentPhotoResponse: Codable, Sendable {
+    public var galleryVersion: String
     public var currentPhotoId: PhotoID?
     public var currentPhotoUpdatedBy: CurrentPhotoUpdatedBy?
     public var updatedAt: String
 
     public init(
+        galleryVersion: String,
         currentPhotoId: PhotoID?,
         currentPhotoUpdatedBy: CurrentPhotoUpdatedBy?,
         updatedAt: String
     ) {
+        self.galleryVersion = galleryVersion
         self.currentPhotoId = currentPhotoId
         self.currentPhotoUpdatedBy = currentPhotoUpdatedBy
         self.updatedAt = updatedAt

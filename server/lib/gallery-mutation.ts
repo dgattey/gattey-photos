@@ -45,7 +45,15 @@ export async function applyGalleryMutation(
   if (isNewerThan(state, baseUpdatedAt)) {
     throw new StaleGalleryError(state);
   }
-  return storage.writeManifest(touchGallery(update(state)));
+  const saved = await storage.writeManifest(touchGallery(update(state)));
+  // Update the sync token's catalog version so polling clients know to do a full pull.
+  await storage.writeCurrent({
+    galleryVersion: saved.updatedAt,
+    currentPhotoId: saved.currentPhotoId ?? null,
+    currentPhotoUpdatedBy: saved.currentPhotoUpdatedBy ?? null,
+    updatedAt: new Date().toISOString(),
+  });
+  return saved;
 }
 
 type GalleryRouteInit = { status?: number; cacheControl?: string };

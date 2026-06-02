@@ -11,9 +11,10 @@ async function handleAdvance(request: Request) {
   const after = advanceCurrentPhoto(before);
   const changed = after.currentPhotoId !== before.currentPhotoId;
 
-  // Rotation writes only the tiny current blob; the photo catalog and its version are untouched.
+  // Rotation writes only the tiny sync-token blob; the photo catalog and its version are untouched.
   if (changed) {
     await storage.writeCurrent({
+      galleryVersion: before.updatedAt,
       currentPhotoId: after.currentPhotoId ?? null,
       currentPhotoUpdatedBy: "cron",
       updatedAt: new Date().toISOString(),

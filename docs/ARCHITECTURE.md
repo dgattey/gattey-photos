@@ -34,25 +34,26 @@ Clients cache JPEG bytes under `~/Library/Application Support/GatteyPhotos/cache
 
 `GalleryState` is assembled at read time from two blobs so the frequently-rotated current photo never rewrites the catalog:
 
-- `gallery/manifest.json` — the catalog: `updatedAt`, `order`, `photos`, `uploaders`. Written only by upload / delete / reorder / rename.
-- `gallery/current.json` — `{ currentPhotoId, currentPhotoUpdatedBy, updatedAt }`. Written only by the cron rotate and manual "set current".
+- `gallery/manifest.json` — the catalog: `updatedAt`, `order`, `photos`, `uploaders`. Written by upload / delete / reorder / rename.
+- `gallery/current.json` — the **sync token**: `{ galleryVersion, currentPhotoId, currentPhotoUpdatedBy, updatedAt }`. `galleryVersion` mirrors the catalog `updatedAt`. Written by every catalog mutation (new version) and by cron rotate / manual "set current" (new current photo).
 
 Both are read from origin (`useCache: false`) for read-after-write consistency, written with a 60s max cache. `storage.readManifest()` merges them and validates `currentPhotoId` against the active order.
 
-## Sync (timestamp concurrency)
+## Sync (timestamp concurrency, quota-aware)
 
-Catalog mutations (upload, delete, reorder, rename uploader) are single atomic catalog writes. The client sends `baseUpdatedAt` (the `updatedAt` it last saw). If the catalog is **newer**, the server responds **409** with the current gallery; the client applies that state and retries (up to a few attempts). Setting the current photo is last-write-wins against the cron and writes only `current.json`.
+Catalog mutations (upload, delete, reorder, rename uploader) write the catalog plus the sync token. The client sends `baseUpdatedAt`; if the catalog is **newer**, the server responds **409** and the client applies that state and retries. Setting the current photo is last-write-wins against the cron and writes only the token.
 
-Pulls replace local state, no merge. Two cheap pull paths:
+Pulls replace local state, no merge:
 
-- `GET /api/gallery` is conditional: it returns an `ETag` of the catalog `updatedAt` and `304 Not Modified` when the client sends a matching `If-None-Match`, so an unchanged periodic pull transfers nothing.
-- `GET /api/gallery/current` is a tiny payload the client polls to catch cron rotations without a full catalog pull.
+- **Periodic poll is one Blob read.** The client reads the sync token (`GET /api/gallery/current`); it does a full `GET /api/gallery` only when `galleryVersion` differs from local state, and applies `currentPhotoId` from the token to catch cron rotations. The interval is 30 min, and polling pauses while the macOS window is backgrounded (a one-off pull runs on reactivation).
+- Foreground / manual sync always does a full catalog pull.
+- `GET /api/gallery` also supports `If-None-Match`/`304` for transfer savings.
 
 The response carries only `state` (no duplicated photos array, no per-photo download URLs); clients build image URLs from the photo id. Failed pulls use exponential backoff.
 
 ## Images
 
-`GET /api/gallery/photos/{id}/image` serves the original, or a resized JPEG when given `?w=<width>` (sharp, clamped 64–2048). The grid requests thumbnails at the cell width; the lightbox and device preview use the original.
+`GET /api/gallery/photos/{id}/image` reads `photos/{id}.jpg` directly (no manifest read per request — that was the dominant Blob op cost). It serves the original, or a resized JPEG when given `?w=<width>` (sharp, clamped 64–2048), computed on demand and **not** stored as a separate blob (avoids a `put` per variant); each client caches the resized result on disk. The grid requests bucketed thumbnail widths; the lightbox and device preview use the original.
 
 ## Runtime components
 

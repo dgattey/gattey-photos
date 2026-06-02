@@ -42,8 +42,13 @@ export interface RawManifest {
   uploaders?: Record<UploaderId, string>;
 }
 
-/** Tiny separate blob for the currently shown photo; the cron and manual "set current" write only this. */
+/**
+ * Tiny sync-token blob. Clients poll this single blob: `galleryVersion` (the catalog `updatedAt`)
+ * tells them whether to do a full catalog pull, and `currentPhotoId` carries cron rotations. Written
+ * by every catalog mutation (with the new version) and by cron / manual "set current".
+ */
 export interface CurrentManifest {
+  galleryVersion: string;
   currentPhotoId: PhotoId | null;
   currentPhotoUpdatedBy: "cron" | "manual" | null;
   updatedAt: string;

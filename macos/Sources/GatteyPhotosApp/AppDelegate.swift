@@ -8,8 +8,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         LegacySyncLaunchAgent.uninstallIfPresent()
+        configureInitialWindowChrome()
         observeExtraWindows()
         DispatchQueue.main.async { [weak self] in
+            self?.configureInitialWindowChrome()
             self?.enforceSingleMainWindow()
         }
         Task { @MainActor in
@@ -34,6 +36,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         enforceSingleMainWindow()
         return true
+    }
+
+    /// Applies translucent chrome before SwiftUI mounts so the window never flashes the default opaque
+    /// titlebar while the session is loading. `WindowChromeConfigurator` refines it per session phase
+    /// once the UI is up (gallery and unlock chrome are both transparent, so there is no conflict).
+    private func configureInitialWindowChrome() {
+        for window in NSApp.windows where window.canBecomeMain {
+            window.applyGatteyPhotosUnlockChrome()
+            window.titleVisibility = .hidden
+            window.title = ""
+        }
     }
 
     private func observeExtraWindows() {

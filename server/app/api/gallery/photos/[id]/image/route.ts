@@ -19,13 +19,12 @@ export async function GET(request: Request, { params }: Params) {
   const auth = await assertSessionToken(request);
   if (auth) return auth;
 
+  // Derive the blob path from the id (uploads always write `photos/{id}.jpg`). Avoids a manifest read
+  // on every image request, which was the dominant Blob operation cost for grid loads. The original is
+  // CDN-cached; resized variants are computed on demand and cached on each client's disk (no extra
+  // Blob write/op per thumbnail).
   const { id } = await params;
-  const state = await storage.readManifest();
-  const entry = state.photos[id];
-  if (!entry || entry.deletedAt) {
-    return new Response("not found", { status: 404 });
-  }
-  const bytes = await storage.readPhotoBytes(entry.blobPath);
+  const bytes = await storage.readPhotoBytes(`photos/${id}.jpg`);
   if (!bytes) {
     return new Response("not found", { status: 404 });
   }
@@ -37,19 +36,16 @@ export async function GET(request: Request, { params }: Params) {
       .resize({ width, withoutEnlargement: true })
       .jpeg({ quality: 82 })
       .toBuffer();
-    return new Response(new Uint8Array(resized), {
-      headers: {
-        "Content-Type": "image/jpeg",
-        // Variant keyed by id+width; a given id maps to one immutable photo, so cache it longer.
-        "Cache-Control": "private, max-age=86400",
-      },
-    });
+    return imageResponse(resized, 86_400);
   }
+  return imageResponse(bytes, 3_600);
+}
 
+function imageResponse(bytes: Buffer, maxAge: number): Response {
   return new Response(new Uint8Array(bytes), {
     headers: {
       "Content-Type": "image/jpeg",
-      "Cache-Control": "private, max-age=3600",
+      "Cache-Control": `private, max-age=${maxAge}`,
     },
   });
 }
