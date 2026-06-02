@@ -5,6 +5,11 @@ import SwiftUI
 struct DeviceCurrentPreview: View {
     @EnvironmentObject private var store: GalleryStore
     @State private var isDropTargeted = false
+    #if os(macOS)
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @State private var previewHoverTilt = DevicePreviewHoverTiltAngles()
+    @State private var isPreviewHovered = false
+    #endif
 
     #if os(macOS)
     /// Space between preview frame and gallery split (matches grid leading gutter in `PreviewGallerySplit`).
@@ -29,7 +34,7 @@ struct DeviceCurrentPreview: View {
             )
 
             framedPreview(screenWidth: screenW)
-                .frame(width: framedSize.width, height: framedSize.height)
+                .frame(width: framedSize.width, alignment: .topLeading)
             #if os(macOS)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .padding(.leading, PreviewPaneLayout.macOSPanePaddingLeading)
@@ -65,28 +70,44 @@ struct DeviceCurrentPreview: View {
 
     @ViewBuilder
     private func framedPreview(screenWidth: CGFloat) -> some View {
+        framedDevice(screenWidth: screenWidth)
+        #if os(macOS)
+            .onChange(of: store.currentPhoto?.id) { _, _ in
+                if store.currentPhoto == nil {
+                    resetPreviewHoverTilt()
+                    isPreviewHovered = false
+                }
+            }
+        #endif
+    }
+
+    @ViewBuilder
+    private func framedDevice(screenWidth: CGFloat) -> some View {
+        #if os(macOS)
+        let hoverTiltEnabled = store.currentPhoto != nil && !accessibilityReduceMotion
+        #endif
+
         DevicePreviewFramed(screenWidth: screenWidth, screenAspectRatio: screenAspectRatio) {
             deviceScreenContent
-        }
-        .overlay {
-            if isDropTargeted {
-                Rectangle()
-                    .strokeBorder(AppBrandColor.accentGreen, lineWidth: 4)
-            }
-        }
-        .overlay(alignment: .bottom) {
-            if let photo = store.currentPhoto {
-                Text(PhotoFormatters.addedBy(photo))
-                    .font(AppTypography.secondary)
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: DevicePreviewChrome.outerFrameWidth)
-                    .background(Color.black)
-            }
+                #if os(macOS)
+                .overlay(alignment: .bottomTrailing) {
+                    if let photo = store.currentPhoto, isPreviewHovered {
+                        devicePreviewHoverBadge(for: photo)
+                    }
+                }
+                #endif
         }
         #if os(macOS)
+        .rotation3DEffect(
+            .degrees(previewHoverTilt.yaw),
+            axis: (x: 0, y: 1, z: 0),
+            perspective: DevicePreviewHoverTilt.perspective
+        )
+        .rotation3DEffect(
+            .degrees(previewHoverTilt.pitch),
+            axis: (x: 1, y: 0, z: 0),
+            perspective: DevicePreviewHoverTilt.perspective
+        )
         .overlay {
             PhotoDragDropTarget(
                 onDrop: { id in
@@ -97,9 +118,14 @@ struct DeviceCurrentPreview: View {
                     Task { await store.uploadFiles(urls: urls) }
                     return true
                 },
+                onPointerMove: hoverTiltEnabled
+                    ? { point, size in updatePreviewHoverTilt(pointer: point, in: size) }
+                    : nil,
+                onPointerExit: hoverTiltEnabled ? resetPreviewHoverTilt : nil,
                 isTargeted: $isDropTargeted
             )
         }
+        .onHover { isPreviewHovered = $0 }
         #else
         .dropDestination(for: String.self) { items, _ in
             guard let id = items.first else { return false }
@@ -109,7 +135,29 @@ struct DeviceCurrentPreview: View {
             isDropTargeted = targeted
         }
         #endif
+        .overlay {
+            if isDropTargeted {
+                Rectangle()
+                    .strokeBorder(AppBrandColor.accentGreen, lineWidth: 4)
+            }
+        }
     }
+
+    #if os(macOS)
+    @ViewBuilder
+    private func devicePreviewHoverBadge(for photo: PhotoEntry) -> some View {
+        let cornerTag = store.showingTag(for: photo.id)
+        Text(store.devicePreviewCaption(for: photo))
+            .font(AppTypography.devicePreviewHoverBadge)
+            .foregroundStyle(.white)
+            .lineLimit(2)
+            .multilineTextAlignment(.trailing)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(cornerTag == "Showing today" ? Color.black : AppBrandColor.accentGreen)
+            .padding(10)
+    }
+    #endif
 
     /// E-ink opening: fixed device aspect, photo `.fit` with black letterboxing (matches push canvas).
     @ViewBuilder
@@ -127,6 +175,7 @@ struct DeviceCurrentPreview: View {
                     emptyPlaceholder
                 }
             }
+            .devicePreviewScreenInnerVignette()
     }
 
     private var emptyPlaceholder: some View {
@@ -137,7 +186,7 @@ struct DeviceCurrentPreview: View {
             Text("No current photo")
                 .font(AppTypography.sectionTitle)
                 .foregroundStyle(.primary)
-            Text("Select a photo and choose Set as current, or drag a thumbnail or image file here.")
+            Text("Select a photo and choose Show for today, or drag a thumbnail or image file here.")
                 .font(AppTypography.secondary)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -146,4 +195,39 @@ struct DeviceCurrentPreview: View {
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+
+    #if os(macOS)
+    private func updatePreviewHoverTilt(pointer: CGPoint, in size: CGSize) {
+        guard size.width > 0, size.height > 0 else { return }
+        let nx = (pointer.x / size.width - 0.5) * 2
+        let ny = (pointer.y / size.height - 0.5) * 2
+        let yaw = nx * DevicePreviewHoverTilt.maxYawDegrees
+        let pitch = -ny * DevicePreviewHoverTilt.maxPitchDegrees
+        withAnimation(.interactiveSpring(response: 0.28, dampingFraction: 0.82)) {
+            previewHoverTilt.yaw = yaw
+            previewHoverTilt.pitch = pitch
+        }
+    }
+
+    private func resetPreviewHoverTilt() {
+        withAnimation(.interactiveSpring(response: 0.4, dampingFraction: 0.9)) {
+            previewHoverTilt = DevicePreviewHoverTiltAngles()
+        }
+    }
+    #endif
 }
+
+#if os(macOS)
+private struct DevicePreviewHoverTiltAngles: Equatable {
+    var yaw: Double = 0
+    var pitch: Double = 0
+}
+
+private enum DevicePreviewHoverTilt {
+    /// Horizontal follow (cursor left/right).
+    static let maxYawDegrees: Double = 3
+    /// Vertical follow (cursor up/down).
+    static let maxPitchDegrees: Double = 2.5
+    static let perspective: CGFloat = 0.8
+}
+#endif

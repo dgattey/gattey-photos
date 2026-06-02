@@ -5,6 +5,7 @@ public enum SyncError: Error, LocalizedError {
     case http(SyncHTTPFailure)
     case decode
     case missingSyncAuth
+    case stale(GalleryResponse)
 
     public var errorDescription: String? {
         switch self {
@@ -16,6 +17,8 @@ public enum SyncError: Error, LocalizedError {
             return "Could not decode server response"
         case .missingSyncAuth:
             return "Unlock the gallery to sync (session not set)"
+        case .stale:
+            return "Gallery changed on server; refreshing and retrying"
         }
     }
 
@@ -29,8 +32,16 @@ public enum SyncError: Error, LocalizedError {
             return "Could not decode server response"
         case .missingSyncAuth:
             return "Unlock the gallery to sync (session not set)"
+        case .stale:
+            return "HTTP 409 gallery stale"
         }
     }
+}
+
+private struct StaleGalleryPayload: Codable {
+    var error: String?
+    var state: GalleryState
+    var photos: [PhotoEntry]
 }
 
 public struct SyncClient: Sendable {
@@ -80,6 +91,11 @@ public struct SyncClient: Sendable {
                 context: context
             ))
         }
+        if http.statusCode == 409,
+           let payload = try? JSONDecoder().decode(StaleGalleryPayload.self, from: data)
+        {
+            throw SyncError.stale(GalleryResponse(state: payload.state, photos: payload.photos))
+        }
         guard (200...299).contains(http.statusCode) else {
             let text = String(data: data, encoding: .utf8) ?? ""
             throw SyncError.http(SyncHTTPFailure(
@@ -102,13 +118,21 @@ public struct SyncClient: Sendable {
         return decoded
     }
 
-    public func uploadPhoto(jpegData: Data, filename: String, uploadedBy: String) async throws -> GalleryResponse {
+    public func uploadPhoto(
+        jpegData: Data,
+        filename: String,
+        uploadedBy: String,
+        baseUpdatedAt: String
+    ) async throws -> GalleryResponse {
         let boundary = "gattey-\(UUID().uuidString)"
         var body = Data()
         func append(_ s: String) { body.append(Data(s.utf8)) }
         append("--\(boundary)\r\n")
         append("Content-Disposition: form-data; name=\"uploadedBy\"\r\n\r\n")
         append("\(uploadedBy)\r\n")
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"baseUpdatedAt\"\r\n\r\n")
+        append("\(baseUpdatedAt)\r\n")
         append("--\(boundary)\r\n")
         append("Content-Disposition: form-data; name=\"filename\"\r\n\r\n")
         append("\(filename)\r\n")
@@ -130,17 +154,27 @@ public struct SyncClient: Sendable {
         return decoded
     }
 
-    public func deletePhoto(id: PhotoID) async throws -> GalleryResponse {
-        let data = try await request(path: "/api/gallery/photos/\(id)", method: "DELETE")
+    public func deletePhoto(id: PhotoID, baseUpdatedAt: String) async throws -> GalleryResponse {
+        struct Body: Encodable { var baseUpdatedAt: String }
+        let encoded = try JSONEncoder().encode(Body(baseUpdatedAt: baseUpdatedAt))
+        let data = try await request(
+            path: "/api/gallery/photos/\(id)",
+            method: "DELETE",
+            body: encoded,
+            contentType: "application/json"
+        )
         guard let decoded = try? JSONDecoder().decode(GalleryResponse.self, from: data) else {
             throw SyncError.decode
         }
         return decoded
     }
 
-    public func reorder(_ order: [PhotoID]) async throws -> GalleryResponse {
-        struct Body: Encodable { var order: [PhotoID] }
-        let encoded = try JSONEncoder().encode(Body(order: order))
+    public func reorder(_ order: [PhotoID], baseUpdatedAt: String) async throws -> GalleryResponse {
+        struct Body: Encodable {
+            var order: [PhotoID]
+            var baseUpdatedAt: String
+        }
+        let encoded = try JSONEncoder().encode(Body(order: order, baseUpdatedAt: baseUpdatedAt))
         let data = try await request(
             path: "/api/gallery/order",
             method: "PUT",
@@ -154,9 +188,38 @@ public struct SyncClient: Sendable {
         return decoded
     }
 
-    public func setCurrentPhoto(id: PhotoID) async throws -> GalleryResponse {
-        struct Body: Encodable { var photoId: PhotoID }
-        let encoded = try JSONEncoder().encode(Body(photoId: id))
+    public func renameUploader(
+        fromName: String,
+        toName: String,
+        baseUpdatedAt: String
+    ) async throws -> GalleryResponse {
+        struct Body: Encodable {
+            var fromName: String
+            var toName: String
+            var baseUpdatedAt: String
+        }
+        let encoded = try JSONEncoder().encode(
+            Body(fromName: fromName, toName: toName, baseUpdatedAt: baseUpdatedAt)
+        )
+        let data = try await request(
+            path: "/api/gallery/uploaders",
+            method: "PATCH",
+            body: encoded,
+            contentType: "application/json",
+            context: "rename uploader \(fromName) → \(toName)"
+        )
+        guard let decoded = try? JSONDecoder().decode(GalleryResponse.self, from: data) else {
+            throw SyncError.decode
+        }
+        return decoded
+    }
+
+    public func setCurrentPhoto(id: PhotoID, baseUpdatedAt: String) async throws -> GalleryResponse {
+        struct Body: Encodable {
+            var photoId: PhotoID
+            var baseUpdatedAt: String
+        }
+        let encoded = try JSONEncoder().encode(Body(photoId: id, baseUpdatedAt: baseUpdatedAt))
         let data = try await request(
             path: "/api/gallery/current",
             method: "PUT",

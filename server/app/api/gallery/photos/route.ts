@@ -2,8 +2,10 @@ import { v4 as uuid } from "uuid";
 import { assertSessionToken } from "@/lib/auth";
 import { jsonApiError, storageErrorResponse } from "@/lib/api-error";
 import { upsertPhoto } from "@/lib/gallery";
-import { buildGalleryResponse } from "@/lib/gallery-service";
-import { updateGalleryManifest } from "@/lib/gallery-manifest-update";
+import {
+  parseBaseUpdatedAt,
+  respondGalleryMutation,
+} from "@/lib/gallery-mutation";
 import * as storage from "@/lib/storage";
 
 export async function POST(request: Request) {
@@ -13,7 +15,11 @@ export async function POST(request: Request) {
   try {
     const form = await request.formData();
     const file = form.get("image");
-    const filenameField = form.get("filename");
+    const base = parseBaseUpdatedAt(
+      typeof form.get("baseUpdatedAt") === "string" ? form.get("baseUpdatedAt") : null
+    );
+    if (base instanceof Response) return base;
+
     if (!(file instanceof Blob)) {
       return jsonApiError(400, "image required");
     }
@@ -31,8 +37,8 @@ export async function POST(request: Request) {
 
     const id = uuid();
     const filename =
-      typeof filenameField === "string" && filenameField.length > 0
-        ? filenameField
+      typeof form.get("filename") === "string" && String(form.get("filename")).length > 0
+        ? String(form.get("filename"))
         : `${id}.jpg`;
     const blobPath = `photos/${id}.jpg`;
 
@@ -48,15 +54,18 @@ export async function POST(request: Request) {
       deletedAt: null,
       uploadedBy,
     };
-    const saved = await updateGalleryManifest(
+
+    return respondGalleryMutation(
+      request,
+      "[gallery upload]",
+      base,
       (state) => upsertPhoto(state, entry),
       (state) => {
         const photo = state.photos[id];
         return photo != null && photo.deletedAt === null;
-      }
+      },
+      { status: 201 }
     );
-    const gallery = await buildGalleryResponse(request, saved);
-    return Response.json(gallery, { status: 201 });
   } catch (err) {
     return storageErrorResponse(err, "[gallery upload]");
   }

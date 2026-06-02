@@ -8,6 +8,8 @@ enum AppTypography {
     static let secondary: Font = .subheadline
     /// Small badges on thumbnails.
     static let thumbBadge: Font = .caption.weight(.semibold)
+    /// Device preview hover badge on the e-ink opening (larger than grid thumb badges).
+    static let devicePreviewHoverBadge: Font = .system(size: 17, weight: .semibold)
 
     /// Primary app title — unlock welcome (serif matches app icon).
     /// Sized above `.largeTitle` (~38pt) on macOS; semantic on iOS so iPad Dynamic Type stays sane.
@@ -28,4 +30,21 @@ enum AppTypography {
     static let unlockSubtitle: Font = .title3
     /// Form labels and inline errors on unlock.
     static let unlockBody: Font = .body
+
+    /// Lightbox "Added by …" — serif matches unlock welcome.
+    #if os(iOS)
+    static let lightboxAttribution: Font = .system(.title2, design: .serif).weight(.semibold)
+    #else
+    static let lightboxAttribution: Font = .system(size: 36, weight: .semibold, design: .serif)
+    #endif
+    /// Lightbox / legacy device preview serif caption (`devicePreviewCaption(for:)`).
+    #if os(iOS)
+    static let devicePreviewCaption: Font = .system(.title2, design: .serif).weight(.semibold)
+    #else
+    static let devicePreviewCaption: Font = .system(size: 28, weight: .semibold, design: .serif)
+    #endif
+    /// Lightbox filename under attribution.
+    static let lightboxFilename: Font = .title2.weight(.semibold)
+    /// Lightbox supporting line (e.g. updated date).
+    static let lightboxMeta: Font = .title3
 }

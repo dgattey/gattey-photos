@@ -77,7 +77,7 @@ Restart the server after adding `CRON_SECRET`, changing cron-related server code
 ./scripts/start-server.sh
 ```
 
-Cron advances `currentPhotoId` and the **server** pushes to all registered frames (`commitManifest`). Clients **pull** via `GalleryStore` (`refresh`, `syncAll`, 15-minute timer while unlocked). No sync when locked or quit. Register frames in Settings (`POST /api/devices`).
+Cron advances `currentPhotoId` and the **server** pushes to all registered frames. Clients **pull** via `GalleryStore` (`refresh`, `syncAll`, 15-minute timer while unlocked). No sync when locked or quit. Register frames in Settings (`POST /api/devices`).
 
 Fast local check: one-shot advance, then sync in the app:
 

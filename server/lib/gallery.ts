@@ -1,3 +1,4 @@
+import { emptyGalleryUpdatedAt } from "./gallery-mutation";
 import type { GalleryState, PhotoEntry, PhotoId } from "./types";
 
 export const MANIFEST_PATH = "gallery/manifest.json";
@@ -6,7 +7,12 @@ export const MANIFEST_PATH = "gallery/manifest.json";
 export const LEGACY_UPLOADER_NAME = "Dylan";
 
 export function emptyGallery(): GalleryState {
-  return { version: 0, order: [], photos: {}, currentPhotoId: null };
+  return {
+    updatedAt: emptyGalleryUpdatedAt(),
+    order: [],
+    photos: {},
+    currentPhotoId: null,
+  };
 }
 
 export function activeOrder(state: GalleryState): PhotoId[] {
@@ -14,10 +20,6 @@ export function activeOrder(state: GalleryState): PhotoId[] {
     const p = state.photos[id];
     return p && p.deletedAt === null;
   });
-}
-
-export function bump(state: GalleryState): GalleryState {
-  return { ...state, version: state.version + 1 };
 }
 
 /** True when soft-deleting `id` would leave at least one active photo. */
@@ -66,12 +68,12 @@ export function softDelete(state: GalleryState, id: PhotoId): GalleryState | nul
   if (next.currentPhotoId === id) {
     next = { ...next, currentPhotoId: nextCurrentPhotoId(state, id, next) };
   }
-  return bump(next);
+  return next;
 }
 
 export function setCurrentPhoto(state: GalleryState, id: PhotoId): GalleryState {
   if (!activeOrder(state).includes(id)) return state;
-  return bump({ ...state, currentPhotoId: id, currentPhotoUpdatedBy: "manual" });
+  return { ...state, currentPhotoId: id, currentPhotoUpdatedBy: "manual" };
 }
 
 /** Next active id in manifest `order` after `current`, wrapping at end. */
@@ -109,18 +111,18 @@ export function advanceCurrentPhoto(state: GalleryState): GalleryState {
   if (!current || !active.includes(current)) {
     const first = firstActiveInOrder(state);
     if (!first) return state;
-    return bump({ ...state, currentPhotoId: first, currentPhotoUpdatedBy: "cron" });
+    return { ...state, currentPhotoId: first, currentPhotoUpdatedBy: "cron" };
   }
   const nextId = nextPhotoInOrder(state, current);
   if (!nextId || nextId === current) return state;
-  return bump({ ...state, currentPhotoId: nextId, currentPhotoUpdatedBy: "cron" });
+  return { ...state, currentPhotoId: nextId, currentPhotoUpdatedBy: "cron" };
 }
 
 export function setOrder(state: GalleryState, order: PhotoId[]): GalleryState {
   const active = new Set(activeOrder(state));
   const filtered = order.filter((id) => active.has(id));
   const missing = activeOrder(state).filter((id) => !filtered.includes(id));
-  return bump({ ...state, order: [...filtered, ...missing] });
+  return { ...state, order: [...filtered, ...missing] };
 }
 
 /**
@@ -136,13 +138,13 @@ export function resolveCurrentPhoto(state: GalleryState): {
     if (state.currentPhotoId == null) {
       return { state, dirty: false };
     }
-    return { state: bump({ ...state, currentPhotoId: null }), dirty: true };
+    return { state: { ...state, currentPhotoId: null }, dirty: true };
   }
   const current = state.currentPhotoId;
   if (current && active.includes(current)) {
     return { state, dirty: false };
   }
-  return { state: bump({ ...state, currentPhotoId: active[0]! }), dirty: true };
+  return { state: { ...state, currentPhotoId: active[0]! }, dirty: true };
 }
 
 /** Backfill `uploadedBy` and repair `currentPhotoId`; returns whether persistence is needed. */
@@ -170,6 +172,39 @@ export function normalizeManifest(state: GalleryState): {
   };
 }
 
+/** Rewrite `uploadedBy` on all entries that exactly match `fromName` (settings rename). */
+export function renameUploader(
+  state: GalleryState,
+  fromName: string,
+  toName: string
+): GalleryState {
+  const from = fromName.trim();
+  const to = toName.trim();
+  if (!from || !to || from === to) return state;
+
+  let dirty = false;
+  const photos = { ...state.photos };
+  const now = new Date().toISOString();
+  for (const id of Object.keys(photos)) {
+    const photo = photos[id]!;
+    if (photo.uploadedBy === from) {
+      photos[id] = { ...photo, uploadedBy: to, updatedAt: now };
+      dirty = true;
+    }
+  }
+  if (!dirty) return state;
+  return { ...state, photos };
+}
+
+export function renameUploaderApplied(
+  state: GalleryState,
+  fromName: string
+): boolean {
+  const from = fromName.trim();
+  if (!from) return true;
+  return !Object.values(state.photos).some((p) => p.uploadedBy === from);
+}
+
 export function upsertPhoto(state: GalleryState, entry: PhotoEntry): GalleryState {
   const exists = state.photos[entry.id];
   const nextPhotos = { ...state.photos, [entry.id]: entry };
@@ -177,5 +212,5 @@ export function upsertPhoto(state: GalleryState, entry: PhotoEntry): GalleryStat
   if (!exists && entry.deletedAt === null) {
     nextOrder = [...state.order, entry.id];
   }
-  return bump({ ...state, photos: nextPhotos, order: nextOrder });
+  return { ...state, photos: nextPhotos, order: nextOrder };
 }

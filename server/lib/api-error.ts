@@ -15,9 +15,24 @@ function blobAccessHint(): string {
   return "Blob access rejected: set GATTEY_BLOB_ACCESS=public only if the Vercel Blob store is public";
 }
 
-import { ManifestUpdateConflictError } from "./manifest-errors.ts";
+import { buildGalleryResponse } from "./gallery-service";
+import {
+  ManifestUpdateConflictError,
+  StaleGalleryError,
+} from "./manifest-errors.ts";
 
 /** Map storage / Blob SDK failures to HTTP status + client-visible message. */
+export async function staleGalleryResponse(
+  request: Request,
+  err: StaleGalleryError
+): Promise<Response> {
+  const gallery = await buildGalleryResponse(request, err.state);
+  return Response.json(
+    { error: "gallery stale", ...gallery },
+    { status: 409, headers: { "Cache-Control": "no-store" } }
+  );
+}
+
 export function storageErrorResponse(
   err: unknown,
   logPrefix: string

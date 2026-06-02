@@ -71,18 +71,6 @@ struct UnlockGlassBackground: View {
     }
 }
 
-/// Split-pane grab bar (centered in the divider hit strip on hover or drag).
-struct SoftColumnSeparator: View {
-    var visibleWidth: CGFloat
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: visibleWidth / 2, style: .continuous)
-            .fill(Color.primary.opacity(0.14))
-            .frame(width: visibleWidth)
-            .frame(maxHeight: .infinity)
-    }
-}
-
 /// Hides window title text while locked; keeps titlebar and traffic lights (close/minimize/zoom).
 struct WindowChromeConfigurator: NSViewRepresentable {
     var unlocked: Bool

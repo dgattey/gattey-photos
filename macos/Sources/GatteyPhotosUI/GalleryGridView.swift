@@ -27,7 +27,6 @@ struct GalleryGridView: View {
         galleryShell
             .inspector(isPresented: $chrome.showActivityInspector) {
                 ActivityLogPaneView()
-                    .inspectorColumnWidth(min: 280, ideal: 320, max: 420)
             }
     }
 
@@ -45,14 +44,22 @@ struct GalleryGridView: View {
             // Unified toolbar: hide SwiftUI/.navigationTitle duplicate (see `.toolbar(removing: .title)`)
             // and `WindowChromeConfigurator` title visibility. Leading title via `.navigation` only;
             // gallery actions follow a flexible spacer — `.primaryAction` is leading on macOS.
-            GalleryToolbarLeadingCluster(photoCount: store.activePhotos.count)
+            GalleryToolbarLeadingCluster(
+                photoCount: store.activePhotos.count,
+                isBootstrapping: store.isBootstrappingGallery
+            )
             GalleryMacOSToolbarFlexSpacer()
             #else
             ToolbarItem(placement: .principal) {
                 VStack(spacing: 2) {
                     Text("Gattey Photos")
                         .font(AppTypography.primaryTitle)
-                    Text(GalleryToolbarLeadingTitle.photoCountLabel(store.activePhotos.count))
+                    Text(
+                        GalleryToolbarLeadingTitle.photoCountLabel(
+                            store.activePhotos.count,
+                            isBootstrapping: store.isBootstrappingGallery
+                        )
+                    )
                         .font(AppTypography.secondary)
                         .foregroundStyle(.secondary)
                 }
@@ -81,10 +88,36 @@ struct GalleryGridView: View {
             Task { await uploadPickedItems(batch) }
         }
         #endif
+        .focusable()
+        .focusEffectDisabled()
+        .focused($gridDeleteKeyFocus)
+        .galleryDeleteKeyboard(photoIDs: gridDeleteKeyPhotoIDs)
+        .galleryOpenLightboxKeyboard(
+            isEnabled: galleryGridKeyboardEnabled,
+            photoOrder: store.activePhotos.map(\.id)
+        )
+        .galleryClearSelectionKeyboard(isEnabled: galleryGridKeyboardEnabled)
+        .galleryArrowSelectionKeyboard(isEnabled: galleryGridKeyboardEnabled)
+        .onChange(of: gridDeleteKeyPhotoIDs) { _, _ in
+            syncGridKeyboardFocus()
+        }
+        .onChange(of: selection.isLightboxOpen) { _, _ in
+            syncGridKeyboardFocus()
+        }
+        .onChange(of: showSettings) { _, _ in
+            syncGridKeyboardFocus()
+        }
+        .onAppear {
+            syncGridKeyboardFocus()
+        }
+    }
+
+    private var galleryGridKeyboardEnabled: Bool {
+        !selection.isLightboxOpen && !showSettings
     }
 
     private var gridDeleteKeyPhotoIDs: Set<PhotoID> {
-        guard !selection.isLightboxOpen else { return [] }
+        guard galleryGridKeyboardEnabled else { return [] }
         return selection.selectedIDs
     }
 
@@ -107,7 +140,16 @@ struct GalleryGridView: View {
                             .contentShape(Rectangle())
                             .onTapGesture { clearSelectionFromBackgroundTap() }
 
-                        if store.activePhotos.isEmpty {
+                        if store.isBootstrappingGallery {
+                            VStack(spacing: 12) {
+                                ProgressView()
+                                    .controlSize(.large)
+                                Text("Loading photos from server…")
+                                    .font(AppTypography.secondary)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 280)
+                        } else if store.activePhotos.isEmpty {
                             ContentUnavailableView {
                                 Label("Drop photos to upload", systemImage: "photo.badge.plus")
                             } description: {
@@ -162,20 +204,18 @@ struct GalleryGridView: View {
             ThumbnailGridSelectionChrome()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .focusable()
-        .focusEffectDisabled()
-        .focused($gridDeleteKeyFocus)
-        .galleryDeleteKeyboard(photoIDs: gridDeleteKeyPhotoIDs)
-        .galleryOpenLightboxKeyboard(
-            isEnabled: !selection.isLightboxOpen,
-            photoOrder: store.activePhotos.map(\.id)
-        )
-        .galleryClearSelectionKeyboard(isEnabled: !selection.isLightboxOpen)
-        .onChange(of: gridDeleteKeyPhotoIDs) { _, ids in
-            gridDeleteKeyFocus = !ids.isEmpty
-        }
-        .onAppear {
-            gridDeleteKeyFocus = !gridDeleteKeyPhotoIDs.isEmpty
+    }
+
+    /// Keeps keyboard shortcuts (delete, arrows, return, escape) on the gallery shell while the lightbox and settings are closed.
+    private func syncGridKeyboardFocus() {
+        let shouldFocus = galleryGridKeyboardEnabled && !store.activePhotos.isEmpty
+        if shouldFocus {
+            // Defer until after AppKit grid click handling so SwiftUI focus sticks.
+            Task { @MainActor in
+                gridDeleteKeyFocus = true
+            }
+        } else {
+            gridDeleteKeyFocus = false
         }
     }
 
@@ -186,6 +226,9 @@ struct GalleryGridView: View {
             rangeSelect: modifiers.rangeSelect,
             photoOrder: store.activePhotos.map(\.id)
         )
+        if !store.selection.isLightboxOpen {
+            syncGridKeyboardFocus()
+        }
     }
 
     #if os(iOS)
@@ -385,6 +428,7 @@ private struct GalleryPhotoGrid: View {
 /// One grid cell: observes selection for this photo only.
 private struct PhotoGridItem: View {
     @Environment(GallerySelectionStore.self) private var selection
+    @EnvironmentObject private var store: GalleryStore
     let photo: PhotoEntry
     let photoIndex: Int
     let photoCount: Int
@@ -420,6 +464,7 @@ private struct PhotoGridItem: View {
             thumbMaxPixelSize: thumbMaxPixelSize,
             isSelected: isSelected,
             isCurrentOnDevice: isCurrentOnDevice,
+            cornerTag: store.showingTag(for: photo.id),
             showsInsertionLineBefore: showsInsertionLineBefore,
             showsInsertionLineAfter: showsInsertionLineAfter
         )
@@ -703,12 +748,13 @@ private final class PhotoGridClickNSView: NSView, NSDraggingSource {
 /// Leading macOS toolbar title + photo count (unified toolbar `.navigation` placement).
 private struct GalleryToolbarLeadingTitle: View {
     let photoCount: Int
+    var isBootstrapping = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("Gattey Photos")
                 .font(AppTypography.toolbarTitle)
-            Text(Self.photoCountLabel(photoCount))
+            Text(Self.photoCountLabel(photoCount, isBootstrapping: isBootstrapping))
                 #if os(macOS)
                 .font(AppTypography.toolbarSubtitle)
                 #else
@@ -718,7 +764,10 @@ private struct GalleryToolbarLeadingTitle: View {
         }
     }
 
-    static func photoCountLabel(_ count: Int) -> String {
+    static func photoCountLabel(_ count: Int, isBootstrapping: Bool = false) -> String {
+        if isBootstrapping, count == 0 {
+            return String(localized: "Loading photos…")
+        }
         let word = count == 1
             ? String(localized: "photo")
             : String(localized: "photos")
@@ -730,6 +779,7 @@ private struct GalleryToolbarLeadingTitle: View {
 /// Leading toolbar: system toggle + title in one navigation group (same treatment as trailing toolbar buttons).
 private struct GalleryToolbarLeadingCluster: ToolbarContent {
     let photoCount: Int
+    var isBootstrapping = false
     @Environment(AppChromeState.self) private var chrome
 
     @ToolbarContentBuilder
@@ -748,12 +798,18 @@ private struct GalleryToolbarLeadingCluster: ToolbarContent {
 
         if #available(macOS 26.0, *) {
             ToolbarItem(placement: .navigation) {
-                GalleryToolbarLeadingTitle(photoCount: photoCount)
+                GalleryToolbarLeadingTitle(
+                    photoCount: photoCount,
+                    isBootstrapping: isBootstrapping
+                )
             }
             .sharedBackgroundVisibility(.hidden)
         } else {
             ToolbarItem(placement: .navigation) {
-                GalleryToolbarLeadingTitle(photoCount: photoCount)
+                GalleryToolbarLeadingTitle(
+                    photoCount: photoCount,
+                    isBootstrapping: isBootstrapping
+                )
             }
         }
     }
@@ -1025,6 +1081,7 @@ struct PhotoThumb: View {
     let thumbMaxPixelSize: Int
     let isSelected: Bool
     var isCurrentOnDevice: Bool = false
+    var cornerTag: String? = nil
     var showsInsertionLineBefore: Bool = false
     var showsInsertionLineAfter: Bool = false
 
@@ -1048,13 +1105,14 @@ struct PhotoThumb: View {
                 }
             }
             .overlay(alignment: .bottomTrailing) {
-                if isCurrentOnDevice, selection.presentedLightboxPhotoID != photo.id {
-                    Text("Current")
+                if let cornerTag,
+                   selection.presentedLightboxPhotoID != photo.id {
+                    Text(cornerTag)
                         .font(AppTypography.thumbBadge)
                         .foregroundStyle(.white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 4)
-                        .background(Color.black)
+                        .background(cornerTag == "Showing today" ? Color.black : AppBrandColor.accentGreen)
                         .padding(6)
                 }
             }

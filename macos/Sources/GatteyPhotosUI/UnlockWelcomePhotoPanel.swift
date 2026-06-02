@@ -91,8 +91,10 @@ struct UnlockWelcomePhotoPanel: View {
         let screenHeight = screenWidth / screenAspectRatio
         if let image = Self.bundledWelcomeImage {
             welcomeImageView(image, screenWidth: screenWidth, screenHeight: screenHeight)
+                .devicePreviewScreenInnerVignette()
         } else {
             Color.secondary.opacity(0.15)
+                .devicePreviewScreenInnerVignette()
         }
     }
 

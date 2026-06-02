@@ -57,6 +57,6 @@ Activity log inspector (toolbar / ⌘B) only when debug mode is on.
 
 ## Sync flows
 
-- `GalleryStore.pullFromServer` — one path for foreground refresh, ⌘R Sync, and the 15-minute timer while unlocked (`SyncEngine.syncFromServer` underneath)
+- `GalleryStore.pullFromServer` — one path for foreground refresh, ⌘R Sync, and the 15-minute timer while unlocked
 
 Server Bloomin8: `server/lib/bloomin8/`, `server/lib/devices/`.

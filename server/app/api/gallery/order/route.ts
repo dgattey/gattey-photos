@@ -1,11 +1,13 @@
 import { assertSessionToken } from "@/lib/auth";
-import { jsonApiError, storageErrorResponse } from "@/lib/api-error";
+import { jsonApiError } from "@/lib/api-error";
 import { activeOrder, setOrder } from "@/lib/gallery";
-import { buildGalleryResponse } from "@/lib/gallery-service";
-import { updateGalleryManifest } from "@/lib/gallery-manifest-update";
+import {
+  parseBaseUpdatedAt,
+  respondGalleryMutation,
+} from "@/lib/gallery-mutation";
 import type { GalleryState, PhotoId } from "@/lib/types";
 
-function activeOrderMatchesRequest(state: GalleryState, requested: PhotoId[]): boolean {
+function orderApplied(state: GalleryState, requested: PhotoId[]): boolean {
   const active = activeOrder(state);
   const activeSet = new Set(active);
   const filtered = requested.filter((id) => activeSet.has(id));
@@ -18,21 +20,22 @@ export async function PUT(request: Request) {
   const auth = await assertSessionToken(request);
   if (auth) return auth;
 
-  const body = (await request.json()) as { order?: PhotoId[] };
+  const body = (await request.json()) as {
+    order?: PhotoId[];
+    baseUpdatedAt?: unknown;
+  };
   if (!Array.isArray(body.order)) {
     return jsonApiError(400, "order array required");
   }
+  const base = parseBaseUpdatedAt(body.baseUpdatedAt);
+  if (base instanceof Response) return base;
 
-  try {
-    const saved = await updateGalleryManifest(
-      (state) => setOrder(state, body.order!),
-      (state) => activeOrderMatchesRequest(state, body.order!)
-    );
-    const gallery = await buildGalleryResponse(request, saved);
-    return Response.json(gallery, {
-      headers: { "Cache-Control": "no-store" },
-    });
-  } catch (err) {
-    return storageErrorResponse(err, "[gallery order]");
-  }
+  return respondGalleryMutation(
+    request,
+    "[gallery order]",
+    base,
+    (state) => setOrder(state, body.order!),
+    (state) => orderApplied(state, body.order!),
+    { cacheControl: "no-store" }
+  );
 }

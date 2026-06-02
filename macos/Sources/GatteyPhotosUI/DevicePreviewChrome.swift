@@ -45,6 +45,54 @@ enum DevicePreviewChrome {
     }
 }
 
+/// Soft inset shading on the e-ink opening so the mat/bezel reads as recessed (non-interactive).
+struct DevicePreviewScreenInnerVignette: View {
+    var body: some View {
+        ZStack {
+            VStack(spacing: 0) {
+                LinearGradient(
+                    colors: [.black.opacity(0.14), .clear],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(maxHeight: 28)
+                Spacer(minLength: 0)
+                LinearGradient(
+                    colors: [.black.opacity(0.06), .clear],
+                    startPoint: .bottom,
+                    endPoint: .top
+                )
+                .frame(maxHeight: 18)
+            }
+            HStack(spacing: 0) {
+                LinearGradient(
+                    colors: [.black.opacity(0.11), .clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(maxWidth: 22)
+                Spacer(minLength: 0)
+                LinearGradient(
+                    colors: [.black.opacity(0.07), .clear],
+                    startPoint: .trailing,
+                    endPoint: .leading
+                )
+                .frame(maxWidth: 18)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+extension View {
+    /// Inner edge shading for device screen content; place before hover/interaction overlays.
+    func devicePreviewScreenInnerVignette() -> some View {
+        overlay {
+            DevicePreviewScreenInnerVignette()
+        }
+    }
+}
+
 struct DevicePreviewFramed<Screen: View>: View {
     let screenWidth: CGFloat
     let screenAspectRatio: CGFloat
@@ -63,6 +111,6 @@ struct DevicePreviewFramed<Screen: View>: View {
             .padding(DevicePreviewChrome.outerFrameWidth)
             .background(DevicePreviewChrome.outerFrameColor)
             .fixedSize()
-            .shadow(color: .black.opacity(0.16), radius: 10, x: 0, y: 5)
+            .shadow(color: .black.opacity(0.24), radius: 14, x: 0, y: 7)
     }
 }

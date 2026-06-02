@@ -16,7 +16,7 @@ struct GalleryPhotoContextMenuItems: View {
     }
 
     var body: some View {
-        Button("Set as current") {
+        Button("Show for today") {
             Task { await store.setAsCurrent(photoID: photoID) }
         }
         .disabled(!canSetCurrent)

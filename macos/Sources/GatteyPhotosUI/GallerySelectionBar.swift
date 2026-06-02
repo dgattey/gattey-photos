@@ -30,7 +30,7 @@ struct GallerySelectionBar: View {
                 .font(AppTypography.sectionTitle)
             Spacer()
             if let id = singleSelectedID {
-                Button("Set as current") {
+                Button("Show for today") {
                     Task { await store.setAsCurrent(photoID: id) }
                 }
                 .galleryPrimaryButtonStyle()

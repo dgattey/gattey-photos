@@ -27,7 +27,8 @@ public struct PhotoEntry: Codable, Equatable, Identifiable, Sendable {
 }
 
 public struct GalleryState: Codable, Equatable, Sendable {
-    public var version: Int
+    /// ISO-8601; bumped on every server manifest write. Sent as `baseUpdatedAt` on mutations.
+    public var updatedAt: String
     public var order: [PhotoID]
     public var photos: [PhotoID: PhotoEntry]
     /// Photo the Bloomin8 frame is showing (synced across clients).
@@ -35,8 +36,24 @@ public struct GalleryState: Codable, Equatable, Sendable {
     /// How `currentPhotoId` last changed on the server (`cron` advance vs manual set).
     public var currentPhotoUpdatedBy: CurrentPhotoUpdatedBy?
 
+    public static let emptyUpdatedAt = "1970-01-01T00:00:00.000Z"
+
+    public init(
+        updatedAt: String,
+        order: [PhotoID],
+        photos: [PhotoID: PhotoEntry],
+        currentPhotoId: PhotoID? = nil,
+        currentPhotoUpdatedBy: CurrentPhotoUpdatedBy? = nil
+    ) {
+        self.updatedAt = updatedAt
+        self.order = order
+        self.photos = photos
+        self.currentPhotoId = currentPhotoId
+        self.currentPhotoUpdatedBy = currentPhotoUpdatedBy
+    }
+
     public static var empty: GalleryState {
-        GalleryState(version: 0, order: [], photos: [:], currentPhotoId: nil)
+        GalleryState(updatedAt: emptyUpdatedAt, order: [], photos: [:], currentPhotoId: nil)
     }
 
     public func activePhotos() -> [PhotoEntry] {
@@ -91,21 +108,6 @@ public struct GalleryState: Codable, Equatable, Sendable {
         return next
     }
 
-    /// Replaces active display order; soft-deleted ids stay at the end of `order`.
-    /// Bumps `version` when order changes so merge keeps optimistic reorders over stale pulls.
-    public func applyingActiveDisplayOrder(_ activeOrder: [PhotoID]) -> GalleryState {
-        let tombstones = order.filter { id in
-            guard let photo = photos[id] else { return false }
-            return photo.isDeleted
-        }
-        let newOrder = activeOrder + tombstones.filter { !activeOrder.contains($0) }
-        guard newOrder != order else { return self }
-        var next = self
-        next.order = newOrder
-        next.version = version + 1
-        return next
-    }
-
     public func withResolvedCurrentPhoto() -> GalleryState {
         let active = activePhotos()
         guard !active.isEmpty else {
@@ -148,6 +150,8 @@ public struct AppSettings: Codable, Sendable {
     public var previewPaneSplitFraction: Double
     /// Photos per row in the gallery thumbnail grid (fixed column count).
     public var galleryGridColumnCount: Int
+    /// Local advance interval (seconds) while `debugMode` is on; matches `ADVANCE_CURRENT_INTERVAL_SECONDS` / debug menu.
+    public var debugAdvanceIntervalSeconds: Int
 
     public static let previewPaneSplitFractionDefault: Double = 0.48
     public static let previewPaneSplitFractionMin: Double = 0.28
@@ -156,6 +160,8 @@ public struct AppSettings: Codable, Sendable {
     public static let galleryGridColumnCountDefault: Int = 5
     public static let galleryGridColumnCountMin: Int = 2
     public static let galleryGridColumnCountMax: Int = 8
+
+    public static let debugAdvanceIntervalSecondsDefault: Int = GalleryRotationSchedule.defaultDebugAdvanceIntervalSeconds
     /// Reference width when migrating legacy `galleryThumbnailColumnMin` (points).
     private static let galleryGridColumnCountMigrationReferenceWidth: Double = 720
     private static let legacyGalleryThumbnailColumnMinDefault: Double = 140
@@ -179,6 +185,7 @@ public struct AppSettings: Codable, Sendable {
         case bloomin8ApiToken, bloomin8OpenApiBaseURL // legacy; dropped on load, never written
         case previewPaneSplitFraction
         case galleryGridColumnCount
+        case debugAdvanceIntervalSeconds
         /// Legacy adaptive minimum width; migrated to `galleryGridColumnCount` on load.
         case galleryThumbnailColumnMin
         // Legacy; never written. Dropped on load.
@@ -192,7 +199,8 @@ public struct AppSettings: Codable, Sendable {
         galleryName: String,
         displayName: String = AppSettings.defaultDisplayName,
         previewPaneSplitFraction: Double = AppSettings.previewPaneSplitFractionDefault,
-        galleryGridColumnCount: Int = AppSettings.galleryGridColumnCountDefault
+        galleryGridColumnCount: Int = AppSettings.galleryGridColumnCountDefault,
+        debugAdvanceIntervalSeconds: Int = AppSettings.debugAdvanceIntervalSecondsDefault
     ) {
         self.serverBaseURL = serverBaseURL
         self.debugMode = debugMode
@@ -203,6 +211,11 @@ public struct AppSettings: Codable, Sendable {
             : displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         self.previewPaneSplitFraction = Self.clampedPreviewPaneSplitFraction(previewPaneSplitFraction)
         self.galleryGridColumnCount = Self.clampedGalleryGridColumnCount(galleryGridColumnCount)
+        self.debugAdvanceIntervalSeconds = Self.clampedDebugAdvanceIntervalSeconds(debugAdvanceIntervalSeconds)
+    }
+
+    public static func clampedDebugAdvanceIntervalSeconds(_ value: Int) -> Int {
+        GalleryRotationSchedule.clampedDebugInterval(value)
     }
 
     public static func clampedPreviewPaneSplitFraction(_ value: Double) -> Double {
@@ -244,6 +257,9 @@ public struct AppSettings: Codable, Sendable {
                 ?? Self.legacyGalleryThumbnailColumnMinDefault
             galleryGridColumnCount = Self.galleryGridColumnCount(migratingLegacyColumnMin: legacyMin)
         }
+        let intervalRaw = try c.decodeIfPresent(Int.self, forKey: .debugAdvanceIntervalSeconds)
+            ?? Self.debugAdvanceIntervalSecondsDefault
+        debugAdvanceIntervalSeconds = Self.clampedDebugAdvanceIntervalSeconds(intervalRaw)
         // Ignore legacy syncPassword — never persisted again.
         _ = try c.decodeIfPresent(String.self, forKey: .syncPassword)
     }
@@ -257,6 +273,7 @@ public struct AppSettings: Codable, Sendable {
         try c.encode(displayName, forKey: .displayName)
         try c.encode(previewPaneSplitFraction, forKey: .previewPaneSplitFraction)
         try c.encode(galleryGridColumnCount, forKey: .galleryGridColumnCount)
+        try c.encode(debugAdvanceIntervalSeconds, forKey: .debugAdvanceIntervalSeconds)
     }
 
     /// Bearer value for sync API calls when a session exists.

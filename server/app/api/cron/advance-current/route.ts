@@ -1,6 +1,7 @@
 import { assertCronSecret } from "@/lib/auth";
 import { advanceCurrentPhoto } from "@/lib/gallery";
-import { commitManifest } from "@/lib/manifest-commit";
+import { applyGalleryMutation } from "@/lib/gallery-mutation";
+import { pushCurrentPhotoToAllDevices } from "@/lib/bloomin8/push-gallery";
 import * as storage from "@/lib/storage";
 
 async function handleAdvance(request: Request) {
@@ -9,16 +10,26 @@ async function handleAdvance(request: Request) {
 
   const before = await storage.readManifest();
   const after = advanceCurrentPhoto(before);
-  const changed = after.version !== before.version;
+  const changed = after.currentPhotoId !== before.currentPhotoId;
 
-  const saved = changed ? await commitManifest(after) : after;
+  const saved = changed
+    ? await applyGalleryMutation(
+        before.updatedAt,
+        () => after,
+        (state) => state.currentPhotoId === after.currentPhotoId
+      )
+    : before;
+
+  if (changed) {
+    await pushCurrentPhotoToAllDevices(saved);
+  }
 
   return Response.json({
     ok: true,
     advanced: changed,
     previousPhotoId: before.currentPhotoId ?? null,
     currentPhotoId: saved.currentPhotoId ?? null,
-    version: saved.version,
+    updatedAt: saved.updatedAt,
   });
 }
 

@@ -35,13 +35,18 @@ extension View {
     }
 }
 
-/// Compact layout: hero fills width. Side-by-side: intrinsic width from aspect ratio (no horizontal stretch).
+/// Compact layout: hero fills width. Side-by-side: hero keeps natural width (macOS cluster is trailing-aligned).
 struct LightboxHeroWidthModifier: ViewModifier {
     let expandsHorizontally: Bool
+    var horizontalAlignment: HorizontalAlignment = .center
 
     func body(content: Content) -> some View {
         if expandsHorizontally {
-            content.frame(maxWidth: .infinity, maxHeight: .infinity)
+            content.frame(
+                maxWidth: .infinity,
+                maxHeight: .infinity,
+                alignment: Alignment(horizontal: horizontalAlignment, vertical: .center)
+            )
         } else {
             content
         }

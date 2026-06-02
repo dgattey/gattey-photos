@@ -48,8 +48,7 @@ enum PreviewPaneLayout {
                 contentHeight: contentHeight,
                 screenAspectRatio: screenAspectRatio
             ),
-            totalWidth: totalWidth,
-            enforceMinimumFraction: false
+            totalWidth: totalWidth
         )
     }
 
@@ -69,20 +68,14 @@ enum PreviewPaneLayout {
         return framed.width + macOSPaneHorizontalPadding
     }
 
-    /// Clamps pane width; optional 28% min applies while dragging, not for auto intrinsic width.
+    /// Clamps pane width to the configured maximum fraction of `totalWidth`.
     static func macOSClampedLeftPaneWidth(
         _ width: CGFloat,
-        totalWidth: CGFloat,
-        enforceMinimumFraction: Bool = true
+        totalWidth: CGFloat
     ) -> CGFloat {
         let total = max(totalWidth, 1)
         let maxW = total * CGFloat(AppSettings.previewPaneSplitFractionMax)
-        var w = min(max(width, 0), maxW)
-        if enforceMinimumFraction {
-            let minW = total * CGFloat(AppSettings.previewPaneSplitFractionMin)
-            w = max(w, minW)
-        }
-        return w
+        return min(max(width, 0), maxW)
     }
     #endif
 }

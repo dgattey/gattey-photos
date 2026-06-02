@@ -5,13 +5,13 @@ description: Build and run the Gattey Photos iOS/iPad app. Use when changing Gat
 
 # Gattey Photos iOS / iPad
 
-The iOS app shares **GatteyPhotosCore** (sync, manifest, auth) and **GatteyPhotosUI** (unlock, gallery, lightbox, settings) with macOS. Client pull is identical on all platforms (`GalleryStore` + `SyncEngine`); there is no local Node server or macOS LaunchAgent helper.
+The iOS app shares **GatteyPhotosCore** (sync, manifest, auth) and **GatteyPhotosUI** (unlock, gallery, lightbox, settings) with macOS. Client pull is identical on all platforms (`GalleryStore`); there is no local Node server or macOS LaunchAgent helper.
 
 ## Package layout (`macos/Package.swift`)
 
 | Target | Platform | Role |
 |--------|----------|------|
-| `GatteyPhotosCore` | macOS + iOS | Models, `SyncEngine`, `AppConfig`, merge; macOS-only helpers behind `#if os(macOS)` |
+| `GatteyPhotosCore` | macOS + iOS | Models, `SyncClient`, `AppConfig`; macOS-only helpers behind `#if os(macOS)` |
 | `GatteyPhotosUI` | macOS + iOS | Shared SwiftUI (`AppRootContainer`, `GalleryStore`, grid, lightbox) |
 | `GatteyPhotosIOS` | iOS | `@main` — wires environment objects |
 | `GatteyPhotosApp` | macOS | `@main` + `AppDelegate` |

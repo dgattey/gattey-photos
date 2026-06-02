@@ -58,12 +58,23 @@ public enum AppConfig {
         try data.write(to: settingsURL, options: .atomic)
     }
 
-    public static func loadLocalState() -> GalleryState {
-        guard let data = try? Data(contentsOf: localStateURL),
-              let decoded = try? JSONDecoder().decode(GalleryState.self, from: data) else {
-            return .empty
+    public struct LocalStateLoad: Sendable {
+        public var state: GalleryState
+        /// Local manifest exists but failed to decode; replace from server on unlock.
+        public var needsServerPull: Bool
+    }
+
+    public static func loadLocalState() -> LocalStateLoad {
+        guard FileManager.default.fileExists(atPath: localStateURL.path) else {
+            return LocalStateLoad(state: .empty, needsServerPull: false)
         }
-        return decoded
+        guard let data = try? Data(contentsOf: localStateURL),
+              let decoded = try? JSONDecoder().decode(GalleryState.self, from: data)
+        else {
+            try? FileManager.default.removeItem(at: localStateURL)
+            return LocalStateLoad(state: .empty, needsServerPull: true)
+        }
+        return LocalStateLoad(state: decoded, needsServerPull: false)
     }
 
     public static func saveLocalState(_ state: GalleryState) throws {

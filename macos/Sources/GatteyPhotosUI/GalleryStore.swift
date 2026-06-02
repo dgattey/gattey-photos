@@ -15,14 +15,20 @@ private actor GalleryMutationSerial {
 
 @MainActor
 public final class GalleryStore: ObservableObject {
-    public init() {}
+    public init() {
+        let local = AppConfig.loadLocalState()
+        state = local.state.withResolvedCurrentPhoto()
+        if local.needsServerPull {
+            isAwaitingInitialGalleryPull = true
+        }
+    }
 
     public weak var session: AppSession?
 
     public let selection = GallerySelectionStore()
 
     @Published public var settings: AppSettings = AppConfig.loadSettings()
-    @Published var state: GalleryState = AppConfig.loadLocalState().withResolvedCurrentPhoto()
+    @Published var state: GalleryState
     @Published var serverLinkStatus: LinkStatus = .down
     @Published var deviceLinkStatus: LinkStatus = .down
     @Published private(set) var isCheckingConnection = false
@@ -40,13 +46,23 @@ public final class GalleryStore: ObservableObject {
     @Published public var photoShareItem: PhotoShareItem?
     #endif
 
-    private let engine = SyncEngine()
     private let log = ActivityLogStore.shared
     private var lastServerOK: Date?
-    /// While `setAsCurrent` is in flight, skip pull logging for that id (avoids duplicate with "Set as current").
+    /// While `setAsCurrent` is in flight, skip pull logging for that id (avoids duplicate with "Show for today").
     private var setAsCurrentInFlight: PhotoID?
     private var periodicPullTask: Task<Void, Never>?
     private let galleryMutationSerial = GalleryMutationSerial()
+    private var pullRetryNotBefore: Date?
+    private var pullFailureStreak = 0
+
+    private static let periodicPullNanos: UInt64 = 900_000_000_000
+
+    /// True while a gallery fetch is in flight and the grid is still empty (first load after unlock).
+    var isBootstrappingGallery: Bool {
+        (isBusy && activePhotos.isEmpty) || isAwaitingInitialGalleryPull
+    }
+
+    @Published private(set) var isAwaitingInitialGalleryPull = false
 
     private enum PullKind {
         case foreground
@@ -70,6 +86,47 @@ public final class GalleryStore: ObservableObject {
         state.canSetAsCurrent(photoID: photoID)
     }
 
+    /// Next cron boundary and per-photo slot starts for the active gallery order.
+    var rotationPlan: GalleryRotationPlan? {
+        let order = activePhotos.map(\.id)
+        return GalleryRotationSchedule.plan(
+            activeOrder: order,
+            currentPhotoID: state.currentPhotoId,
+            kind: GalleryRotationSchedule.kind(
+                debugMode: settings.debugMode,
+                debugAdvanceIntervalSeconds: settings.debugAdvanceIntervalSeconds
+            )
+        )
+    }
+
+    func showingTag(for photoID: PhotoID) -> String? {
+        guard let date = rotationPlan?.showingStartByPhotoID[photoID] else { return nil }
+        return PhotoFormatters.showingTag(start: date)
+    }
+
+    func devicePreviewCaption(for photo: PhotoEntry) -> String {
+        if let until = rotationPlan?.currentShowingUntil, state.currentPhotoId == photo.id {
+            return PhotoFormatters.addedByUntilFriendly(photo: photo, until: until)
+        }
+        return PhotoFormatters.addedBy(photo)
+    }
+
+    /// Lightbox secondary line when this photo is the device current (rotation end date).
+    func lightboxShowingUntilCaption(for photo: PhotoEntry) -> String? {
+        guard state.currentPhotoId == photo.id,
+              let until = rotationPlan?.currentShowingUntil
+        else { return nil }
+        return PhotoFormatters.showingUntil(until)
+    }
+
+    public func setDebugAdvanceIntervalSeconds(_ seconds: Int) {
+        let clamped = AppSettings.clampedDebugAdvanceIntervalSeconds(seconds)
+        guard settings.debugAdvanceIntervalSeconds != clamped else { return }
+        settings.debugAdvanceIntervalSeconds = clamped
+        try? AppConfig.saveSettings(settings)
+        log.log(.system, level: .info, "Debug advance interval", detail: "\(clamped)s")
+    }
+
     private func applyState(_ next: GalleryState) {
         state = next.withResolvedCurrentPhoto()
     }
@@ -78,18 +135,54 @@ public final class GalleryStore: ObservableObject {
         try SyncClient(settings: settings)
     }
 
-    /// Apply server manifest to UI + disk. Reuse `client` when the caller already has one for this operation.
-    private func commitServerState(
-        _ serverState: GalleryState,
+    private func commit(
+        _ response: GalleryResponse,
         client: SyncClient? = nil,
         downloadMissing: Bool = false
     ) async throws {
+        let next = response.state.mergingDownloadURLs(from: response.photos)
         if downloadMissing {
             let sync = try client ?? makeSyncClient()
-            try await sync.downloadMissing(for: serverState)
+            try await sync.downloadMissing(for: next)
         }
-        applyState(serverState)
+        applyState(next)
         try AppConfig.saveLocalState(state)
+    }
+
+    /// Mutation with `baseUpdatedAt`; on 409 applies server body and retries (up to 3 attempts).
+    private func mutateGallery(
+        client: SyncClient,
+        downloadMissing: Bool = false,
+        call: (String) async throws -> GalleryResponse
+    ) async throws {
+        var base = state.updatedAt
+        for attempt in 0..<3 {
+            do {
+                try await commit(try await call(base), client: client, downloadMissing: downloadMissing)
+                return
+            } catch let error as SyncError {
+                guard case .stale(let remote) = error else { throw error }
+                try await commit(remote, client: client)
+                guard attempt < 2 else { throw error }
+                base = state.updatedAt
+            }
+        }
+    }
+
+    private func shouldSkipPeriodicPull(now: Date = Date()) -> Bool {
+        guard let pullRetryNotBefore else { return false }
+        return now < pullRetryNotBefore
+    }
+
+    private func notePullSuccess() {
+        pullFailureStreak = 0
+        pullRetryNotBefore = nil
+    }
+
+    private func notePullFailure(now: Date = Date()) {
+        pullFailureStreak += 1
+        let seconds = min(300.0, pow(2.0, Double(pullFailureStreak)))
+        pullRetryNotBefore = now.addingTimeInterval(seconds)
     }
 
     /// Ensures the on-disk JPEG cache exists for grid/lightbox display.
@@ -138,16 +231,55 @@ public final class GalleryStore: ObservableObject {
         lastServerOK = nil
         serverLinkStatus = .down
         deviceLinkStatus = .down
+        pullRetryNotBefore = nil
+        pullFailureStreak = 0
     }
 
     func saveSettings() {
+        let previousDisplayName = Self.persistedDisplayName()
         let previousServerURL = settings.serverBaseURL
         settings.serverBaseURL = AppSettings.syncServerBaseURL(debugMode: settings.debugMode)
         settings.galleryName = "default"
+        let newDisplayName = settings.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         try? AppConfig.saveSettings(settings)
         session?.noteSettingsChanged(store: self, previousServerURL: previousServerURL)
         log.log(.system, level: .info, "Settings saved", detail: settings.serverBaseURL)
+        if let previousDisplayName,
+           previousDisplayName != newDisplayName,
+           !newDisplayName.isEmpty,
+           session?.isUnlocked == true
+        {
+            Task { await propagateDisplayNameChange(from: previousDisplayName, to: newDisplayName) }
+        }
         Task { await updateConnectionStatus() }
+    }
+
+    private static func persistedDisplayName() -> String? {
+        guard let data = try? Data(contentsOf: AppConfig.settingsURL),
+              let decoded = try? JSONDecoder().decode(AppSettings.self, from: data)
+        else { return nil }
+        let trimmed = decoded.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func propagateDisplayNameChange(from oldName: String, to newName: String) async {
+        await run(label: "Rename uploader", category: .gallery) {
+            let client = try makeSyncClient()
+            try await mutateGallery(client: client) { base in
+                try await client.renameUploader(
+                    fromName: oldName,
+                    toName: newName,
+                    baseUpdatedAt: base
+                )
+            }
+            noteServerOK()
+            log.log(
+                .gallery,
+                level: .success,
+                "Updated uploader name on server",
+                detail: "\(oldName) → \(newName)"
+            )
+        }
     }
 
     public func reloadRegisteredFrames() async {
@@ -168,17 +300,31 @@ public final class GalleryStore: ObservableObject {
             displayName: parsed,
             registeredBy: settings.displayName
         )
-        registeredFrames = try await client.listDevices()
+        upsertRegisteredFrame(device)
         log.log(.device, level: .success, "Frame registered", detail: device.displayName)
-        await updateDeviceStatus(using: client)
+        Task { await updateDeviceStatus(using: client) }
     }
 
     public func unregisterFrame(id: String) async throws {
         let client = try makeSyncClient()
-        try await client.deleteDevice(id: id)
-        registeredFrames = try await client.listDevices()
-        log.log(.device, level: .info, "Frame removed")
-        await updateDeviceStatus(using: client)
+        let snapshot = registeredFrames
+        registeredFrames.removeAll { $0.id == id }
+        do {
+            try await client.deleteDevice(id: id)
+            log.log(.device, level: .info, "Frame removed")
+            Task { await updateDeviceStatus(using: client) }
+        } catch {
+            registeredFrames = snapshot
+            throw error
+        }
+    }
+
+    private func upsertRegisteredFrame(_ device: RegisteredDevicePublic) {
+        if let index = registeredFrames.firstIndex(where: { $0.id == device.id }) {
+            registeredFrames[index] = device
+        } else {
+            registeredFrames.append(device)
+        }
     }
 
     private func applyDeviceScreenGeometry(from status: DeviceLiveStatus) {
@@ -209,7 +355,12 @@ public final class GalleryStore: ObservableObject {
         serverLinkStatus = .down
     }
 
+    func markAwaitingInitialGalleryPull() {
+        isAwaitingInitialGalleryPull = true
+    }
+
     func refresh() async {
+        defer { isAwaitingInitialGalleryPull = false }
         await pullFromServer(kind: .foreground)
     }
 
@@ -222,7 +373,7 @@ public final class GalleryStore: ObservableObject {
         periodicPullTask?.cancel()
         periodicPullTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: GallerySyncSchedule.periodicIntervalNanoseconds)
+                try? await Task.sleep(nanoseconds: Self.periodicPullNanos)
                 guard !Task.isCancelled else { break }
                 await self?.pullFromServer(kind: .periodic)
             }
@@ -236,16 +387,13 @@ public final class GalleryStore: ObservableObject {
 
     private func pullFromServer(kind: PullKind) async {
         guard session?.isUnlocked == true else { return }
-        if isBusy {
-            let message = switch kind {
-            case .periodic: "Scheduled sync skipped"
-            case .foreground: "Refresh skipped"
-            case .manual: "Server sync skipped"
-            }
-            log.log(.sync, level: .info, message, detail: "Gallery busy")
-            return
+        if kind == .periodic, shouldSkipPeriodicPull() { return }
+        await galleryMutationSerial.perform { [weak self] in
+            await self?.executePullFromServer(kind: kind)
         }
+    }
 
+    private func executePullFromServer(kind: PullKind) async {
         let failureContext: String
         let logCategory: LogCategory
         switch kind {
@@ -275,8 +423,10 @@ public final class GalleryStore: ObservableObject {
 
         let previousCurrentId = state.currentPhotoId
         do {
-            let merged = try await engine.pullRemoteMerged(settings: settings)
-            try await commitServerState(merged)
+            let client = try makeSyncClient()
+            let response = try await client.fetchGallery()
+            try await commit(response, client: client, downloadMissing: true)
+            notePullSuccess()
             noteServerOK()
             logPulledCurrentPhotoChange(
                 delta: CurrentPhotoPullDelta.ifCurrentChanged(from: previousCurrentId, to: state),
@@ -288,24 +438,25 @@ public final class GalleryStore: ObservableObject {
                     .gallery,
                     level: .success,
                     "Gallery refreshed",
-                    detail: "version=\(state.version) active=\(state.activePhotos().count)"
+                    detail: "updatedAt=\(state.updatedAt) active=\(state.activePhotos().count)"
                 )
             case .manual:
                 log.log(
                     .server,
                     level: .success,
                     "Server sync OK",
-                    detail: "version=\(state.version) photos=\(state.activePhotos().count)"
+                    detail: "updatedAt=\(state.updatedAt) photos=\(state.activePhotos().count)"
                 )
             case .periodic:
                 log.log(
                     .sync,
                     level: .success,
                     "Scheduled sync OK",
-                    detail: "version=\(state.version) photos=\(state.activePhotos().count)"
+                    detail: "updatedAt=\(state.updatedAt) photos=\(state.activePhotos().count)"
                 )
             }
         } catch {
+            notePullFailure()
             log.log(error: error, category: logCategory, context: failureContext)
             markServerUnreachableAfterSyncFailure(error)
         }
@@ -377,12 +528,15 @@ public final class GalleryStore: ObservableObject {
         }
     }
 
-    func updateConnectionStatus() async {
+    /// Refreshes server + frame reachability. Pass `showCheckingUI: true` when opening Settings so pills can show "Connecting"; background calls keep the last status until the check finishes.
+    func updateConnectionStatus(showCheckingUI: Bool = false) async {
         let serverWasDown = serverLinkStatus == .down
         isCheckingConnection = true
         defer { isCheckingConnection = false }
-        serverLinkStatus = .checking
-        deviceLinkStatus = .checking
+        if showCheckingUI {
+            serverLinkStatus = .checking
+            deviceLinkStatus = .checking
+        }
         log.log(.system, level: .info, "Checking server and frames")
         let server = await Reachability.pingServer(baseURL: settings.serverBaseURL)
         applyServerStatus(pingSucceeded: server)
@@ -401,7 +555,7 @@ public final class GalleryStore: ObservableObject {
         if session?.isUnlocked == true, server {
             await session?.revalidateIfUnlocked(store: self)
             if serverWasDown {
-                await pullFromServer(kind: .foreground)
+                Task { await self.pullFromServer(kind: .foreground) }
             }
         }
     }
@@ -474,8 +628,7 @@ public final class GalleryStore: ObservableObject {
         log.log(.gallery, level: .info, "Uploading \(urls.count) file(s)")
         await run(label: "Upload", category: .gallery) {
             let client = try makeSyncClient()
-            var latest = state
-            for url in urls {
+            for (index, url) in urls.enumerated() {
                 let accessed = url.startAccessingSecurityScopedResource()
                 defer {
                     if accessed {
@@ -484,20 +637,26 @@ public final class GalleryStore: ObservableObject {
                 }
                 let data = try PhotoCacheJPEG.normalizedJPEGData(fromFileURL: url)
                 let name = url.lastPathComponent
-                let beforeIDs = Set(latest.activePhotos().map(\.id))
-                let response = try await client.uploadPhoto(
-                    jpegData: data,
-                    filename: name,
-                    uploadedBy: settings.displayName
-                )
-                latest = response.state.mergingDownloadURLs(from: response.photos)
-                let newIDs = Set(latest.activePhotos().map(\.id)).subtracting(beforeIDs)
+                let beforeIDs = Set(state.activePhotos().map(\.id))
+                let isLast = index == urls.count - 1
+                try await mutateGallery(
+                    client: client,
+                    downloadMissing: isLast
+                ) { base in
+                    try await client.uploadPhoto(
+                        jpegData: data,
+                        filename: name,
+                        uploadedBy: settings.displayName,
+                        baseUpdatedAt: base
+                    )
+                }
+                let newIDs = Set(state.activePhotos().map(\.id)).subtracting(beforeIDs)
                 guard !newIDs.isEmpty else {
                     log.log(
                         .gallery,
                         level: .error,
                         "Upload response missing new photo",
-                        detail: "\(name) version=\(response.state.version)"
+                        detail: "\(name) updatedAt=\(state.updatedAt)"
                     )
                     throw SyncError.decode
                 }
@@ -511,14 +670,14 @@ public final class GalleryStore: ObservableObject {
                     detail: "\(name) → \(newIDs.sorted().joined(separator: ", "))"
                 )
             }
-            try await commitServerState(latest, client: client, downloadMissing: true)
             noteServerOK()
             log.log(
                 .gallery,
                 level: .success,
                 "Upload complete",
-                detail: "version=\(state.version) photos=\(state.activePhotos().count)"
+                detail: "updatedAt=\(state.updatedAt) photos=\(state.activePhotos().count)"
             )
+            selection.clearSelection()
             await updateDeviceStatus()
         }
     }
@@ -533,15 +692,14 @@ public final class GalleryStore: ObservableObject {
         log.log(.gallery, level: .info, "Deleting \(ids.count) photo(s)")
         await run(label: "Delete", category: .gallery) {
             let client = try makeSyncClient()
-            var latest = state
-            let orderedIDs = latest.order.filter { ids.contains($0) }
+            let orderedIDs = state.order.filter { ids.contains($0) }
             let trailing = ids.subtracting(orderedIDs)
             for id in orderedIDs + trailing.sorted() {
-                let response = try await client.deletePhoto(id: id)
-                latest = response.state.mergingDownloadURLs(from: response.photos)
+                try await mutateGallery(client: client) { base in
+                    try await client.deletePhoto(id: id, baseUpdatedAt: base)
+                }
+                selection.subtractSelection([id])
             }
-            try await commitServerState(latest)
-            selection.subtractSelection(ids)
             noteServerOK()
             log.log(.gallery, level: .success, "Delete complete")
             await updateDeviceStatus()
@@ -554,30 +712,23 @@ public final class GalleryStore: ObservableObject {
             return
         }
         await run(label: "Reorder", category: .gallery) {
-            let snapshot = state
-            applyState(snapshot.applyingActiveDisplayOrder(order))
-            log.log(
-                .gallery,
-                level: .info,
-                "Reordering gallery",
-                detail: "photos=\(order.count) version=\(snapshot.version)"
-            )
-            do {
-                let client = try makeSyncClient()
-                let response = try await client.reorder(order)
-                try await commitServerState(response.state.mergingDownloadURLs(from: response.photos))
-                noteServerOK()
+            let activeIDs = Set(state.activePhotos().map(\.id))
+            guard Set(order) == activeIDs else {
                 log.log(
                     .gallery,
-                    level: .success,
-                    "Reorder saved",
-                    detail: "version=\(state.version)"
+                    level: .warning,
+                    "Reorder skipped",
+                    detail: "stale order (active=\(activeIDs.count) requested=\(order.count))"
                 )
-            } catch {
-                applyState(snapshot)
-                try? AppConfig.saveLocalState(state)
-                throw error
+                return
             }
+            let client = try makeSyncClient()
+            log.log(.gallery, level: .info, "Reordering gallery", detail: "photos=\(order.count)")
+            try await mutateGallery(client: client) { base in
+                try await client.reorder(order, baseUpdatedAt: base)
+            }
+            noteServerOK()
+            log.log(.gallery, level: .success, "Reorder saved", detail: "updatedAt=\(state.updatedAt)")
         }
     }
 
@@ -664,17 +815,17 @@ public final class GalleryStore: ObservableObject {
         defer { setAsCurrentInFlight = nil }
         await run(label: "Set current", category: .gallery) {
             let client = try makeSyncClient()
-            let response = try await client.setCurrentPhoto(id: photoID)
-            try await commitServerState(
-                response.state.mergingDownloadURLs(from: response.photos),
+            try await mutateGallery(
                 client: client,
                 downloadMissing: true
-            )
+            ) { base in
+                try await client.setCurrentPhoto(id: photoID, baseUpdatedAt: base)
+            }
             noteServerOK()
             log.log(
                 .gallery,
                 level: .success,
-                "Set as current",
+                "Show for today",
                 detail: "Server pushes the current JPEG to all registered frames."
             )
             await updateDeviceStatus()
@@ -705,7 +856,7 @@ public final class GalleryStore: ObservableObject {
                     if isTransientServerConnectionError(error) {
                         markServerUnreachable()
                     }
-                    await updateConnectionStatus()
+                    Task { await self.updateConnectionStatus() }
                 }
             }
         }

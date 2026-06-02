@@ -50,6 +50,22 @@ struct GatteyPhotosApp: App {
                         set: { store.setDebugMode($0) }
                     )
                 )
+                if store.settings.debugMode {
+                    Divider()
+                    Picker(
+                        "Advance interval",
+                        selection: Binding(
+                            get: { store.settings.debugAdvanceIntervalSeconds },
+                            set: { store.setDebugAdvanceIntervalSeconds($0) }
+                        )
+                    ) {
+                        Text("1 min").tag(60)
+                        Text("5 min").tag(300)
+                        Text("30 min").tag(1800)
+                        Text("1 hour").tag(3600)
+                        Text("6 hours").tag(21_600)
+                    }
+                }
             }
         }
     }

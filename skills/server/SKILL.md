@@ -12,8 +12,9 @@ description: Change the Gattey Photos Next.js sync API on Vercel (gallery routes
 - `app/api/gallery/photos/route.ts` — POST upload
 - `app/api/gallery/photos/[id]/route.ts` — DELETE
 - `app/api/gallery/order/route.ts` — PUT reorder
+- `app/api/gallery/uploaders/route.ts` — PATCH rename `uploadedBy` on all photos matching `fromName` (settings display name change)
 - `app/api/gallery/blob/[path]/route.ts` — GET bytes (local dev only)
-- `app/api/gallery/current/route.ts` — PUT set current (then `commitManifest` + device push)
+- `app/api/gallery/current/route.ts` — PUT set current (`baseUpdatedAt`, then device push)
 - `app/api/devices/route.ts` — GET list / POST register frame (encrypted token in registry)
 - `app/api/devices/[id]/route.ts` — DELETE frame
 - `app/api/devices/status/route.ts` — live reachability per frame
@@ -26,7 +27,7 @@ description: Change the Gattey Photos Next.js sync API on Vercel (gallery routes
 - `devices/registry.json` — frame tokens (AES-GCM with `SYNC_PASSWORD`)
 - `photos/{id}.jpg` — JPEG blobs
 
-`lib/manifest-commit.ts` — always writes manifest, then pushes current photo to all frames; per-frame failures are logged, manifest is not rolled back.
+`lib/gallery-mutation.ts` — `applyGalleryMutation`, `respondGalleryMutation` (shared 409 handling). Current/cron call `pushCurrentPhotoToAllDevices` after a successful mutation.
 
 ## Auth
 

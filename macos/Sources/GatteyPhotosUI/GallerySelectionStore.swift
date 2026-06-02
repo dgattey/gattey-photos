@@ -109,6 +109,56 @@ public final class GallerySelectionStore {
         lightboxNavigationPhotoID = nil
     }
 
+    /// Moves grid selection along gallery order (horizontal) or by row (vertical × `columnCount`).
+    /// Wraps at ends. With no selection, right/down start at the first photo; left/up at the last.
+    @discardableResult
+    func navigateGridSelection(
+        horizontalDelta: Int = 0,
+        verticalDelta: Int = 0,
+        photoOrder: [PhotoID],
+        columnCount: Int
+    ) -> Bool {
+        guard !isLightboxOpen, !photoOrder.isEmpty else { return false }
+        let cols = max(1, columnCount)
+        let linearDelta = horizontalDelta + verticalDelta * cols
+        guard linearDelta != 0 else { return false }
+
+        let count = photoOrder.count
+        let startIndex: Int
+        if let id = preferredLightboxPhotoID(in: photoOrder),
+           let index = photoOrder.firstIndex(of: id) {
+            startIndex = index
+        } else if linearDelta > 0 {
+            startIndex = -1
+        } else {
+            startIndex = count
+        }
+
+        let nextIndex = ((startIndex + linearDelta) % count + count) % count
+        let nextID = photoOrder[nextIndex]
+        selectedIDs = [nextID]
+        selectionAnchor = nextID
+        return true
+    }
+
+    /// Previous/next photo in gallery order while the lightbox is open (wraps at ends).
+    @discardableResult
+    func navigateLightbox(by delta: Int, photoOrder: [PhotoID]) -> Bool {
+        guard isLightboxOpen, photoOrder.count > 1,
+              let current = presentedLightboxPhotoID,
+              let index = photoOrder.firstIndex(of: current)
+        else { return false }
+        let count = photoOrder.count
+        let nextIndex = ((index + delta) % count + count) % count
+        let nextID = photoOrder[nextIndex]
+        guard nextID != current else { return false }
+        lightboxNavigationPhotoID = nextID
+        lightboxPhotoID = nil
+        selectedIDs = [nextID]
+        selectionAnchor = nextID
+        return true
+    }
+
     func subtractSelection(_ ids: Set<PhotoID>) {
         selectedIDs.subtract(ids)
         if let open = presentedLightboxPhotoID, ids.contains(open) {

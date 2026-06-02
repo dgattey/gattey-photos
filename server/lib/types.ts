@@ -12,7 +12,8 @@ export interface PhotoEntry {
 }
 
 export interface GalleryState {
-  version: number;
+  /** ISO-8601; bumped on every manifest mutation. Clients send this as `baseUpdatedAt`. */
+  updatedAt: string;
   order: PhotoId[];
   photos: Record<PhotoId, PhotoEntry>;
   /** Photo the Bloomin8 device is showing. */

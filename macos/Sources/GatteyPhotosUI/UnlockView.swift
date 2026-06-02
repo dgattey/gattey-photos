@@ -304,10 +304,6 @@ struct UnlockView: View {
             let setupPaste = bloomin8SetupText.trimmingCharacters(in: .whitespacesAndNewlines)
             bloomin8SetupText = ""
             store.saveSettings()
-            async let status: Void = store.updateConnectionStatus()
-            async let gallery: Void = store.refresh()
-            async let frames: Void = store.reloadRegisteredFrames()
-            _ = await (status, gallery, frames)
             if !setupPaste.isEmpty {
                 do {
                     try await store.registerFrame(setupText: setupPaste)

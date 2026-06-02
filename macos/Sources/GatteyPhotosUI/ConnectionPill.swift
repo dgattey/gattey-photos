@@ -67,6 +67,8 @@ struct ConnectionPill: View {
     var subtitle: String? = nil
     let status: LinkStatus
 
+    private static let cornerRadius: CGFloat = 12
+
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: status.icon)
@@ -96,6 +98,9 @@ struct ConnectionPill: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(status.solidFill(for: colorScheme), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(
+            status.solidFill(for: colorScheme),
+            in: RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+        )
     }
 }

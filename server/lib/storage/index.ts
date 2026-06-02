@@ -1,4 +1,5 @@
 import { normalizeManifest } from "../gallery";
+import { emptyGalleryUpdatedAt } from "../gallery-mutation";
 import type { GalleryState } from "../types";
 
 const useLocal = () => process.env.GATTEY_LOCAL_STORAGE === "1";
@@ -14,9 +15,17 @@ async function readRawManifest(): Promise<GalleryState> {
 
 export async function readManifest(): Promise<GalleryState> {
   const raw = await readRawManifest();
-  const { state, dirty } = normalizeManifest(raw);
-  if (dirty) {
-    await writeManifest(state);
+  let state: GalleryState = {
+    updatedAt: raw.updatedAt?.trim() || emptyGalleryUpdatedAt(),
+    order: raw.order ?? [],
+    photos: raw.photos ?? {},
+    currentPhotoId: raw.currentPhotoId ?? null,
+    currentPhotoUpdatedBy: raw.currentPhotoUpdatedBy,
+  };
+  const { state: normalized, dirty: normalizedDirty } = normalizeManifest(state);
+  state = normalized;
+  if (normalizedDirty) {
+    return writeManifest(state);
   }
   return state;
 }

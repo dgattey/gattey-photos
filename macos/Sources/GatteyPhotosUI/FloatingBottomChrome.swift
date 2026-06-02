@@ -44,20 +44,22 @@ extension View {
         modifier(FloatingActionBarStyle())
     }
 
-    /// Primary gallery action (e.g. Set as current).
-    @ViewBuilder
+    /// Primary gallery action (e.g. Show for today). Uses bordered prominent (not glass) so corner radius matches Download/Delete.
     func galleryPrimaryButtonStyle() -> some View {
-        if #available(macOS 26.0, iOS 26.0, *) {
-            buttonStyle(.glassProminent)
-        } else {
-            buttonStyle(.borderedProminent)
-        }
+        buttonStyle(.borderedProminent)
+            .galleryChromeButtonBorderShape()
     }
 
-    /// Secondary prominent action (e.g. Download in lightbox).
+    /// Secondary prominent action (legacy; prefer `galleryBorderedButtonStyle` in lightbox).
     func gallerySecondaryButtonStyle() -> some View {
         buttonStyle(.borderedProminent)
             .tint(Color.secondary)
+    }
+
+    /// Neutral bordered gallery action (e.g. Download in lightbox) — same chrome as Delete, default tint.
+    func galleryBorderedButtonStyle() -> some View {
+        buttonStyle(.bordered)
+            .galleryChromeButtonBorderShape()
     }
 
     /// Destructive gallery chrome action (e.g. Delete in selection bar or lightbox).
@@ -66,9 +68,15 @@ extension View {
     func galleryDestructiveButtonStyle() -> some View {
         buttonStyle(.bordered)
             .tint(.red)
+            .galleryChromeButtonBorderShape()
     }
 
-    /// Disabled dimming for destructive chrome buttons (matches Set as current).
+    /// Capsule corners shared by gallery chrome buttons (selection bar, lightbox actions).
+    func galleryChromeButtonBorderShape() -> some View {
+        buttonBorderShape(.capsule)
+    }
+
+    /// Disabled dimming for destructive chrome buttons (matches Show for today).
     func galleryDestructiveChromeOpacity(isEnabled: Bool) -> some View {
         opacity(isEnabled ? 1 : 0.45)
     }

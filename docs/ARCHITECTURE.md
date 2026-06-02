@@ -14,11 +14,11 @@ interface PhotoEntry {
   sizeBytes: number;
   updatedAt: string;    // ISO-8601
   deletedAt: string | null;
-  uploadedBy: string;     // family member display name; legacy entries backfill to "Dylan" on read
+  uploadedBy: string;     // family member display name at upload; legacy entries backfill to "Dylan" on read; `PATCH /api/gallery/uploaders` rewrites matching names when a client saves a new display name in settings
 }
 
 interface GalleryState {
-  version: number;        // monotonic, bumped on every write
+  updatedAt: string;      // ISO-8601; bumped on every manifest write (gallery revision)
   order: PhotoId[];       // display order, excludes soft-deleted unless tombstone needed
   photos: Record<PhotoId, PhotoEntry>;
   currentPhotoId?: PhotoId | null;  // Bloomin8 display; Bloomin8 upload uses show_now on this id
@@ -27,13 +27,11 @@ interface GalleryState {
 
 Clients cache JPEG bytes under `~/Library/Application Support/GatteyPhotos/cache/{id}.jpg` (macOS) or the app container on iOS.
 
-## Conflict merge (per photo)
+## Sync (timestamp concurrency)
 
-After fetching remote `R` and comparing to local `L`:
+Every gallery mutation (upload, delete, reorder, set current, rename uploader) is a single atomic server write. The client sends `baseUpdatedAt` (the `updatedAt` it last saw). If the on-disk manifest is **newer** than `baseUpdatedAt`, the server responds **409** with the current gallery; the client applies that state and retries the same intent with the new timestamp (up to a few attempts).
 
-1. Start from a copy of `R` (remote wins for order, metadata, and deletes).
-2. For each photo id in `L` that is active locally (`deletedAt == null`) and absent from `R.photos`, append to `order` and copy the entry (local-only addition).
-3. Do not apply local deletes when remote still has the photo active.
+Pulls (`GET /api/gallery`) replace local state entirely — no merge. Failed pulls use exponential backoff so periodic sync does not hammer an unreachable server.
 
 ## Runtime components
 
@@ -41,7 +39,7 @@ After fetching remote `R` and comparing to local `L`:
 |-----------|------|
 | `server/` | Next.js on Vercel. Blob + Edge Config in prod; filesystem under `.data/` when `GATTEY_LOCAL_STORAGE=1`. Owns gallery manifest, JPEG blobs, **device registry**, and **Bloomin8 push**. |
 | `GatteyPhotosUI` + `GatteyPhotosCore` | Shared on macOS, iOS, iPadOS: gallery browser, upload, reorder, set current, frame registration. **Pull-only** sync; no client Bloomin8 push. |
-| `GalleryStore` periodic pull | Same on macOS, iOS, iPadOS: `SyncEngine.pullAndMerge` every 15 minutes **while unlocked** (foreground refresh, ⌘R, and timer share one path). |
+| `GalleryStore` periodic pull | Same on macOS, iOS, iPadOS: `fetchGallery` + `commit` every 15 minutes **while unlocked** (foreground refresh, manual sync, and timer share one path; backoff on failure). |
 
 ## Bloomin8 frames (server-owned)
 

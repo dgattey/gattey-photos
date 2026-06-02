@@ -6,7 +6,7 @@
     "build": "next build",
     "start": "next start --port 3000",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test lib/auth.test.ts lib/api-error.test.ts"
+    "test": "node --experimental-strip-types --test lib/auth.test.ts lib/api-error.test.ts lib/gallery.test.ts"
   },
   "dependencies": {
     "@vercel/blob": "^2.4.0",

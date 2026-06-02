@@ -7,6 +7,9 @@ import SwiftUI
 struct PhotoDragDropTarget: NSViewRepresentable {
     var onDrop: (PhotoID) -> Bool
     var onFileDrop: (([URL]) -> Bool)?
+    /// Normalized pointer in view bounds (for hover effects on the same surface).
+    var onPointerMove: ((CGPoint, CGSize) -> Void)?
+    var onPointerExit: (() -> Void)?
     @Binding var isTargeted: Bool
 
     func makeNSView(context: Context) -> PhotoDragDropNSView {
@@ -22,16 +25,52 @@ struct PhotoDragDropTarget: NSViewRepresentable {
     private func sync(into view: PhotoDragDropNSView) {
         view.onDrop = onDrop
         view.onFileDrop = onFileDrop
+        view.onPointerMove = onPointerMove
+        view.onPointerExit = onPointerExit
         view.onTargetedChange = { isTargeted = $0 }
+        view.syncPointerTrackingAreas()
     }
 }
 
 final class PhotoDragDropNSView: NSView {
     var onDrop: ((PhotoID) -> Bool)?
     var onFileDrop: (([URL]) -> Bool)?
+    var onPointerMove: ((CGPoint, CGSize) -> Void)?
+    var onPointerExit: (() -> Void)?
     var onTargetedChange: ((Bool) -> Void)?
 
     override var isFlipped: Bool { true }
+
+    func syncPointerTrackingAreas() {
+        for area in trackingAreas {
+            removeTrackingArea(area)
+        }
+        guard onPointerMove != nil || onPointerExit != nil else { return }
+        let options: NSTrackingArea.Options = [
+            .activeInKeyWindow,
+            .mouseMoved,
+            .inVisibleRect,
+            .enabledDuringMouseDrag,
+        ]
+        addTrackingArea(NSTrackingArea(rect: bounds, options: options, owner: self, userInfo: nil))
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        syncPointerTrackingAreas()
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        guard let onPointerMove, bounds.width > 0, bounds.height > 0 else { return }
+        let location = convert(event.locationInWindow, from: nil)
+        onPointerMove(location, bounds.size)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        onPointerExit?()
+    }
 
     private static var draggedTypes: [NSPasteboard.PasteboardType] {
         PhotoDragPasteboard.draggedTypes + GalleryFilePasteboard.draggedTypes

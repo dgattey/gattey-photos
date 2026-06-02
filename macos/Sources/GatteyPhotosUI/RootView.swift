@@ -39,17 +39,26 @@ struct RootView: View {
 
     private func syncNavigationPath(with photoID: PhotoID?) {
         if let photoID {
-            guard navigationPath.isEmpty else { return }
             #if os(macOS)
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
-                navigationPath.append(photoID)
+                if navigationPath.isEmpty {
+                    navigationPath.append(photoID)
+                } else {
+                    navigationPath.removeLast()
+                    navigationPath.append(photoID)
+                }
             }
             #else
             var transaction = Transaction(animation: .easeInOut(duration: 0.32))
             withTransaction(transaction) {
-                navigationPath.append(photoID)
+                if navigationPath.isEmpty {
+                    navigationPath.append(photoID)
+                } else {
+                    navigationPath.removeLast()
+                    navigationPath.append(photoID)
+                }
             }
             #endif
         } else if !navigationPath.isEmpty {
@@ -74,10 +83,13 @@ struct RootView: View {
         .background(WindowGlassBackground())
         .background(TransparentWindowConfigurator())
         .task {
-            async let status: Void = store.updateConnectionStatus()
+            if store.activePhotos.isEmpty {
+                store.markAwaitingInitialGalleryPull()
+            }
             async let gallery: Void = store.refresh()
+            async let status: Void = store.updateConnectionStatus()
             async let frames: Void = store.reloadRegisteredFrames()
-            _ = await (status, gallery, frames)
+            _ = await (gallery, status, frames)
         }
         #if os(macOS)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willResignActiveNotification)) { _ in
