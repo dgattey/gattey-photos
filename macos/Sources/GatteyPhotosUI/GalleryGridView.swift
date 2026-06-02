@@ -51,18 +51,13 @@ struct GalleryGridView: View {
             GalleryMacOSToolbarFlexSpacer()
             #else
             ToolbarItem(placement: .principal) {
-                VStack(spacing: 2) {
-                    Text("Gattey Photos")
-                        .font(AppTypography.primaryTitle)
-                    Text(
-                        GalleryToolbarLeadingTitle.photoCountLabel(
-                            store.activePhotos.count,
-                            isBootstrapping: store.isBootstrappingGallery
-                        )
+                Text(
+                    GalleryToolbarLeadingTitle.photoCountLabel(
+                        store.activePhotos.count,
+                        isBootstrapping: store.isBootstrappingGallery
                     )
-                        .font(AppTypography.secondary)
-                        .foregroundStyle(.secondary)
-                }
+                )
+                .font(AppTypography.toolbarTitle)
             }
             #endif
             GalleryMainToolbar(
@@ -116,78 +111,101 @@ struct GalleryGridView: View {
         !selection.isLightboxOpen && !showSettings
     }
 
+    private var gridLayoutWidth: CGFloat {
+        max(gridViewportWidth, 1)
+    }
+
+    private var gridViewportMinHeight: CGFloat {
+        max(gridViewportHeight > 0 ? gridViewportHeight : 600, 280)
+    }
+
     private var gridDeleteKeyPhotoIDs: Set<PhotoID> {
         guard galleryGridKeyboardEnabled else { return [] }
         return selection.selectedIDs
     }
 
+    @State private var gridViewportWidth: CGFloat = 0
+    @State private var gridViewportHeight: CGFloat = 0
+
     @ViewBuilder
     private var thumbnailGridColumn: some View {
         ZStack {
-            GeometryReader { viewport in
-                ScrollView {
-                    ZStack(alignment: .top) {
-                        #if os(macOS)
-                        GalleryFileDropTarget(
-                            onDrop: handleFileURLDrop,
-                            isTargeted: $isFileDropTargeted
-                        )
-                        .frame(maxWidth: .infinity, minHeight: viewport.size.height)
-                        #endif
+            ScrollView {
+                ZStack(alignment: .top) {
+                    #if os(macOS)
+                    GalleryFileDropTarget(
+                        onDrop: handleFileURLDrop,
+                        isTargeted: $isFileDropTargeted
+                    )
+                    .frame(maxWidth: .infinity, minHeight: gridViewportMinHeight)
+                    #endif
 
-                        Color.clear
-                            .frame(maxWidth: .infinity, minHeight: viewport.size.height)
-                            .contentShape(Rectangle())
-                            .onTapGesture { clearSelectionFromBackgroundTap() }
+                    Color.clear
+                        .frame(maxWidth: .infinity, minHeight: gridViewportMinHeight)
+                        .contentShape(Rectangle())
+                        .onTapGesture { clearSelectionFromBackgroundTap() }
 
-                        if store.isBootstrappingGallery {
-                            VStack(spacing: 12) {
-                                ProgressView()
-                                    .controlSize(.large)
-                                Text("Loading photos from server…")
-                                    .font(AppTypography.secondary)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 280)
-                        } else if store.activePhotos.isEmpty {
-                            ContentUnavailableView {
-                                Label("Drop photos to upload", systemImage: "photo.badge.plus")
-                            } description: {
-                                Text("JPEG images from Finder, or use Add in the toolbar.")
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 280)
-                        } else {
-                            #if os(macOS)
-                            GalleryPhotoGrid(
-                                gridContainerWidth: viewport.size.width,
-                                currentPhotoID: store.state.currentPhotoId,
-                                deviceScreenAspectRatio: store.deviceScreenAspectRatio,
-                                dropInsertionIndex: $dropInsertionIndex,
-                                onSelectPhoto: handleGridPhotoTap,
-                                onOpenLightbox: { store.selection.openLightbox($0) },
-                                onReorderDrop: handleReorderDrop,
-                                onFileDrop: handleFileURLDrop,
-                                onFileDropTargeted: { isFileDropTargeted = $0 }
-                            )
-                            #else
-                            GalleryPhotoGrid(
-                                gridContainerWidth: viewport.size.width,
-                                currentPhotoID: store.state.currentPhotoId,
-                                deviceScreenAspectRatio: store.deviceScreenAspectRatio,
-                                dropInsertionIndex: $dropInsertionIndex,
-                                onSelectPhoto: handleGridPhotoTap,
-                                onOpenLightbox: { store.selection.openLightbox($0) },
-                                onReorderDrop: handleReorderDrop
-                            )
-                            #endif
+                    if store.isBootstrappingGallery {
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .controlSize(.large)
+                            Text("Loading photos from server…")
+                                .font(AppTypography.secondary)
+                                .foregroundStyle(.secondary)
                         }
+                        .frame(maxWidth: .infinity, minHeight: 280)
+                    } else if store.activePhotos.isEmpty {
+                        ContentUnavailableView {
+                            Label("Drop photos to upload", systemImage: "photo.badge.plus")
+                        } description: {
+                            Text("JPEG images from Finder, or use Add in the toolbar.")
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 280)
+                    } else {
+                        #if os(macOS)
+                        GalleryPhotoGrid(
+                            gridContainerWidth: gridLayoutWidth,
+                            currentPhotoID: store.state.currentPhotoId,
+                            deviceScreenAspectRatio: store.deviceScreenAspectRatio,
+                            dropInsertionIndex: $dropInsertionIndex,
+                            onSelectPhoto: handleGridPhotoTap,
+                            onOpenLightbox: { store.selection.openLightbox($0) },
+                            onReorderDrop: handleReorderDrop,
+                            onFileDrop: handleFileURLDrop,
+                            onFileDropTargeted: { isFileDropTargeted = $0 }
+                        )
+                        #else
+                        GalleryPhotoGrid(
+                            gridContainerWidth: gridLayoutWidth,
+                            currentPhotoID: store.state.currentPhotoId,
+                            deviceScreenAspectRatio: store.deviceScreenAspectRatio,
+                            dropInsertionIndex: $dropInsertionIndex,
+                            onSelectPhoto: handleGridPhotoTap,
+                            onOpenLightbox: { store.selection.openLightbox($0) },
+                            onReorderDrop: handleReorderDrop
+                        )
+                        #endif
                     }
-                    .frame(maxWidth: .infinity, minHeight: viewport.size.height)
                 }
-                .scrollContentBackground(.hidden)
-                #if os(macOS)
-                .galleryMacOSGridScrollEdgeEffect()
-                #endif
+                .frame(maxWidth: .infinity, minHeight: gridViewportMinHeight)
+            }
+            #if os(macOS)
+            .galleryMacOSGridScrollEdgeEffect()
+            #endif
+            .background {
+                GeometryReader { viewport in
+                    Color.clear
+                        .onAppear {
+                            gridViewportWidth = viewport.size.width
+                            gridViewportHeight = viewport.size.height
+                        }
+                        .onChange(of: viewport.size.width) { _, width in
+                            gridViewportWidth = width
+                        }
+                        .onChange(of: viewport.size.height) { _, height in
+                            gridViewportHeight = height
+                        }
+                }
             }
 
             #if os(macOS)
@@ -751,17 +769,8 @@ private struct GalleryToolbarLeadingTitle: View {
     var isBootstrapping = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("Gattey Photos")
-                .font(AppTypography.toolbarTitle)
-            Text(Self.photoCountLabel(photoCount, isBootstrapping: isBootstrapping))
-                #if os(macOS)
-                .font(AppTypography.toolbarSubtitle)
-                #else
-                .font(AppTypography.secondary)
-                #endif
-                .foregroundStyle(.secondary)
-        }
+        Text(Self.photoCountLabel(photoCount, isBootstrapping: isBootstrapping))
+            .font(AppTypography.toolbarTitle)
     }
 
     static func photoCountLabel(_ count: Int, isBootstrapping: Bool = false) -> String {
@@ -839,12 +848,14 @@ private struct GalleryMacOSToolbarActionButtonStyle: ViewModifier {
 #endif
 
 #if os(macOS)
-/// macOS 26+: system Liquid Glass toolbar + scroll edge — no custom ShapeStyle (`.regularMaterial` blocks fade).
-/// Pre-26: visible material fallback when scroll edge is unavailable.
+/// macOS 26+: default unified-toolbar Liquid Glass (no `.hidden` / `.regularMaterial` — both block scroll edge).
+/// Pre-26: visible material when scroll edge is unavailable.
 private struct GalleryMacOSToolbarChrome: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
-            content.toolbarBackgroundVisibility(.visible, for: .windowToolbar)
+            // No forced toolbar background: a visible/opaque background overrides Liquid Glass and
+            // suppresses the automatic scroll edge effect (WWDC25 "Build a SwiftUI app with the new design").
+            content
         } else if #available(macOS 15.0, *) {
             content
                 .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
@@ -856,6 +867,7 @@ private struct GalleryMacOSToolbarChrome: ViewModifier {
 }
 
 private extension View {
+    /// macOS 26+: soft Liquid Glass scroll edge as the grid scrolls under the unified toolbar.
     @ViewBuilder
     func galleryMacOSGridScrollEdgeEffect() -> some View {
         if #available(macOS 26.0, *) {

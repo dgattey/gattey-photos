@@ -132,8 +132,10 @@ struct TransparentWindowConfigurator: NSViewRepresentable {
 }
 
 public extension NSWindow {
-    /// Gallery: content may extend under the unified toolbar for macOS 26 scroll-edge fade.
-    /// Pair with SwiftUI `scrollEdgeEffectStyle` on the grid — no manual toolbar materials on 26+.
+    /// Gallery: unified toolbar host for macOS 26 Liquid Glass + `scrollEdgeEffectStyle` on the grid.
+    /// `titlebarAppearsTransparent = true` lets the toolbar render as Liquid Glass over the content instead of
+    /// a solid titlebar slab; the full-window `PushedDetailBackground` (`.withinWindow`) fills under the toolbar,
+    /// so the glass samples app content (no desktop bleed). Do not force a toolbar background on 26+.
     func applyGatteyPhotosGalleryChrome() {
         styleMask.insert(.fullSizeContentView)
         isMovableByWindowBackground = true

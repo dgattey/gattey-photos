@@ -41,9 +41,17 @@ Single **G** group: `glass: true`, solid white layer fill, translucency/specular
 
 Full-width `GalleryGridView`: left `DeviceCurrentPreview` (on-device photo, black frame, drop to set current) + right thumbnail grid. Floating `ConnectionStatusView` (top-trailing). `currentPhotoId` on `GalleryState` syncs via `PUT /api/gallery/current`; Bloomin8 `show_now` targets that photo. Toolbar **Set as current** when one grid photo is selected. Double-click opens `PhotoLightboxView`. Multi-select shows `GallerySelectionBar`. Drag thumbnails to reorder.
 
-**macOS toolbar (logged-in):** leading `ToolbarItemGroup(.navigation)` — `Toggle` + `.toggleStyle(.button)` + `.labelStyle(.iconOnly)` for device preview (no custom `Button`/`Image`/`buttonStyle`); title with `.sharedBackgroundVisibility(.hidden)` on 26+ only. Grid `ScrollView`: `.scrollEdgeEffectStyle(.soft, for: .top)` on macOS 26+; gallery `titlebarAppearsTransparent = true` + `.toolbarBackgroundVisibility(.visible)` without manual material on 26+ (system Liquid Glass + scroll edge). Pre-26: `.regularMaterial` toolbar fallback. Not `.primaryAction` on macOS.
+**macOS 26 toolbar Liquid Glass + soft scroll edge (verified recipe).** The scroll edge effect is automatic on macOS 26; you do not turn it on, you only avoid suppressing it. Three things must all hold, and any one wrong gives the failure shown:
 
-**Glass chrome:** `GlassChromeStyle.swift` — floating panel background; `WindowGlassBackground.swift` — full-window vibrancy.
+1. `applyGatteyPhotosGalleryChrome` sets `titlebarAppearsTransparent = true`. With `false`, AppKit paints the standard opaque titlebar over the content and you get a solid gray toolbar slab at rest.
+2. No forced toolbar background on 26. The `GalleryMacOSToolbarChrome` 26 branch is a no-op. A visible or opaque toolbar background (`.toolbarBackground(...)`, `.toolbarBackgroundVisibility(.visible)`) overrides Liquid Glass and suppresses the scroll edge (WWDC25 "Build a SwiftUI app with the new design"; HIG Toolbars best practices). Pre-26 keeps `.regularMaterial`.
+3. A full-window content background fills under the toolbar so the glass samples app content, not the desktop. `RootView` uses `PushedDetailBackground` (`.withinWindow` vibrancy), which does not sample the desktop, so there is no wallpaper bleed. Do not use a `.behindWindow` background (`WindowGlassBackground`) for the gallery; it frosts the desktop and reads as bleed in the titlebar.
+
+Grid `ScrollView` needs only `.scrollEdgeEffectStyle(.soft, for: .top)` (macOS 26+) for the soft fade. `.scrollClipDisabled()`, `.backgroundExtensionEffect()`, `.contentMargins(.top, 1)`, `.scrollContentBackground(.hidden)`, and a scroll edge on the gallery shell are not needed; content scrolls under the unified toolbar by default, and they were removed. Leading `ToolbarItemGroup(.navigation)` with `Toggle` + `.toggleStyle(.button)` + `.labelStyle(.iconOnly)` for device preview; title with `.sharedBackgroundVisibility(.hidden)` on 26+. `GatteyPhotosApp` sets `.windowToolbarStyle(.unified)`. Not `.primaryAction` on macOS.
+
+Verify live with `.chrome-verify/capture-toolbar.sh <label>` (drives the running window over Accessibility across Spaces; writes `<label>-at-rest.png` and `<label>-scrolled.png`). A `-l` window capture shows within-window glass but not desktop bleed; for a bleed check use a composited full-screen capture over a bright backdrop.
+
+**Glass chrome:** `GlassChromeStyle.swift` — floating panel background; `WindowGlassBackground.swift` — unlock/launch vibrancy; gallery uses `PushedDetailBackground`.
 
 ## Settings popover
 
