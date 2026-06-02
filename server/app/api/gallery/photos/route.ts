@@ -1,7 +1,7 @@
 import { v4 as uuid } from "uuid";
 import { assertSessionToken } from "@/lib/auth";
 import { jsonApiError, storageErrorResponse } from "@/lib/api-error";
-import { ensureUploaderId, legacyUploaderId, upsertPhoto } from "@/lib/gallery";
+import { ensureUploaderId, uploaderIdForName, upsertPhoto } from "@/lib/gallery";
 import type { PhotoEntry } from "@/lib/types";
 import {
   parseBaseUpdatedAt,
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
         const { state: withUploader, uploaderId } = ensureUploaderId(
           state,
           uploadedBy,
-          legacyUploaderId(uploadedBy)
+          uploaderIdForName(uploadedBy)
         );
         const entry: PhotoEntry = {
           id,

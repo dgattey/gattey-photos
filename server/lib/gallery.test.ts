@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   coalesceUploaders,
-  legacyUploaderId,
+  DEFAULT_UPLOADER_NAME,
   renameUploader,
+  uploaderIdForName,
 } from "./gallery";
 import { emptyGalleryUpdatedAt, touchGallery } from "./gallery-mutation";
 import type { GalleryState, RawPhotoEntry } from "./types";
@@ -21,8 +22,8 @@ function photo(id: string, uploaderId: string) {
 }
 
 describe("renameUploader", () => {
-  const alexId = legacyUploaderId("Alex");
-  const samId = legacyUploaderId("Sam");
+  const alexId = uploaderIdForName("Alex");
+  const samId = uploaderIdForName("Sam");
   const base: GalleryState = {
     updatedAt: "2024-01-01T00:00:00.000Z",
     order: ["a", "b"],
@@ -52,7 +53,7 @@ describe("renameUploader", () => {
 });
 
 describe("coalesceUploaders", () => {
-  it("derives uploader ids from legacy uploadedBy strings", () => {
+  it("defaults a photo without an uploaderId to the default uploader", () => {
     const raw: Record<string, RawPhotoEntry> = {
       a: {
         id: "a",
@@ -61,17 +62,16 @@ describe("coalesceUploaders", () => {
         sizeBytes: 1,
         updatedAt: "2020-01-01T00:00:00.000Z",
         deletedAt: null,
-        uploadedBy: "Alex",
       },
     };
     const { photos, uploaders } = coalesceUploaders(raw, undefined);
-    const alexId = legacyUploaderId("Alex");
-    assert.equal(photos.a!.uploaderId, alexId);
-    assert.equal(uploaders[alexId], "Alex");
+    const defId = uploaderIdForName(DEFAULT_UPLOADER_NAME);
+    assert.equal(photos.a!.uploaderId, defId);
+    assert.equal(uploaders[defId], DEFAULT_UPLOADER_NAME);
   });
 
-  it("fills missing map entries for existing uploader ids", () => {
-    const uid = legacyUploaderId("Sam");
+  it("fills a missing map entry for an existing uploader id", () => {
+    const uid = uploaderIdForName("Sam");
     const raw: Record<string, RawPhotoEntry> = {
       b: {
         id: "b",
@@ -81,11 +81,10 @@ describe("coalesceUploaders", () => {
         updatedAt: "2020-01-01T00:00:00.000Z",
         deletedAt: null,
         uploaderId: uid,
-        uploadedBy: "Sam",
       },
     };
     const { uploaders } = coalesceUploaders(raw, {});
-    assert.equal(uploaders[uid], "Sam");
+    assert.equal(uploaders[uid], DEFAULT_UPLOADER_NAME);
   });
 });
 

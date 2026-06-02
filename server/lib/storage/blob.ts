@@ -1,4 +1,3 @@
-import { list } from "@vercel/blob";
 import type { CurrentManifest, RawCurrent, RawManifest } from "../types";
 import { CURRENT_PATH, MANIFEST_PATH } from "../gallery";
 import { readBlobBytes, writeBlob } from "./blob-access";
@@ -42,9 +41,4 @@ export async function putBytes(blobPath: string, bytes: Buffer): Promise<string>
 
 export async function readPhotoBytes(blobPath: string): Promise<Buffer | null> {
   return readBlobBytes(blobPath);
-}
-
-export async function listPhotoBlobs(): Promise<string[]> {
-  const { blobs } = await list({ prefix: "photos/" });
-  return blobs.map((b) => b.pathname);
 }

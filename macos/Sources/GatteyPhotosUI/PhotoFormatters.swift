@@ -50,7 +50,7 @@ enum PhotoFormatters {
 
     static func addedBy(_ photo: PhotoEntry, uploaders: [UploaderID: String]) -> String {
         let raw = uploaders[photo.uploaderId]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let name = raw.isEmpty ? legacyUploaderDisplayName : raw
+        let name = raw.isEmpty ? defaultUploaderDisplayName : raw
         return "Added by \(name)"
     }
 

@@ -4,11 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { emptyGalleryUpdatedAt } from "./gallery-mutation";
-import { legacyUploaderId, softDelete } from "./gallery";
+import { softDelete, uploaderIdForName } from "./gallery";
 import type { PhotoEntry, PhotoId } from "./types";
 
 function photo(id: PhotoId): PhotoEntry {
-  const uploaderId = legacyUploaderId("Test");
+  const uploaderId = uploaderIdForName("Test");
   return {
     id,
     filename: `${id}.jpg`,
@@ -21,7 +21,7 @@ function photo(id: PhotoId): PhotoEntry {
 }
 
 function manifestBody(photos: Record<PhotoId, PhotoEntry>, extra: Record<string, unknown> = {}) {
-  const uploaderId = legacyUploaderId("Test");
+  const uploaderId = uploaderIdForName("Test");
   return {
     updatedAt: "2024-06-01T12:00:00.000Z",
     order: Object.keys(photos),

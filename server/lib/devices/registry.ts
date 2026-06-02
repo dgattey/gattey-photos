@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { DeviceRegistry, RegisteredDevice, RegisteredDevicePublic } from "../types";
+import type { RegisteredDevice, RegisteredDevicePublic } from "../types";
 import { decryptDeviceToken, encryptDeviceToken } from "./crypto";
 import { parseBloomin8Token, parseDeviceName } from "./token-parser";
 import * as storage from "../storage/registry-storage";
@@ -84,15 +84,35 @@ export async function removeDevice(id: string): Promise<boolean> {
   return true;
 }
 
-export async function recordDevicePushResult(
-  id: string,
-  ok: boolean,
-  detail?: string
+export type DevicePushOutcome = {
+  id: string;
+  ok: boolean;
+  error?: string;
+};
+
+/**
+ * Persist a batch of push outcomes in a single registry write. We deliberately
+ * do NOT stamp `lastPushAt` on a plain success: doing so would force an advanced
+ * Blob `put` on every rotation just to record a timestamp. The write is skipped
+ * entirely unless a device's error state actually changed (a new failure, or a
+ * success clearing a prior error), so a healthy push of N frames costs 0 puts.
+ */
+export async function recordDevicePushResults(
+  outcomes: DevicePushOutcome[]
 ): Promise<void> {
+  if (outcomes.length === 0) return;
   const registry = await storage.readRegistry();
-  const device = registry.devices.find((d) => d.id === id);
-  if (!device) return;
-  device.lastPushAt = new Date().toISOString();
-  device.lastPushError = ok ? undefined : detail ?? "push failed";
+  const now = new Date().toISOString();
+  let changed = false;
+  for (const outcome of outcomes) {
+    const device = registry.devices.find((d) => d.id === outcome.id);
+    if (!device) continue;
+    const nextError = outcome.ok ? undefined : outcome.error ?? "push failed";
+    if (device.lastPushError === nextError) continue;
+    device.lastPushError = nextError;
+    device.lastPushAt = now;
+    changed = true;
+  }
+  if (!changed) return;
   await storage.writeRegistry(registry);
 }

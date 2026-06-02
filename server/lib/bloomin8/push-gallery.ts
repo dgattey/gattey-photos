@@ -1,4 +1,4 @@
-import { listDevicesDecrypted, recordDevicePushResult } from "../devices/registry";
+import { listDevicesDecrypted, recordDevicePushResults } from "../devices/registry";
 import type { GalleryState } from "../types";
 import * as storage from "../storage";
 import { pushImage } from "./open-api";
@@ -37,25 +37,29 @@ export async function pushCurrentPhotoToAllDevices(
     return summary;
   }
 
-  await Promise.all(
+  const outcomes = await Promise.all(
     devices.map(async (device) => {
       try {
         await pushImage(device.token, bytes, device.openApiBaseURL);
-        await recordDevicePushResult(device.id, true);
         summary.pushed += 1;
+        return { id: device.id, ok: true as const };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.warn(`[device-push] offline or failed: ${device.displayName}: ${msg}`);
-        await recordDevicePushResult(device.id, false, msg);
         summary.failed += 1;
         summary.failures.push({
           deviceId: device.id,
           displayName: device.displayName,
           error: msg,
         });
+        return { id: device.id, ok: false as const, error: msg };
       }
     })
   );
+
+  // One registry write for the whole batch (skipped when no error state flips),
+  // instead of an advanced Blob `put` per frame on every rotation.
+  await recordDevicePushResults(outcomes);
 
   if (summary.pushed > 0) {
     console.info(

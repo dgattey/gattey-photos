@@ -26,7 +26,7 @@ interface GalleryState {
 }
 ```
 
-Legacy manifests may still store `uploadedBy` on photos without `uploaderId`; reads coalesce each distinct name to a deterministic id and fill `uploaders`. New uploads register the client’s `uploadedBy` form field via `ensureUploaderId` and persist `uploaderId` on the photo only.
+Each photo stores only `uploaderId`. New uploads map the client’s `uploadedBy` form field to a stable id via `ensureUploaderId` (`uploaderIdForName` derives one id per display name); reads fill any uploader id missing from `uploaders` with the default name.
 
 Clients cache JPEG bytes under `~/Library/Application Support/GatteyPhotos/cache/{id}.jpg` (full) and `{id}_w{width}.jpg` (grid thumbnails) on macOS, or the app container on iOS.
 

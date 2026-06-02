@@ -55,10 +55,3 @@ export async function getBytes(blobPath: string): Promise<Buffer | null> {
     return null;
   }
 }
-
-export function localDownloadUrl(request: Request, blobPath: string): string {
-  const base = new URL(request.url);
-  base.pathname = `/api/gallery/blob/${encodeURIComponent(blobPath)}`;
-  base.search = "";
-  return base.toString();
-}

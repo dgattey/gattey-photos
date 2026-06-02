@@ -3,8 +3,8 @@ import Foundation
 public typealias PhotoID = String
 public typealias UploaderID = String
 
-/// Display name for photos uploaded before uploader attribution existed.
-public let legacyUploaderDisplayName = "Dylan"
+/// Fallback display name when an uploader id has no mapped name.
+public let defaultUploaderDisplayName = "Dylan"
 
 public enum CurrentPhotoUpdatedBy: String, Codable, Sendable {
     case cron
@@ -85,10 +85,10 @@ public struct GalleryState: Codable, Equatable, Sendable {
         GalleryState(updatedAt: emptyUpdatedAt, order: [], photos: [:], uploaders: [:], currentPhotoId: nil)
     }
 
-    /// FNV-1a id for a pre-`uploaderId` display name; matches server `legacyUploaderId`.
-    public static func legacyUploaderId(forDisplayName name: String) -> UploaderID {
+    /// Deterministic FNV-1a uploader id for a display name; matches server `uploaderIdForName`.
+    public static func uploaderId(forDisplayName name: String) -> UploaderID {
         let s = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalized = s.isEmpty ? legacyUploaderDisplayName : s
+        let normalized = s.isEmpty ? defaultUploaderDisplayName : s
         var h: UInt32 = 0x811c9dc5
         for scalar in normalized.unicodeScalars {
             h ^= UInt32(scalar.value)
@@ -97,7 +97,7 @@ public struct GalleryState: Codable, Equatable, Sendable {
         return String(format: "u-%08x", h)
     }
 
-    /// Collapse legacy `uploadedBy` on manifest photos into `uploaders` (matches server `coalesceUploaders`).
+    /// Build id-keyed entries and ensure every uploader id has a mapped name (matches server `coalesceUploaders`).
     public static func coalescingUploaders(
         rawPhotos: [PhotoID: RawManifestPhoto],
         rawUploaders: [UploaderID: String]?
@@ -105,17 +105,9 @@ public struct GalleryState: Codable, Equatable, Sendable {
         var uploaders = rawUploaders ?? [:]
         var photos: [PhotoID: PhotoEntry] = [:]
         for (id, raw) in rawPhotos {
-            var uploaderId = raw.uploaderId
-            if uploaderId == nil {
-                let name = raw.uploadedBy?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                let display = name.isEmpty ? legacyUploaderDisplayName : name
-                uploaderId = legacyUploaderId(forDisplayName: display)
-                if uploaders[uploaderId!] == nil {
-                    uploaders[uploaderId!] = display
-                }
-            } else if uploaders[uploaderId!] == nil {
-                let name = raw.uploadedBy?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                uploaders[uploaderId!] = name.isEmpty ? legacyUploaderDisplayName : name
+            let uploaderId = raw.uploaderId ?? Self.uploaderId(forDisplayName: defaultUploaderDisplayName)
+            if uploaders[uploaderId] == nil {
+                uploaders[uploaderId] = defaultUploaderDisplayName
             }
             photos[id] = PhotoEntry(
                 id: raw.id,
@@ -124,7 +116,7 @@ public struct GalleryState: Codable, Equatable, Sendable {
                 sizeBytes: raw.sizeBytes,
                 updatedAt: raw.updatedAt,
                 deletedAt: raw.deletedAt,
-                uploaderId: uploaderId!,
+                uploaderId: uploaderId,
                 downloadUrl: raw.downloadUrl
             )
         }
@@ -226,7 +218,7 @@ public struct GalleryState: Codable, Equatable, Sendable {
     }
 }
 
-/// Manifest photo JSON before `uploaders` normalization (may include legacy `uploadedBy`).
+/// Manifest photo JSON before `uploaders` normalization. `uploaderId` is optional only to guard a malformed blob.
 public struct RawManifestPhoto: Decodable, Sendable {
     public var id: PhotoID
     public var filename: String
@@ -235,7 +227,6 @@ public struct RawManifestPhoto: Decodable, Sendable {
     public var updatedAt: String
     public var deletedAt: String?
     public var uploaderId: UploaderID?
-    public var uploadedBy: String?
     public var downloadUrl: String?
 }
 
@@ -301,9 +292,6 @@ public struct AppSettings: Codable, Sendable {
     public static let galleryGridColumnCountMax: Int = 8
 
     public static let debugAdvanceIntervalSecondsDefault: Int = GalleryRotationSchedule.defaultDebugAdvanceIntervalSeconds
-    /// Reference width when migrating legacy `galleryThumbnailColumnMin` (points).
-    private static let galleryGridColumnCountMigrationReferenceWidth: Double = 720
-    private static let legacyGalleryThumbnailColumnMinDefault: Double = 140
 
     public static let defaultDisplayName = "Dylan"
 
@@ -319,16 +307,9 @@ public struct AppSettings: Codable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case serverBaseURL, debugMode, syncSessionToken, galleryName, displayName
-        // Legacy; never written. Dropped on load.
-        case deviceIP
-        case bloomin8ApiToken, bloomin8OpenApiBaseURL // legacy; dropped on load, never written
         case previewPaneSplitFraction
         case galleryGridColumnCount
         case debugAdvanceIntervalSeconds
-        /// Legacy adaptive minimum width; migrated to `galleryGridColumnCount` on load.
-        case galleryThumbnailColumnMin
-        // Legacy; never written. Dropped on load.
-        case syncPassword
     }
 
     public init(
@@ -365,42 +346,26 @@ public struct AppSettings: Codable, Sendable {
         min(max(value, galleryGridColumnCountMin), galleryGridColumnCountMax)
     }
 
-    /// Maps legacy adaptive minimum width to a fixed column count (~720pt grid).
-    public static func galleryGridColumnCount(migratingLegacyColumnMin columnMin: Double) -> Int {
-        let reference = galleryGridColumnCountMigrationReferenceWidth
-        let estimate = reference / max(columnMin, 1)
-        return clampedGalleryGridColumnCount(Int(estimate.rounded()))
-    }
-
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = AppSettings.defaults
         serverBaseURL = try c.decodeIfPresent(String.self, forKey: .serverBaseURL) ?? d.serverBaseURL
         debugMode = try c.decodeIfPresent(Bool.self, forKey: .debugMode) ?? d.debugMode
-        _ = try c.decodeIfPresent(String.self, forKey: .deviceIP)
         syncSessionToken = try c.decodeIfPresent(String.self, forKey: .syncSessionToken) ?? d.syncSessionToken
         galleryName = try c.decodeIfPresent(String.self, forKey: .galleryName) ?? d.galleryName
         let nameRaw = try c.decodeIfPresent(String.self, forKey: .displayName) ?? Self.defaultDisplayName
         displayName = nameRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? Self.defaultDisplayName
             : nameRaw.trimmingCharacters(in: .whitespacesAndNewlines)
-        _ = try c.decodeIfPresent(String.self, forKey: .bloomin8ApiToken)
-        _ = try c.decodeIfPresent(String.self, forKey: .bloomin8OpenApiBaseURL)
         let splitRaw = try c.decodeIfPresent(Double.self, forKey: .previewPaneSplitFraction)
             ?? Self.previewPaneSplitFractionDefault
         previewPaneSplitFraction = Self.clampedPreviewPaneSplitFraction(splitRaw)
-        if let countRaw = try c.decodeIfPresent(Int.self, forKey: .galleryGridColumnCount) {
-            galleryGridColumnCount = Self.clampedGalleryGridColumnCount(countRaw)
-        } else {
-            let legacyMin = try c.decodeIfPresent(Double.self, forKey: .galleryThumbnailColumnMin)
-                ?? Self.legacyGalleryThumbnailColumnMinDefault
-            galleryGridColumnCount = Self.galleryGridColumnCount(migratingLegacyColumnMin: legacyMin)
-        }
+        let countRaw = try c.decodeIfPresent(Int.self, forKey: .galleryGridColumnCount)
+            ?? Self.galleryGridColumnCountDefault
+        galleryGridColumnCount = Self.clampedGalleryGridColumnCount(countRaw)
         let intervalRaw = try c.decodeIfPresent(Int.self, forKey: .debugAdvanceIntervalSeconds)
             ?? Self.debugAdvanceIntervalSecondsDefault
         debugAdvanceIntervalSeconds = Self.clampedDebugAdvanceIntervalSeconds(intervalRaw)
-        // Ignore legacy syncPassword — never persisted again.
-        _ = try c.decodeIfPresent(String.self, forKey: .syncPassword)
     }
 
     public func encode(to encoder: Encoder) throws {

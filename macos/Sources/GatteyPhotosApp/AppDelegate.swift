@@ -7,7 +7,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var extraWindowObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        LegacySyncLaunchAgent.uninstallIfPresent()
         configureInitialWindowChrome()
         observeExtraWindows()
         DispatchQueue.main.async { [weak self] in

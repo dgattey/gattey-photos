@@ -50,12 +50,6 @@ extension View {
             .galleryChromeButtonBorderShape()
     }
 
-    /// Secondary prominent action (legacy; prefer `galleryBorderedButtonStyle` in lightbox).
-    func gallerySecondaryButtonStyle() -> some View {
-        buttonStyle(.borderedProminent)
-            .tint(Color.secondary)
-    }
-
     /// Neutral bordered gallery action (e.g. Download in lightbox) — same chrome as Delete, default tint.
     func galleryBorderedButtonStyle() -> some View {
         buttonStyle(.bordered)

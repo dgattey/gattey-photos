@@ -12,7 +12,7 @@ description: Change the Gattey Photos Next.js sync API on Vercel (gallery routes
 - `app/api/gallery/photos/route.ts` — POST upload
 - `app/api/gallery/photos/[id]/route.ts` — DELETE
 - `app/api/gallery/order/route.ts` — PUT reorder
-- `app/api/gallery/uploaders/route.ts` — PATCH rename `uploadedBy` on all photos matching `fromName` (settings display name change)
+- `app/api/gallery/uploaders/route.ts` — PATCH rename an uploader in the `uploaders` map (settings display name change)
 - `app/api/gallery/blob/[path]/route.ts` — GET bytes (local dev only)
 - `app/api/gallery/current/route.ts` — PUT set current (`baseUpdatedAt`, then device push)
 - `app/api/devices/route.ts` — GET list / POST register frame (encrypted token in registry)

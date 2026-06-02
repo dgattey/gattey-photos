@@ -159,11 +159,6 @@ public extension NSWindow {
         titlebarSeparatorStyle = .none
     }
 
-    /// @deprecated Use `applyGatteyPhotosGalleryChrome` or `applyGatteyPhotosUnlockChrome`.
-    func applyGatteyPhotosGlassChrome() {
-        applyGatteyPhotosUnlockChrome()
-    }
-
     /// Hides the centered title label SwiftUI/unified toolbar injects beside the traffic lights.
     func setTitlebarCenteredTitleHidden(_ hidden: Bool) {
         guard let close = standardWindowButton(.closeButton) else { return }

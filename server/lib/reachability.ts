@@ -9,7 +9,3 @@ export async function tryReadManifest(): Promise<GalleryState | null> {
     return null;
   }
 }
-
-export async function isGalleryReachable(): Promise<boolean> {
-  return (await tryReadManifest()) !== null;
-}

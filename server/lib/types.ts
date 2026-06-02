@@ -25,10 +25,9 @@ export interface GalleryState {
   currentPhotoUpdatedBy?: "cron" | "manual" | null;
 }
 
-/** Manifest photo as read from storage; may carry the pre-uploaderId `uploadedBy` string. */
+/** Manifest photo as read from storage. `uploaderId` is optional only to guard a malformed blob. */
 export type RawPhotoEntry = Omit<PhotoEntry, "uploaderId"> & {
   uploaderId?: UploaderId;
-  uploadedBy?: string;
 };
 
 /**

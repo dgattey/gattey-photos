@@ -117,18 +117,6 @@ export async function putPhotoBytes(
   return blob.putBytes(blobPath, bytes);
 }
 
-/** Local dev only; production serves bytes via `/api/gallery/photos/[id]/image`. */
-export async function resolveDownloadUrl(
-  request: Request,
-  blobPath: string
-): Promise<string | null> {
-  if (!useLocal()) return null;
-  const local = await import("./local");
-  const bytes = await local.getBytes(blobPath);
-  if (!bytes) return null;
-  return local.localDownloadUrl(request, blobPath);
-}
-
 export async function readPhotoBytes(blobPath: string): Promise<Buffer | null> {
   if (useLocal()) {
     const local = await import("./local");

@@ -8,12 +8,6 @@ final class AppSettingsGalleryGridTests: XCTestCase {
         XCTAssertEqual(AppSettings.clampedGalleryGridColumnCount(5), 5)
     }
 
-    func testMigrationFromLegacyColumnMinMatchesReferenceWidth() {
-        XCTAssertEqual(AppSettings.galleryGridColumnCount(migratingLegacyColumnMin: 140), 5)
-        XCTAssertEqual(AppSettings.galleryGridColumnCount(migratingLegacyColumnMin: 96), 8)
-        XCTAssertEqual(AppSettings.galleryGridColumnCount(migratingLegacyColumnMin: 320), 2)
-    }
-
     func testDecodesNewColumnCountKey() throws {
         let json = """
         {"serverBaseURL":"https://photos.gattey.com","syncSessionToken":"","galleryName":"default","galleryGridColumnCount":3}
@@ -22,11 +16,11 @@ final class AppSettingsGalleryGridTests: XCTestCase {
         XCTAssertEqual(settings.galleryGridColumnCount, 3)
     }
 
-    func testDecodesLegacyColumnMinKey() throws {
+    func testIgnoresUnknownLegacyKeysAndUsesDefaults() throws {
         let json = """
-        {"serverBaseURL":"https://photos.gattey.com","syncSessionToken":"","galleryName":"default","galleryThumbnailColumnMin":140}
+        {"serverBaseURL":"https://photos.gattey.com","syncSessionToken":"","galleryName":"default","galleryThumbnailColumnMin":140,"deviceIP":"1.2.3.4","syncPassword":"x"}
         """
         let settings = try JSONDecoder().decode(AppSettings.self, from: json.data(using: .utf8)!)
-        XCTAssertEqual(settings.galleryGridColumnCount, 5)
+        XCTAssertEqual(settings.galleryGridColumnCount, AppSettings.galleryGridColumnCountDefault)
     }
 }

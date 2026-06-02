@@ -1,4 +1,3 @@
-import { emptyGalleryUpdatedAt } from "./gallery-mutation";
 import type {
   GalleryState,
   PhotoEntry,
@@ -11,25 +10,12 @@ export const MANIFEST_PATH = "gallery/manifest.json";
 /** Small separate blob holding only the currently shown photo (decoupled from the library catalog). */
 export const CURRENT_PATH = "gallery/current.json";
 
-/** Name assigned to photos uploaded before uploader attribution existed. */
-export const LEGACY_UPLOADER_NAME = "Dylan";
+/** Fallback display name when an uploader id has no mapped name. */
+export const DEFAULT_UPLOADER_NAME = "Dylan";
 
-export function emptyGallery(): GalleryState {
-  return {
-    updatedAt: emptyGalleryUpdatedAt(),
-    order: [],
-    photos: {},
-    uploaders: {},
-    currentPhotoId: null,
-  };
-}
-
-/**
- * Deterministic uploader id for a pre-uploaderId display name. Stable across reads so
- * in-memory normalization yields the same id every pull until a write bakes it in.
- */
-export function legacyUploaderId(name: string): UploaderId {
-  const s = name.trim() || LEGACY_UPLOADER_NAME;
+/** Deterministic FNV-1a uploader id for a display name; assigns one id per person on first upload. */
+export function uploaderIdForName(name: string): UploaderId {
+  const s = name.trim() || DEFAULT_UPLOADER_NAME;
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);
@@ -38,10 +24,7 @@ export function legacyUploaderId(name: string): UploaderId {
   return `u-${(h >>> 0).toString(16).padStart(8, "0")}`;
 }
 
-/**
- * Parse raw manifest photos into id-keyed entries plus the uploaders map. Photos written before
- * uploader ids carry a `uploadedBy` string; collapse each distinct name to one deterministic id.
- */
+/** Parse raw manifest photos into id-keyed entries and ensure every uploader id has a mapped name. */
 export function coalesceUploaders(
   rawPhotos: Record<PhotoId, RawPhotoEntry>,
   rawUploaders: Record<UploaderId, string> | undefined
@@ -49,14 +32,8 @@ export function coalesceUploaders(
   const uploaders: Record<UploaderId, string> = { ...(rawUploaders ?? {}) };
   const photos: Record<PhotoId, PhotoEntry> = {};
   for (const [id, raw] of Object.entries(rawPhotos)) {
-    let uploaderId = raw.uploaderId;
-    if (!uploaderId) {
-      const name = (raw.uploadedBy ?? "").trim() || LEGACY_UPLOADER_NAME;
-      uploaderId = legacyUploaderId(name);
-      if (!uploaders[uploaderId]) uploaders[uploaderId] = name;
-    } else if (!uploaders[uploaderId]) {
-      uploaders[uploaderId] = (raw.uploadedBy ?? "").trim() || LEGACY_UPLOADER_NAME;
-    }
+    const uploaderId = raw.uploaderId ?? uploaderIdForName(DEFAULT_UPLOADER_NAME);
+    if (!uploaders[uploaderId]) uploaders[uploaderId] = DEFAULT_UPLOADER_NAME;
     photos[id] = {
       id: raw.id,
       filename: raw.filename,
@@ -79,7 +56,7 @@ export function ensureUploaderId(
   name: string,
   newId: UploaderId
 ): { state: GalleryState; uploaderId: UploaderId } {
-  const trimmed = name.trim() || LEGACY_UPLOADER_NAME;
+  const trimmed = name.trim() || DEFAULT_UPLOADER_NAME;
   for (const [id, mapped] of Object.entries(state.uploaders)) {
     if (mapped === trimmed) return { state, uploaderId: id };
   }
@@ -89,7 +66,7 @@ export function ensureUploaderId(
   };
 }
 
-export function activeOrder(state: GalleryState): PhotoId[] {
+function activeOrder(state: GalleryState): PhotoId[] {
   return state.order.filter((id) => {
     const p = state.photos[id];
     return p && p.deletedAt === null;
@@ -107,7 +84,7 @@ export function canSoftDelete(state: GalleryState, id: PhotoId): boolean {
  * After `deletedId` is removed, pick the next active id in gallery order (scan forward,
  * then backward). Uses `before` for index and `after` for the remaining active set.
  */
-export function nextCurrentPhotoId(
+function nextCurrentPhotoId(
   before: GalleryState,
   deletedId: PhotoId,
   after: GalleryState
@@ -151,7 +128,7 @@ export function setCurrentPhoto(state: GalleryState, id: PhotoId): GalleryState 
 }
 
 /** Next active id in manifest `order` after `current`, wrapping at end. */
-export function nextPhotoInOrder(state: GalleryState, current: PhotoId): PhotoId | null {
+function nextPhotoInOrder(state: GalleryState, current: PhotoId): PhotoId | null {
   const active = new Set(activeOrder(state));
   if (active.size === 0) return null;
   const idx = state.order.indexOf(current);
@@ -169,7 +146,7 @@ export function nextPhotoInOrder(state: GalleryState, current: PhotoId): PhotoId
 }
 
 /** First active photo id in manifest `order`. */
-export function firstActiveInOrder(state: GalleryState): PhotoId | null {
+function firstActiveInOrder(state: GalleryState): PhotoId | null {
   const active = new Set(activeOrder(state));
   for (const id of state.order) {
     if (active.has(id)) return id;
@@ -221,12 +198,6 @@ export function resolveCurrentPhoto(state: GalleryState): {
   return { state: { ...state, currentPhotoId: active[0]! }, dirty: true };
 }
 
-/** Collapse legacy uploaders into the map and repair `currentPhotoId` before storage. */
-export function normalizeManifest(state: GalleryState): GalleryState {
-  const { photos, uploaders } = coalesceUploaders(state.photos, state.uploaders);
-  return resolveCurrentPhoto({ ...state, photos, uploaders }).state;
-}
-
 /** Point every uploader id named `fromName` at `toName` (settings rename). One map write; photos untouched. */
 export function renameUploader(
   state: GalleryState,
@@ -247,16 +218,6 @@ export function renameUploader(
   }
   if (!dirty) return state;
   return { ...state, uploaders };
-}
-
-/** True once no uploader id still maps to `fromName` (manifest-write visibility check). */
-export function renameUploaderApplied(
-  state: GalleryState,
-  fromName: string
-): boolean {
-  const from = fromName.trim();
-  if (!from) return true;
-  return !Object.values(state.uploaders).some((name) => name === from);
 }
 
 export function upsertPhoto(state: GalleryState, entry: PhotoEntry): GalleryState {
