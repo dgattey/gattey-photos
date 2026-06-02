@@ -41,7 +41,7 @@ Single **G** group: `glass: true`, solid white layer fill, translucency/specular
 
 Full-width `GalleryGridView`: left `DeviceCurrentPreview` (on-device photo, black frame, drop to set current) + right thumbnail grid. Floating `ConnectionStatusView` (top-trailing). `currentPhotoId` on `GalleryState` syncs via `PUT /api/gallery/current`; Bloomin8 `show_now` targets that photo. Toolbar **Set as current** when one grid photo is selected. Double-click opens `PhotoLightboxView`. Multi-select shows `GallerySelectionBar`. Drag thumbnails to reorder.
 
-**macOS toolbar (logged-in):** leading `ToolbarItemGroup(.navigation)` — `Toggle` + `.toggleStyle(.button)` + `.labelStyle(.iconOnly)` for device preview (no custom `Button`/`Image`/`buttonStyle`); title with `.sharedBackgroundVisibility(.hidden)` on 26+ only. Grid `ScrollView`: `.scrollEdgeEffectStyle(.soft, for: .top)` on macOS 26+. Trailing: photos-per-row group, `ToolbarSpacer(.fixed)`, action group. Transparent `.toolbarBackground(.hidden)`; not `.primaryAction` on macOS.
+**macOS toolbar (logged-in):** leading `ToolbarItemGroup(.navigation)` — `Toggle` + `.toggleStyle(.button)` + `.labelStyle(.iconOnly)` for device preview (no custom `Button`/`Image`/`buttonStyle`); title with `.sharedBackgroundVisibility(.hidden)` on 26+ only. Grid `ScrollView`: `.scrollEdgeEffectStyle(.soft, for: .top)` on macOS 26+; gallery `titlebarAppearsTransparent = true` + `.toolbarBackgroundVisibility(.visible)` without manual material on 26+ (system Liquid Glass + scroll edge). Pre-26: `.regularMaterial` toolbar fallback. Not `.primaryAction` on macOS.
 
 **Glass chrome:** `GlassChromeStyle.swift` — floating panel background; `WindowGlassBackground.swift` — full-window vibrancy.
 

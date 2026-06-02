@@ -132,7 +132,8 @@ struct TransparentWindowConfigurator: NSViewRepresentable {
 }
 
 public extension NSWindow {
-    /// Gallery: translucent unified toolbar; SwiftUI scroll edge + optional toolbar material (not opaque titlebar).
+    /// Gallery: content may extend under the unified toolbar for macOS 26 scroll-edge fade.
+    /// Pair with SwiftUI `scrollEdgeEffectStyle` on the grid — no manual toolbar materials on 26+.
     func applyGatteyPhotosGalleryChrome() {
         styleMask.insert(.fullSizeContentView)
         isMovableByWindowBackground = true

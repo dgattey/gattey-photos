@@ -73,7 +73,6 @@ struct GalleryGridView: View {
         #if os(macOS)
         .modifier(GalleryMacOSToolbarChrome())
         .modifier(GalleryMacOSToolbarTitleRemoval())
-        .galleryMacOSToolbarScrollEdge()
         #endif
         #if os(macOS)
         // Fallback for chrome outside the grid; populated grids use AppKit targets (see thumbnailGridColumn).
@@ -188,7 +187,6 @@ struct GalleryGridView: View {
                 .scrollContentBackground(.hidden)
                 #if os(macOS)
                 .galleryMacOSGridScrollEdgeEffect()
-                .contentMargins(.top, 1, for: .scrollContent)
                 #endif
             }
 
@@ -841,23 +839,23 @@ private struct GalleryMacOSToolbarActionButtonStyle: ViewModifier {
 #endif
 
 #if os(macOS)
-/// Transparent unified toolbar (Photos-style); legibility from scroll edge on macOS 26+ (`galleryMacOSToolbarScrollEdge`).
+/// macOS 26+: system Liquid Glass toolbar + scroll edge — no custom ShapeStyle (`.regularMaterial` blocks fade).
+/// Pre-26: visible material fallback when scroll edge is unavailable.
 private struct GalleryMacOSToolbarChrome: ViewModifier {
     func body(content: Content) -> some View {
-        content.toolbarBackground(.hidden, for: .windowToolbar)
+        if #available(macOS 26.0, *) {
+            content.toolbarBackgroundVisibility(.visible, for: .windowToolbar)
+        } else if #available(macOS 15.0, *) {
+            content
+                .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
+                .toolbarBackground(.regularMaterial, for: .windowToolbar)
+        } else {
+            content.toolbarBackground(.regularMaterial, for: .windowToolbar)
+        }
     }
 }
 
 private extension View {
-    @ViewBuilder
-    func galleryMacOSToolbarScrollEdge() -> some View {
-        if #available(macOS 26.0, *) {
-            scrollEdgeEffectStyle(.soft, for: .top)
-        } else {
-            self
-        }
-    }
-
     @ViewBuilder
     func galleryMacOSGridScrollEdgeEffect() -> some View {
         if #available(macOS 26.0, *) {
