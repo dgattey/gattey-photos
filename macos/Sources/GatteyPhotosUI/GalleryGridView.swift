@@ -841,16 +841,10 @@ private struct GalleryMacOSToolbarActionButtonStyle: ViewModifier {
 #endif
 
 #if os(macOS)
-/// Unified toolbar material (requires `applyGatteyPhotosGalleryChrome` — not transparent titlebar).
+/// Transparent unified toolbar (Photos-style); legibility from scroll edge on macOS 26+ (`galleryMacOSToolbarScrollEdge`).
 private struct GalleryMacOSToolbarChrome: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(macOS 15.0, *) {
-            content
-                .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
-                .toolbarBackground(.regularMaterial, for: .windowToolbar)
-        } else {
-            content.toolbarBackground(.regularMaterial, for: .windowToolbar)
-        }
+        content.toolbarBackground(.hidden, for: .windowToolbar)
     }
 }
 

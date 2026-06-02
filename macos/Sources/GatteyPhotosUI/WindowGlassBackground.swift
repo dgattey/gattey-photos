@@ -132,7 +132,7 @@ struct TransparentWindowConfigurator: NSViewRepresentable {
 }
 
 public extension NSWindow {
-    /// Gallery: content under unified toolbar; system draws toolbar/titlebar material + scroll edge.
+    /// Gallery: translucent unified toolbar; SwiftUI scroll edge + optional toolbar material (not opaque titlebar).
     func applyGatteyPhotosGalleryChrome() {
         styleMask.insert(.fullSizeContentView)
         isMovableByWindowBackground = true
@@ -140,7 +140,7 @@ public extension NSWindow {
         backgroundColor = .clear
         hasShadow = true
         toolbarStyle = .unified
-        titlebarAppearsTransparent = false
+        titlebarAppearsTransparent = true
         titlebarSeparatorStyle = .automatic
     }
 
