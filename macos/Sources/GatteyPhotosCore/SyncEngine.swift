@@ -9,6 +9,7 @@ public struct SyncEngine: Sendable {
         let remote = try await client.fetchGallery()
         let local = AppConfig.loadLocalState()
         let merged = GalleryMerge.merge(local: local, remote: remote.state)
+            .mergingDownloadURLs(from: remote.photos)
         try await client.downloadMissing(for: merged)
         return merged
     }

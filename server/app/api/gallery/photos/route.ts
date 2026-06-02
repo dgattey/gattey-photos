@@ -3,6 +3,7 @@ import { assertSessionToken } from "@/lib/auth";
 import { jsonApiError, storageErrorResponse } from "@/lib/api-error";
 import { upsertPhoto } from "@/lib/gallery";
 import { buildGalleryResponse } from "@/lib/gallery-service";
+import { updateGalleryManifest } from "@/lib/gallery-manifest-update";
 import * as storage from "@/lib/storage";
 
 export async function POST(request: Request) {
@@ -37,9 +38,8 @@ export async function POST(request: Request) {
 
     await storage.putPhotoBytes(blobPath, bytes);
 
-    const state = await storage.readManifest();
     const now = new Date().toISOString();
-    const next = upsertPhoto(state, {
+    const entry = {
       id,
       filename,
       blobPath,
@@ -47,8 +47,14 @@ export async function POST(request: Request) {
       updatedAt: now,
       deletedAt: null,
       uploadedBy,
-    });
-    const saved = await storage.writeManifest(next);
+    };
+    const saved = await updateGalleryManifest(
+      (state) => upsertPhoto(state, entry),
+      (state) => {
+        const photo = state.photos[id];
+        return photo != null && photo.deletedAt === null;
+      }
+    );
     const gallery = await buildGalleryResponse(request, saved);
     return Response.json(gallery, { status: 201 });
   } catch (err) {

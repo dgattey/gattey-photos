@@ -76,11 +76,27 @@ public final class GalleryStore: ObservableObject {
         client: SyncClient? = nil,
         downloadMissing: Bool = false
     ) async throws {
-        applyState(serverState)
-        try AppConfig.saveLocalState(state)
         if downloadMissing {
             let sync = try client ?? makeSyncClient()
-            try await sync.downloadMissing(for: state)
+            try await sync.downloadMissing(for: serverState)
+        }
+        applyState(serverState)
+        try AppConfig.saveLocalState(state)
+    }
+
+    /// Ensures the on-disk JPEG cache exists for grid/lightbox display.
+    func ensurePhotoCached(photoID: PhotoID) async {
+        guard session?.isUnlocked == true,
+              let photo = state.photos[photoID],
+              !photo.isDeleted
+        else { return }
+        let cacheURL = AppConfig.cacheURL(for: photoID)
+        if FileManager.default.fileExists(atPath: cacheURL.path) { return }
+        do {
+            let client = try makeSyncClient()
+            try await client.cachePhotoIfMissing(photo)
+        } catch {
+            log.log(error: error, category: .gallery, context: "Cache photo \(photoID)")
         }
     }
 
@@ -212,6 +228,10 @@ public final class GalleryStore: ObservableObject {
 
     private func pullFromServer(kind: PullKind) async {
         guard session?.isUnlocked == true else { return }
+        if kind == .periodic, isBusy {
+            log.log(.sync, level: .info, "Scheduled sync skipped", detail: "Gallery busy")
+            return
+        }
 
         let failureContext: String
         let logCategory: LogCategory
@@ -451,16 +471,41 @@ public final class GalleryStore: ObservableObject {
                 }
                 let data = try PhotoCacheJPEG.normalizedJPEGData(fromFileURL: url)
                 let name = url.lastPathComponent
+                let beforeIDs = Set(latest.activePhotos().map(\.id))
                 let response = try await client.uploadPhoto(
                     jpegData: data,
                     filename: name,
                     uploadedBy: settings.displayName
                 )
-                latest = response.state
+                latest = response.state.mergingDownloadURLs(from: response.photos)
+                let newIDs = Set(latest.activePhotos().map(\.id)).subtracting(beforeIDs)
+                guard !newIDs.isEmpty else {
+                    log.log(
+                        .gallery,
+                        level: .error,
+                        "Upload response missing new photo",
+                        detail: "\(name) version=\(response.state.version)"
+                    )
+                    throw SyncError.decode
+                }
+                for newID in newIDs {
+                    try data.write(to: AppConfig.cacheURL(for: newID), options: .atomic)
+                }
+                log.log(
+                    .gallery,
+                    level: .info,
+                    "Uploaded to server",
+                    detail: "\(name) → \(newIDs.sorted().joined(separator: ", "))"
+                )
             }
             try await commitServerState(latest, client: client, downloadMissing: true)
             noteServerOK()
-            log.log(.gallery, level: .success, "Upload complete", detail: "version=\(state.version)")
+            log.log(
+                .gallery,
+                level: .success,
+                "Upload complete",
+                detail: "version=\(state.version) photos=\(state.activePhotos().count)"
+            )
             await updateDeviceStatus()
         }
     }
@@ -480,7 +525,7 @@ public final class GalleryStore: ObservableObject {
             let trailing = ids.subtracting(orderedIDs)
             for id in orderedIDs + trailing.sorted() {
                 let response = try await client.deletePhoto(id: id)
-                latest = response.state
+                latest = response.state.mergingDownloadURLs(from: response.photos)
             }
             try await commitServerState(latest)
             selection.subtractSelection(ids)
@@ -491,11 +536,35 @@ public final class GalleryStore: ObservableObject {
     }
 
     func applyOrder(_ order: [PhotoID]) async {
+        guard session?.isUnlocked == true else {
+            log.log(.gallery, level: .warning, "Reorder skipped", detail: "Unlock the gallery first")
+            return
+        }
         await run(label: "Reorder", category: .gallery) {
-            let client = try makeSyncClient()
-            let response = try await client.reorder(order)
-            try await commitServerState(response.state)
-            noteServerOK()
+            let snapshot = state
+            applyState(snapshot.applyingActiveDisplayOrder(order))
+            log.log(
+                .gallery,
+                level: .info,
+                "Reordering gallery",
+                detail: "photos=\(order.count) version=\(snapshot.version)"
+            )
+            do {
+                let client = try makeSyncClient()
+                let response = try await client.reorder(order)
+                try await commitServerState(response.state.mergingDownloadURLs(from: response.photos))
+                noteServerOK()
+                log.log(
+                    .gallery,
+                    level: .success,
+                    "Reorder saved",
+                    detail: "version=\(state.version)"
+                )
+            } catch {
+                applyState(snapshot)
+                try? AppConfig.saveLocalState(state)
+                throw error
+            }
         }
     }
 
@@ -550,21 +619,8 @@ public final class GalleryStore: ObservableObject {
             return try Data(contentsOf: cacheURL)
         }
         let client = try makeSyncClient()
-        var req = URLRequest(url: client.imageURL(for: photo))
-        req.setValue("Bearer \(client.bearer)", forHTTPHeaderField: "Authorization")
-        let (data, res) = try await URLSession.shared.data(for: req)
-        guard let http = res as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            let code = (res as? HTTPURLResponse)?.statusCode ?? -1
-            throw SyncError.http(SyncHTTPFailure(
-                statusCode: code,
-                method: "GET",
-                url: req.url?.absoluteString ?? client.baseURL.absoluteString,
-                responseBody: "image download failed",
-                context: "download image \(photo.id)"
-            ))
-        }
-        try data.write(to: cacheURL, options: .atomic)
-        return data
+        try await client.cachePhotoIfMissing(photo)
+        return try Data(contentsOf: cacheURL)
     }
 
     private static func downloadFilename(for photo: PhotoEntry) -> String {
@@ -596,7 +652,11 @@ public final class GalleryStore: ObservableObject {
         await run(label: "Set current", category: .gallery) {
             let client = try makeSyncClient()
             let response = try await client.setCurrentPhoto(id: photoID)
-            try await commitServerState(response.state, client: client, downloadMissing: true)
+            try await commitServerState(
+                response.state.mergingDownloadURLs(from: response.photos),
+                client: client,
+                downloadMissing: true
+            )
             noteServerOK()
             log.log(
                 .gallery,

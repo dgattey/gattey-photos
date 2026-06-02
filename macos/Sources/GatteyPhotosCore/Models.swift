@@ -77,6 +77,31 @@ public struct GalleryState: Codable, Equatable, Sendable {
     }
 
     /// Local cache repair; server normalizes `currentPhotoId` on read/write (same rules).
+    /// Applies `downloadUrl` from gallery API `photos` views onto manifest entries.
+    public func mergingDownloadURLs(from views: [PhotoEntry]) -> GalleryState {
+        var next = self
+        for view in views {
+            guard let raw = view.downloadUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !raw.isEmpty,
+                  var entry = next.photos[view.id]
+            else { continue }
+            entry.downloadUrl = raw
+            next.photos[view.id] = entry
+        }
+        return next
+    }
+
+    /// Replaces active display order; soft-deleted ids stay at the end of `order`.
+    public func applyingActiveDisplayOrder(_ activeOrder: [PhotoID]) -> GalleryState {
+        let tombstones = order.filter { id in
+            guard let photo = photos[id] else { return false }
+            return photo.isDeleted
+        }
+        var next = self
+        next.order = activeOrder + tombstones.filter { !activeOrder.contains($0) }
+        return next
+    }
+
     public func withResolvedCurrentPhoto() -> GalleryState {
         let active = activePhotos()
         guard !active.isEmpty else {

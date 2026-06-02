@@ -15,11 +15,21 @@ function blobAccessHint(): string {
   return "Blob access rejected: set GATTEY_BLOB_ACCESS=public only if the Vercel Blob store is public";
 }
 
+import { ManifestUpdateConflictError } from "./manifest-errors.ts";
+
 /** Map storage / Blob SDK failures to HTTP status + client-visible message. */
 export function storageErrorResponse(
   err: unknown,
   logPrefix: string
 ): Response {
+  if (err instanceof ManifestUpdateConflictError) {
+    console.error(logPrefix, err.message);
+    return jsonApiError(
+      503,
+      "Gallery manifest busy; retry upload in a moment"
+    );
+  }
+
   const name = err instanceof Error ? err.name : "";
   const message =
     err instanceof Error && err.message.trim().length > 0

@@ -17,5 +17,7 @@ export async function PUT(request: Request) {
   const next = setOrder(state, body.order);
   const saved = await storage.writeManifest(next);
   const gallery = await buildGalleryResponse(request, saved);
-  return Response.json(gallery);
+  return Response.json(gallery, {
+    headers: { "Cache-Control": "no-store" },
+  });
 }

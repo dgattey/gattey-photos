@@ -16,7 +16,11 @@ final class PhotoImageModel: ObservableObject {
     private var loadedPhotoID: PhotoID?
     private var loadedMaxPixelSize: Int?
 
-    func load(photoID: PhotoID, maxPixelSize: Int) {
+    func load(
+        photoID: PhotoID,
+        maxPixelSize: Int,
+        ensureCached: (@MainActor () async -> Void)? = nil
+    ) {
         if loadedPhotoID == photoID, loadedMaxPixelSize == maxPixelSize,
            image != nil || loadTask != nil {
             return
@@ -34,9 +38,11 @@ final class PhotoImageModel: ObservableObject {
         let requestedID = photoID
         let requestedSize = maxPixelSize
         loadTask = Task {
-            let loaded = await Task.detached(priority: .userInitiated) {
-                ImageDownsampler.loadThumbnail(from: url, maxPixelSize: maxPixelSize)
-            }.value
+            var loaded = await Self.readThumbnail(from: url, maxPixelSize: maxPixelSize)
+            if loaded == nil, let ensureCached {
+                await ensureCached()
+                loaded = await Self.readThumbnail(from: url, maxPixelSize: maxPixelSize)
+            }
             guard !Task.isCancelled,
                   self.loadedPhotoID == requestedID,
                   self.loadedMaxPixelSize == requestedSize
@@ -53,6 +59,8 @@ final class PhotoImageModel: ObservableObject {
                     "Could not load cached image",
                     detail: "\(requestedID) maxPx=\(requestedSize) fileExists=\(exists)"
                 )
+            } else {
+                self.loadFailed = false
             }
         }
     }
@@ -65,6 +73,12 @@ final class PhotoImageModel: ObservableObject {
         isLoading = false
         loadFailed = false
     }
+
+    private static func readThumbnail(from url: URL, maxPixelSize: Int) async -> PlatformThumbnailImage? {
+        await Task.detached(priority: .userInitiated) {
+            ImageDownsampler.loadThumbnail(from: url, maxPixelSize: maxPixelSize)
+        }.value
+    }
 }
 
 struct CachedPhotoImage: View {
@@ -74,6 +88,7 @@ struct CachedPhotoImage: View {
     /// When true, shows a centered spinner while the cache read is in flight.
     var showsLoadingSpinner = false
 
+    @EnvironmentObject private var store: GalleryStore
     @StateObject private var model = PhotoImageModel()
 
     var body: some View {
@@ -97,12 +112,26 @@ struct CachedPhotoImage: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear { model.load(photoID: photoID, maxPixelSize: maxPixelSize) }
+        .onAppear {
+            model.load(
+                photoID: photoID,
+                maxPixelSize: maxPixelSize,
+                ensureCached: { await store.ensurePhotoCached(photoID: photoID) }
+            )
+        }
         .onChange(of: photoID) { _, newID in
-            model.load(photoID: newID, maxPixelSize: maxPixelSize)
+            model.load(
+                photoID: newID,
+                maxPixelSize: maxPixelSize,
+                ensureCached: { await store.ensurePhotoCached(photoID: newID) }
+            )
         }
         .onChange(of: maxPixelSize) { _, newSize in
-            model.load(photoID: photoID, maxPixelSize: newSize)
+            model.load(
+                photoID: photoID,
+                maxPixelSize: newSize,
+                ensureCached: { await store.ensurePhotoCached(photoID: photoID) }
+            )
         }
     }
 

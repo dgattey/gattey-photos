@@ -145,7 +145,8 @@ public struct SyncClient: Sendable {
             path: "/api/gallery/order",
             method: "PUT",
             body: encoded,
-            contentType: "application/json"
+            contentType: "application/json",
+            context: "reorder \(order.count) photos"
         )
         guard let decoded = try? JSONDecoder().decode(GalleryResponse.self, from: data) else {
             throw SyncError.decode
@@ -214,15 +215,39 @@ public struct SyncClient: Sendable {
         return decoded.devices
     }
 
+    public func cachePhotoIfMissing(_ photo: PhotoEntry) async throws {
+        let dest = AppConfig.cacheURL(for: photo.id)
+        if FileManager.default.fileExists(atPath: dest.path) { return }
+        var req = URLRequest(url: imageURL(for: photo))
+        req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
+        let (data, res) = try await session.data(for: req)
+        guard let http = res as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            let code = (res as? HTTPURLResponse)?.statusCode ?? -1
+            throw SyncError.http(SyncHTTPFailure(
+                statusCode: code,
+                method: "GET",
+                url: req.url?.absoluteString ?? baseURL.absoluteString,
+                responseBody: "image download failed",
+                context: "cache photo \(photo.id)"
+            ))
+        }
+        try data.write(to: dest, options: .atomic)
+    }
+
     public func downloadMissing(for state: GalleryState) async throws {
         for photo in state.activePhotos() {
-            let dest = AppConfig.cacheURL(for: photo.id)
-            if FileManager.default.fileExists(atPath: dest.path) { continue }
-            var req = URLRequest(url: imageURL(for: photo))
-            req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
-            let (data, res) = try await session.data(for: req)
-            guard let http = res as? HTTPURLResponse, (200...299).contains(http.statusCode) else { continue }
-            try data.write(to: dest, options: .atomic)
+            do {
+                try await cachePhotoIfMissing(photo)
+            } catch {
+                await MainActor.run {
+                    ActivityLogStore.shared.log(
+                        .gallery,
+                        level: .warning,
+                        "Could not cache photo from server",
+                        detail: "\(photo.id): \(error.localizedDescription)"
+                    )
+                }
+            }
         }
     }
 }
