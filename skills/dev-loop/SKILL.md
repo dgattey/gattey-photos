@@ -103,6 +103,22 @@ Starts the server (`start-server.sh`), packages the app, writes `repo-root.txt`,
 1. Restart server first (`stop-server.sh` then `start-server.sh`)
 2. Relaunch app (`launch.sh macos` or `package-macos.sh`)
 
+## Before `git push`
+
+Run the full gate (same as GitHub Actions `verify` workflow):
+
+```bash
+./scripts/verify.sh
+```
+
+One-time hook install (blocks push when checks fail):
+
+```bash
+./scripts/install-git-hooks.sh
+```
+
+`verify.sh` runs: `swift test` (macos), `npm run typecheck`, `npm run test`, `npm run build` (server).
+
 ## Agent checklist
 
 | Touched | Before task end (this turn) |
@@ -110,5 +126,6 @@ Starts the server (`start-server.sh`), packages the app, writes `repo-root.txt`,
 | `macos/` only | `./scripts/launch.sh macos` from repo root — required even if build succeeded |
 | `server/` only (runtime) | `stop-server.sh` + `start-server.sh`, then `cd server && npm run typecheck` |
 | Both | Server restart, then `./scripts/launch.sh macos` |
+| Before push | `./scripts/verify.sh` — required; do not claim deploy-safe without a green build |
 
 Never batch several macOS UI tweaks without a relaunch between them when the user is actively iterating.

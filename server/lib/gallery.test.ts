@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { renameUploader, renameUploaderApplied } from "./gallery.ts";
-import { emptyGalleryUpdatedAt, touchGallery } from "./gallery-mutation.ts";
-import type { GalleryState } from "./types.ts";
+import { renameUploader, renameUploaderApplied } from "./gallery";
+import { emptyGalleryUpdatedAt, touchGallery } from "./gallery-mutation";
+import type { GalleryState } from "./types";
 
 function photo(id: string, uploadedBy: string) {
   return {

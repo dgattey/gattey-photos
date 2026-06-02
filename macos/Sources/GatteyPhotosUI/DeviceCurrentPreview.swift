@@ -3,11 +3,10 @@ import SwiftUI
 
 /// Left column: large preview of the photo on the Bloomin8 device; drop target to set current.
 struct DeviceCurrentPreview: View {
+    @Environment(AppChromeState.self) private var chrome
     @EnvironmentObject private var store: GalleryStore
     @State private var isDropTargeted = false
     #if os(macOS)
-    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
-    @State private var previewHoverTilt = DevicePreviewHoverTiltAngles()
     @State private var isPreviewHovered = false
     #endif
 
@@ -74,7 +73,7 @@ struct DeviceCurrentPreview: View {
         #if os(macOS)
             .onChange(of: store.currentPhoto?.id) { _, _ in
                 if store.currentPhoto == nil {
-                    resetPreviewHoverTilt()
+                    chrome.resetDevicePreviewHoverTilt()
                     isPreviewHovered = false
                 }
             }
@@ -83,10 +82,6 @@ struct DeviceCurrentPreview: View {
 
     @ViewBuilder
     private func framedDevice(screenWidth: CGFloat) -> some View {
-        #if os(macOS)
-        let hoverTiltEnabled = store.currentPhoto != nil && !accessibilityReduceMotion
-        #endif
-
         DevicePreviewFramed(screenWidth: screenWidth, screenAspectRatio: screenAspectRatio) {
             deviceScreenContent
                 #if os(macOS)
@@ -99,12 +94,12 @@ struct DeviceCurrentPreview: View {
         }
         #if os(macOS)
         .rotation3DEffect(
-            .degrees(previewHoverTilt.yaw),
+            .degrees(chrome.devicePreviewHoverTilt.yaw),
             axis: (x: 0, y: 1, z: 0),
             perspective: DevicePreviewHoverTilt.perspective
         )
         .rotation3DEffect(
-            .degrees(previewHoverTilt.pitch),
+            .degrees(chrome.devicePreviewHoverTilt.pitch),
             axis: (x: 1, y: 0, z: 0),
             perspective: DevicePreviewHoverTilt.perspective
         )
@@ -118,10 +113,6 @@ struct DeviceCurrentPreview: View {
                     Task { await store.uploadFiles(urls: urls) }
                     return true
                 },
-                onPointerMove: hoverTiltEnabled
-                    ? { point, size in updatePreviewHoverTilt(pointer: point, in: size) }
-                    : nil,
-                onPointerExit: hoverTiltEnabled ? resetPreviewHoverTilt : nil,
                 isTargeted: $isDropTargeted
             )
         }
@@ -195,39 +186,4 @@ struct DeviceCurrentPreview: View {
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-
-    #if os(macOS)
-    private func updatePreviewHoverTilt(pointer: CGPoint, in size: CGSize) {
-        guard size.width > 0, size.height > 0 else { return }
-        let nx = (pointer.x / size.width - 0.5) * 2
-        let ny = (pointer.y / size.height - 0.5) * 2
-        let yaw = nx * DevicePreviewHoverTilt.maxYawDegrees
-        let pitch = -ny * DevicePreviewHoverTilt.maxPitchDegrees
-        withAnimation(.interactiveSpring(response: 0.28, dampingFraction: 0.82)) {
-            previewHoverTilt.yaw = yaw
-            previewHoverTilt.pitch = pitch
-        }
-    }
-
-    private func resetPreviewHoverTilt() {
-        withAnimation(.interactiveSpring(response: 0.4, dampingFraction: 0.9)) {
-            previewHoverTilt = DevicePreviewHoverTiltAngles()
-        }
-    }
-    #endif
 }
-
-#if os(macOS)
-private struct DevicePreviewHoverTiltAngles: Equatable {
-    var yaw: Double = 0
-    var pitch: Double = 0
-}
-
-private enum DevicePreviewHoverTilt {
-    /// Horizontal follow (cursor left/right).
-    static let maxYawDegrees: Double = 3
-    /// Vertical follow (cursor up/down).
-    static let maxPitchDegrees: Double = 2.5
-    static let perspective: CGFloat = 0.8
-}
-#endif

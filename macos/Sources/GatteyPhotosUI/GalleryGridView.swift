@@ -73,6 +73,7 @@ struct GalleryGridView: View {
         #if os(macOS)
         .modifier(GalleryMacOSToolbarChrome())
         .modifier(GalleryMacOSToolbarTitleRemoval())
+        .galleryMacOSToolbarScrollEdge()
         #endif
         #if os(macOS)
         // Fallback for chrome outside the grid; populated grids use AppKit targets (see thumbnailGridColumn).
@@ -187,6 +188,7 @@ struct GalleryGridView: View {
                 .scrollContentBackground(.hidden)
                 #if os(macOS)
                 .galleryMacOSGridScrollEdgeEffect()
+                .contentMargins(.top, 1, for: .scrollContent)
                 #endif
             }
 
@@ -685,7 +687,7 @@ private final class PhotoGridClickNSView: NSView, NSDraggingSource {
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        let fileURLs = GalleryFilePasteboard.urls(from: sender)
+        let fileURLs = GalleryFilePasteboard.uploadURLs(from: sender)
         if !fileURLs.isEmpty {
             onFileDropTargeted?(true)
             return .copy
@@ -696,7 +698,7 @@ private final class PhotoGridClickNSView: NSView, NSDraggingSource {
     }
 
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
-        let fileURLs = GalleryFilePasteboard.urls(from: sender)
+        let fileURLs = GalleryFilePasteboard.uploadURLs(from: sender)
         if !fileURLs.isEmpty {
             onFileDropTargeted?(true)
             return .copy
@@ -713,12 +715,12 @@ private final class PhotoGridClickNSView: NSView, NSDraggingSource {
     }
 
     override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        !GalleryFilePasteboard.urls(from: sender).isEmpty
+        !GalleryFilePasteboard.uploadURLs(from: sender).isEmpty
             || PhotoDragPasteboard.photoID(from: sender) != nil
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        let fileURLs = GalleryFilePasteboard.urls(from: sender)
+        let fileURLs = GalleryFilePasteboard.uploadURLs(from: sender)
         if !fileURLs.isEmpty {
             onFileDropTargeted?(false)
             return onFileDrop?(fileURLs) ?? false
@@ -839,14 +841,29 @@ private struct GalleryMacOSToolbarActionButtonStyle: ViewModifier {
 #endif
 
 #if os(macOS)
-/// Transparent unified toolbar (Photos-style); legibility from `.scrollEdgeEffectStyle` on the grid `ScrollView`.
+/// Unified toolbar material (requires `applyGatteyPhotosGalleryChrome` — not transparent titlebar).
 private struct GalleryMacOSToolbarChrome: ViewModifier {
     func body(content: Content) -> some View {
-        content.toolbarBackground(.hidden, for: .windowToolbar)
+        if #available(macOS 15.0, *) {
+            content
+                .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
+                .toolbarBackground(.regularMaterial, for: .windowToolbar)
+        } else {
+            content.toolbarBackground(.regularMaterial, for: .windowToolbar)
+        }
     }
 }
 
 private extension View {
+    @ViewBuilder
+    func galleryMacOSToolbarScrollEdge() -> some View {
+        if #available(macOS 26.0, *) {
+            scrollEdgeEffectStyle(.soft, for: .top)
+        } else {
+            self
+        }
+    }
+
     @ViewBuilder
     func galleryMacOSGridScrollEdgeEffect() -> some View {
         if #available(macOS 26.0, *) {

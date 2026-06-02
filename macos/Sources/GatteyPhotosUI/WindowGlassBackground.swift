@@ -91,7 +91,11 @@ struct WindowChromeConfigurator: NSViewRepresentable {
 
     private static func apply(unlocked: Bool, to window: NSWindow?) {
         guard let window else { return }
-        window.applyGatteyPhotosGlassChrome()
+        if unlocked {
+            window.applyGatteyPhotosGalleryChrome()
+        } else {
+            window.applyGatteyPhotosUnlockChrome()
+        }
         window.subtitle = ""
         if unlocked {
             // Custom leading toolbar title only — non-empty window.title duplicates in unified toolbar.
@@ -123,21 +127,38 @@ struct TransparentWindowConfigurator: NSViewRepresentable {
     }
 
     private static func apply(to window: NSWindow?) {
-        window?.applyGatteyPhotosGlassChrome()
+        window?.applyGatteyPhotosUnlockChrome()
     }
 }
 
 public extension NSWindow {
-    /// Translucent titlebar + clear window background (Sudylko glass). Safe to call repeatedly when SwiftUI resets chrome.
-    func applyGatteyPhotosGlassChrome() {
-        titlebarAppearsTransparent = true
+    /// Gallery: content under unified toolbar; system draws toolbar/titlebar material + scroll edge.
+    func applyGatteyPhotosGalleryChrome() {
         styleMask.insert(.fullSizeContentView)
         isMovableByWindowBackground = true
         isOpaque = false
         backgroundColor = .clear
         hasShadow = true
-        titlebarSeparatorStyle = .none
         toolbarStyle = .unified
+        titlebarAppearsTransparent = false
+        titlebarSeparatorStyle = .automatic
+    }
+
+    /// Unlock / launch: full glass titlebar (no toolbar items).
+    func applyGatteyPhotosUnlockChrome() {
+        styleMask.insert(.fullSizeContentView)
+        isMovableByWindowBackground = true
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = true
+        toolbarStyle = .unified
+        titlebarAppearsTransparent = true
+        titlebarSeparatorStyle = .none
+    }
+
+    /// @deprecated Use `applyGatteyPhotosGalleryChrome` or `applyGatteyPhotosUnlockChrome`.
+    func applyGatteyPhotosGlassChrome() {
+        applyGatteyPhotosUnlockChrome()
     }
 
     /// Hides the centered title label SwiftUI/unified toolbar injects beside the traffic lights.

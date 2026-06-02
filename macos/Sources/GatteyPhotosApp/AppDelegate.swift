@@ -8,7 +8,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         LegacySyncLaunchAgent.uninstallIfPresent()
-        configureGlassWindows()
         observeExtraWindows()
         DispatchQueue.main.async { [weak self] in
             self?.enforceSingleMainWindow()
@@ -35,13 +34,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         enforceSingleMainWindow()
         return true
-    }
-
-    /// Ensures windows created before SwiftUI mounts still get translucent chrome.
-    private func configureGlassWindows() {
-        for window in NSApp.windows {
-            window.applyGatteyPhotosGlassChrome()
-        }
     }
 
     private func observeExtraWindows() {

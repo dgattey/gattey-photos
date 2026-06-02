@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { storageErrorResponse } from "./api-error.ts";
-import { ManifestUpdateConflictError } from "./manifest-errors.ts";
+import { storageErrorResponse } from "./api-error";
+import { ManifestUpdateConflictError } from "./manifest-errors";
 
 describe("storageErrorResponse", () => {
   it("maps missing blob credentials to 503 with setup hint", async () => {

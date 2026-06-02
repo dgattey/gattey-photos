@@ -27,9 +27,6 @@ final class GalleryFileDropNSView: NSView {
     var onDrop: (([URL]) -> Bool)?
     var onTargetedChange: ((Bool) -> Void)?
 
-    /// `hitTest` returns `nil` for mouse so taps reach SwiftUI; set while a file drag is over so drops register.
-    private var isFileDragHovering = false
-
     override var isFlipped: Bool { true }
 
     override init(frame frameRect: NSRect) {
@@ -42,34 +39,38 @@ final class GalleryFileDropNSView: NSView {
         registerForDraggedTypes(GalleryFilePasteboard.draggedTypes)
     }
 
+    /// Pass primary mouse clicks to SwiftUI above; accept Finder drags (nil `currentEvent` during drag hit-test).
     override func hitTest(_ point: NSPoint) -> NSView? {
-        isFileDragHovering ? self : nil
+        switch NSApp.currentEvent?.type {
+        case .leftMouseDown, .leftMouseUp, .leftMouseDragged,
+             .rightMouseDown, .rightMouseUp, .rightMouseDragged:
+            return nil
+        default:
+            return self
+        }
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        guard !GalleryFilePasteboard.urls(from: sender).isEmpty else { return [] }
-        isFileDragHovering = true
+        guard !GalleryFilePasteboard.uploadURLs(from: sender).isEmpty else { return [] }
         onTargetedChange?(true)
         return .copy
     }
 
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
-        GalleryFilePasteboard.urls(from: sender).isEmpty ? [] : .copy
+        GalleryFilePasteboard.uploadURLs(from: sender).isEmpty ? [] : .copy
     }
 
     override func draggingExited(_ sender: NSDraggingInfo?) {
-        isFileDragHovering = false
         onTargetedChange?(false)
     }
 
     override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        !GalleryFilePasteboard.urls(from: sender).isEmpty
+        !GalleryFilePasteboard.uploadURLs(from: sender).isEmpty
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        let urls = GalleryFilePasteboard.urls(from: sender)
+        let urls = GalleryFilePasteboard.uploadURLs(from: sender)
         guard !urls.isEmpty else { return false }
-        isFileDragHovering = false
         onTargetedChange?(false)
         return onDrop?(urls) ?? false
     }

@@ -81,7 +81,6 @@ struct RootView: View {
         GalleryGridView()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(WindowGlassBackground())
-        .background(TransparentWindowConfigurator())
         .task {
             if store.activePhotos.isEmpty {
                 store.markAwaitingInitialGalleryPull()

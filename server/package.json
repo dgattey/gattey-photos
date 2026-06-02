@@ -6,7 +6,7 @@
     "build": "next build",
     "start": "next start --port 3000",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test lib/auth.test.ts lib/api-error.test.ts lib/gallery.test.ts"
+    "test": "tsx --test lib/auth.test.ts lib/api-error.test.ts lib/gallery.test.ts"
   },
   "dependencies": {
     "@vercel/blob": "^2.4.0",
@@ -22,6 +22,7 @@
     "@types/node": "^22.13.0",
     "@types/react": "19.2.15",
     "@types/uuid": "^10.0.0",
+    "tsx": "^4.19.4",
     "typescript": "^5.8.0"
   }
 }

@@ -621,14 +621,19 @@ public final class GalleryStore: ObservableObject {
             log.log(.gallery, level: .warning, "Upload skipped", detail: "Unlock the gallery first")
             return
         }
-        guard !urls.isEmpty else {
+        #if os(macOS)
+        let uploads = urls.filter { GalleryFilePasteboard.isUploadableImageFile($0) }
+        #else
+        let uploads = urls
+        #endif
+        guard !uploads.isEmpty else {
             log.log(.gallery, level: .warning, "Upload skipped", detail: "No supported image files in drop")
             return
         }
-        log.log(.gallery, level: .info, "Uploading \(urls.count) file(s)")
+        log.log(.gallery, level: .info, "Uploading \(uploads.count) file(s)")
         await run(label: "Upload", category: .gallery) {
             let client = try makeSyncClient()
-            for (index, url) in urls.enumerated() {
+            for (index, url) in uploads.enumerated() {
                 let accessed = url.startAccessingSecurityScopedResource()
                 defer {
                     if accessed {
@@ -638,7 +643,7 @@ public final class GalleryStore: ObservableObject {
                 let data = try PhotoCacheJPEG.normalizedJPEGData(fromFileURL: url)
                 let name = url.lastPathComponent
                 let beforeIDs = Set(state.activePhotos().map(\.id))
-                let isLast = index == urls.count - 1
+                let isLast = index == uploads.count - 1
                 try await mutateGallery(
                     client: client,
                     downloadMissing: isLast

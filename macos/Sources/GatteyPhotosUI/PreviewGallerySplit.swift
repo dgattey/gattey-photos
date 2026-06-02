@@ -5,6 +5,7 @@ import SwiftUI
 /// Fixed split between device preview and thumbnail grid (intrinsic preview width).
 struct PreviewGallerySplit<Right: View>: View {
     @Environment(AppChromeState.self) private var chrome
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @EnvironmentObject private var store: GalleryStore
     @ViewBuilder var right: () -> Right
 
@@ -30,6 +31,9 @@ struct PreviewGallerySplit<Right: View>: View {
         let showPreview = chrome.showDevicePreview
         let leftW = showPreview ? intrinsicLeftW : 0
 
+        let tiltTrackingEnabled =
+            showPreview && store.currentPhoto != nil && !accessibilityReduceMotion
+
         HStack(alignment: .top, spacing: 0) {
             if showPreview {
                 DeviceCurrentPreview()
@@ -40,6 +44,18 @@ struct PreviewGallerySplit<Right: View>: View {
             right()
                 .padding(.leading, showPreview ? DeviceCurrentPreview.splitColumnGutter : 0)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(width: totalW, height: geo.size.height)
+        .overlay {
+            DevicePreviewTiltMouseTracker(
+                enabled: tiltTrackingEnabled,
+                onMove: { pointer, size in
+                    chrome.setDevicePreviewHoverTilt(pointer: pointer, in: size)
+                },
+                onExit: {
+                    chrome.resetDevicePreviewHoverTilt()
+                }
+            )
         }
     }
 }

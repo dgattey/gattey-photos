@@ -39,6 +39,20 @@ enum GalleryFilePasteboard {
         return []
     }
 
+    static func uploadURLs(from info: NSDraggingInfo) -> [URL] {
+        urls(from: info).filter(isUploadableImageFile)
+    }
+
+    static func isUploadableImageFile(_ url: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
+              !isDirectory.boolValue
+        else { return false }
+        let ext = url.pathExtension.lowercased()
+        if ext.isEmpty { return true }
+        return ["jpg", "jpeg", "heic", "heif", "png", "tif", "tiff", "gif", "webp"].contains(ext)
+    }
+
     private static func writeImageDataToTemporaryFile(from pb: NSPasteboard) -> URL? {
         let imageTypes: [NSPasteboard.PasteboardType] = [
             NSPasteboard.PasteboardType(UTType.jpeg.identifier),

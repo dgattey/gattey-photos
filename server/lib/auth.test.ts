@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { mintSessionToken, verifySessionToken } from "./auth.ts";
+import { mintSessionToken, verifySessionToken } from "./auth";
 
 describe("session tokens", () => {
   const secret = "test-family-password";

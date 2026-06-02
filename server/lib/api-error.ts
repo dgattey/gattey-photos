@@ -19,7 +19,7 @@ import { buildGalleryResponse } from "./gallery-service";
 import {
   ManifestUpdateConflictError,
   StaleGalleryError,
-} from "./manifest-errors.ts";
+} from "./manifest-errors";
 
 /** Map storage / Blob SDK failures to HTTP status + client-visible message. */
 export async function staleGalleryResponse(
