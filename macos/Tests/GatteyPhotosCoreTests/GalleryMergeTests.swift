@@ -19,6 +19,17 @@ final class GalleryMergeTests: XCTestCase {
         XCTAssertEqual(merged.version, 5)
     }
 
+    func testApplyingActiveDisplayOrderBumpsVersion() {
+        var state = Self.state(
+            version: 2,
+            order: ["a", "b"],
+            photos: Self.activePhotos(ids: ["a", "b"])
+        )
+        state = state.applyingActiveDisplayOrder(["b", "a"])
+        XCTAssertEqual(state.order.filter { state.photos[$0]?.isDeleted == false }, ["b", "a"])
+        XCTAssertEqual(state.version, 3)
+    }
+
     func testUsesRemoteOrderWhenRemoteVersionIsNewer() {
         let local = Self.state(
             version: 3,

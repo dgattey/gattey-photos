@@ -6,6 +6,13 @@ import UniformTypeIdentifiers
 import AppKit
 #endif
 
+/// One gallery mutation at a time (upload vs reorder vs delete).
+private actor GalleryMutationSerial {
+    func perform(_ operation: @MainActor @Sendable () async -> Void) async {
+        await operation()
+    }
+}
+
 @MainActor
 public final class GalleryStore: ObservableObject {
     public init() {}
@@ -39,6 +46,7 @@ public final class GalleryStore: ObservableObject {
     /// While `setAsCurrent` is in flight, skip pull logging for that id (avoids duplicate with "Set as current").
     private var setAsCurrentInFlight: PhotoID?
     private var periodicPullTask: Task<Void, Never>?
+    private let galleryMutationSerial = GalleryMutationSerial()
 
     private enum PullKind {
         case foreground
@@ -228,8 +236,13 @@ public final class GalleryStore: ObservableObject {
 
     private func pullFromServer(kind: PullKind) async {
         guard session?.isUnlocked == true else { return }
-        if kind == .periodic, isBusy {
-            log.log(.sync, level: .info, "Scheduled sync skipped", detail: "Gallery busy")
+        if isBusy {
+            let message = switch kind {
+            case .periodic: "Scheduled sync skipped"
+            case .foreground: "Refresh skipped"
+            case .manual: "Server sync skipped"
+            }
+            log.log(.sync, level: .info, message, detail: "Gallery busy")
             return
         }
 
@@ -679,19 +692,21 @@ public final class GalleryStore: ObservableObject {
         category: LogCategory,
         _ work: () async throws -> Void
     ) async {
-        isBusy = true
-        defer { isBusy = false }
-        do {
-            try await work()
-        } catch {
-            log.log(error: error, category: category, context: "\(label) failed")
-            if shouldLockForSyncError(error) {
-                session?.lockAndClearCaches(store: self)
-            } else {
-                if isTransientServerConnectionError(error) {
-                    markServerUnreachable()
+        await galleryMutationSerial.perform { [label, category] in
+            isBusy = true
+            defer { isBusy = false }
+            do {
+                try await work()
+            } catch {
+                log.log(error: error, category: category, context: "\(label) failed")
+                if shouldLockForSyncError(error) {
+                    session?.lockAndClearCaches(store: self)
+                } else {
+                    if isTransientServerConnectionError(error) {
+                        markServerUnreachable()
+                    }
+                    await updateConnectionStatus()
                 }
-                await updateConnectionStatus()
             }
         }
     }

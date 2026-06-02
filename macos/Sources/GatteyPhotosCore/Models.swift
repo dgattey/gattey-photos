@@ -92,13 +92,17 @@ public struct GalleryState: Codable, Equatable, Sendable {
     }
 
     /// Replaces active display order; soft-deleted ids stay at the end of `order`.
+    /// Bumps `version` when order changes so merge keeps optimistic reorders over stale pulls.
     public func applyingActiveDisplayOrder(_ activeOrder: [PhotoID]) -> GalleryState {
         let tombstones = order.filter { id in
             guard let photo = photos[id] else { return false }
             return photo.isDeleted
         }
+        let newOrder = activeOrder + tombstones.filter { !activeOrder.contains($0) }
+        guard newOrder != order else { return self }
         var next = self
-        next.order = activeOrder + tombstones.filter { !activeOrder.contains($0) }
+        next.order = newOrder
+        next.version = version + 1
         return next
     }
 
