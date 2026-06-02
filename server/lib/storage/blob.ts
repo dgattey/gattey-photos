@@ -1,24 +1,38 @@
 import { list } from "@vercel/blob";
-import type { GalleryState, RawManifest } from "../types";
-import { MANIFEST_PATH, emptyGallery } from "../gallery";
+import type { CurrentManifest, RawCurrent, RawManifest } from "../types";
+import { CURRENT_PATH, MANIFEST_PATH } from "../gallery";
 import { readBlobBytes, writeBlob } from "./blob-access";
 
-/// Manifest is mutable: read from origin (no CDN cache) so a delete/upload is immediately visible
-/// on the next pull instead of resurrecting from a stale cached copy.
+/// Library + current are mutable: read from origin (no CDN cache) so a delete/upload/rotate is
+/// immediately visible on the next pull instead of resurrecting from a stale cached copy.
 export async function readManifest(): Promise<RawManifest> {
   const bytes = await readBlobBytes(MANIFEST_PATH, false);
-  if (!bytes) return emptyGallery();
+  if (!bytes) return {};
   try {
     return JSON.parse(bytes.toString("utf8")) as RawManifest;
   } catch {
-    return emptyGallery();
+    return {};
+  }
+}
+
+export async function readCurrent(): Promise<RawCurrent | null> {
+  const bytes = await readBlobBytes(CURRENT_PATH, false);
+  if (!bytes) return null;
+  try {
+    return JSON.parse(bytes.toString("utf8")) as RawCurrent;
+  } catch {
+    return null;
   }
 }
 
 /// 60s is the minimum cache the SDK allows; combined with origin reads it bounds staleness for any
 /// consumer that does read through the CDN.
-export async function writeManifest(state: GalleryState): Promise<void> {
-  await writeBlob(MANIFEST_PATH, JSON.stringify(state), "application/json", 60);
+export async function writeManifest(library: RawManifest): Promise<void> {
+  await writeBlob(MANIFEST_PATH, JSON.stringify(library), "application/json", 60);
+}
+
+export async function writeCurrent(current: CurrentManifest): Promise<void> {
+  await writeBlob(CURRENT_PATH, JSON.stringify(current), "application/json", 60);
 }
 
 export async function putBytes(blobPath: string, bytes: Buffer): Promise<string> {

@@ -8,6 +8,8 @@ import type {
 } from "./types";
 
 export const MANIFEST_PATH = "gallery/manifest.json";
+/** Small separate blob holding only the currently shown photo (decoupled from the library catalog). */
+export const CURRENT_PATH = "gallery/current.json";
 
 /** Name assigned to photos uploaded before uploader attribution existed. */
 export const LEGACY_UPLOADER_NAME = "Dylan";

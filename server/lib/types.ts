@@ -31,23 +31,28 @@ export type RawPhotoEntry = Omit<PhotoEntry, "uploaderId"> & {
   uploadedBy?: string;
 };
 
-/** Manifest JSON as read from storage, before boundary normalization into `GalleryState`. */
+/**
+ * Library blob JSON (the photo catalog). `currentPhotoId` lives in `CurrentManifest`, not here, so
+ * the cron can rotate the shown photo without rewriting this blob or bumping its `updatedAt`.
+ */
 export interface RawManifest {
   updatedAt?: string;
   order?: PhotoId[];
   photos?: Record<PhotoId, RawPhotoEntry>;
   uploaders?: Record<UploaderId, string>;
-  currentPhotoId?: PhotoId | null;
-  currentPhotoUpdatedBy?: "cron" | "manual" | null;
 }
 
-export interface GalleryPhotoView extends PhotoEntry {
-  downloadUrl: string;
+/** Tiny separate blob for the currently shown photo; the cron and manual "set current" write only this. */
+export interface CurrentManifest {
+  currentPhotoId: PhotoId | null;
+  currentPhotoUpdatedBy: "cron" | "manual" | null;
+  updatedAt: string;
 }
+
+export type RawCurrent = Partial<CurrentManifest>;
 
 export interface GalleryResponse {
   state: GalleryState;
-  photos: GalleryPhotoView[];
 }
 
 export interface RegisteredDevice {

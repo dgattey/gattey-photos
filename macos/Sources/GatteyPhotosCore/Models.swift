@@ -241,7 +241,27 @@ public struct RawManifestPhoto: Decodable, Sendable {
 
 public struct GalleryResponse: Codable, Sendable {
     public var state: GalleryState
-    public var photos: [PhotoEntry]
+
+    public init(state: GalleryState) {
+        self.state = state
+    }
+}
+
+/// Lightweight `/api/gallery/current` payload: just which photo is showing, for cheap polling.
+public struct CurrentPhotoResponse: Codable, Sendable {
+    public var currentPhotoId: PhotoID?
+    public var currentPhotoUpdatedBy: CurrentPhotoUpdatedBy?
+    public var updatedAt: String
+
+    public init(
+        currentPhotoId: PhotoID?,
+        currentPhotoUpdatedBy: CurrentPhotoUpdatedBy?,
+        updatedAt: String
+    ) {
+        self.currentPhotoId = currentPhotoId
+        self.currentPhotoUpdatedBy = currentPhotoUpdatedBy
+        self.updatedAt = updatedAt
+    }
 }
 
 public struct AppSettings: Codable, Sendable {

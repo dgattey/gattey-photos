@@ -19,6 +19,7 @@ final class PhotoImageModel: ObservableObject {
     func load(
         photoID: PhotoID,
         maxPixelSize: Int,
+        thumbnailWidth: Int? = nil,
         ensureCached: (@MainActor () async -> Void)? = nil
     ) {
         if loadedPhotoID == photoID, loadedMaxPixelSize == maxPixelSize,
@@ -34,7 +35,8 @@ final class PhotoImageModel: ObservableObject {
             loadFailed = false
         }
         isLoading = image == nil
-        let url = AppConfig.cacheURL(for: photoID)
+        let url = thumbnailWidth.map { AppConfig.thumbnailCacheURL(for: photoID, width: $0) }
+            ?? AppConfig.cacheURL(for: photoID)
         let requestedID = photoID
         let requestedSize = maxPixelSize
         loadTask = Task {
@@ -87,9 +89,19 @@ struct CachedPhotoImage: View {
     var contentMode: ContentMode = .fill
     /// When true, shows a centered spinner while the cache read is in flight.
     var showsLoadingSpinner = false
+    /// When set, loads a server-resized thumbnail of this width (grid) instead of the full image.
+    var thumbnailWidth: Int? = nil
 
     @EnvironmentObject private var store: GalleryStore
     @StateObject private var model = PhotoImageModel()
+
+    private func ensureCached(_ id: PhotoID) async {
+        if let thumbnailWidth {
+            await store.ensureThumbnailCached(photoID: id, width: thumbnailWidth)
+        } else {
+            await store.ensurePhotoCached(photoID: id)
+        }
+    }
 
     var body: some View {
         Group {
@@ -116,21 +128,24 @@ struct CachedPhotoImage: View {
             model.load(
                 photoID: photoID,
                 maxPixelSize: maxPixelSize,
-                ensureCached: { await store.ensurePhotoCached(photoID: photoID) }
+                thumbnailWidth: thumbnailWidth,
+                ensureCached: { await ensureCached(photoID) }
             )
         }
         .onChange(of: photoID) { _, newID in
             model.load(
                 photoID: newID,
                 maxPixelSize: maxPixelSize,
-                ensureCached: { await store.ensurePhotoCached(photoID: newID) }
+                thumbnailWidth: thumbnailWidth,
+                ensureCached: { await ensureCached(newID) }
             )
         }
         .onChange(of: maxPixelSize) { _, newSize in
             model.load(
                 photoID: photoID,
                 maxPixelSize: newSize,
-                ensureCached: { await store.ensurePhotoCached(photoID: photoID) }
+                thumbnailWidth: thumbnailWidth,
+                ensureCached: { await ensureCached(photoID) }
             )
         }
     }

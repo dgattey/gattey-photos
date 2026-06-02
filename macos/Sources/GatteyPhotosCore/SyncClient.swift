@@ -41,7 +41,6 @@ public enum SyncError: Error, LocalizedError {
 private struct StaleGalleryPayload: Codable {
     var error: String?
     var state: GalleryState
-    var photos: [PhotoEntry]
 }
 
 public struct SyncClient: Sendable {
@@ -69,17 +68,9 @@ public struct SyncClient: Sendable {
         contentType: String? = nil,
         context: String? = nil
     ) async throws -> Data {
-        var url = baseURL
-        url.append(path: path.hasPrefix("/") ? String(path.dropFirst()) : path)
-        var req = URLRequest(url: url)
-        req.httpMethod = method
-        req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
-        if let body {
-            req.httpBody = body
-            if let contentType {
-                req.setValue(contentType, forHTTPHeaderField: "Content-Type")
-            }
-        }
+        var req = makeRequest(path: path, method: method, contentType: contentType)
+        if let body { req.httpBody = body }
+        let url = req.url ?? baseURL
         let (data, res) = try await session.data(for: req)
         guard let http = res as? HTTPURLResponse else {
             throw SyncError.http(SyncHTTPFailure(
@@ -94,7 +85,7 @@ public struct SyncClient: Sendable {
         if http.statusCode == 409,
            let payload = try? JSONDecoder().decode(StaleGalleryPayload.self, from: data)
         {
-            throw SyncError.stale(GalleryResponse(state: payload.state, photos: payload.photos))
+            throw SyncError.stale(GalleryResponse(state: payload.state))
         }
         guard (200...299).contains(http.statusCode) else {
             let text = String(data: data, encoding: .utf8) ?? ""
@@ -110,9 +101,56 @@ public struct SyncClient: Sendable {
         return data
     }
 
-    public func fetchGallery() async throws -> GalleryResponse {
-        let data = try await request(path: "/api/gallery", method: "GET")
+    private func makeRequest(
+        path: String,
+        method: String,
+        contentType: String? = nil
+    ) -> URLRequest {
+        var url = baseURL
+        url.append(path: path.hasPrefix("/") ? String(path.dropFirst()) : path)
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
+        if let contentType {
+            req.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        }
+        return req
+    }
+
+    public enum GalleryFetch: Sendable {
+        case modified(GalleryResponse)
+        case notModified
+    }
+
+    /// Conditional pull: pass the local `updatedAt` as `ifNoneMatch` to get `.notModified` (304) when
+    /// the photo catalog is unchanged, transferring nothing.
+    public func fetchGallery(ifNoneMatch: String? = nil) async throws -> GalleryFetch {
+        var req = makeRequest(path: "/api/gallery", method: "GET")
+        if let ifNoneMatch, !ifNoneMatch.isEmpty {
+            req.setValue("\"\(ifNoneMatch)\"", forHTTPHeaderField: "If-None-Match")
+        }
+        let (data, res) = try await session.data(for: req)
+        guard let http = res as? HTTPURLResponse else { throw SyncError.decode }
+        if http.statusCode == 304 { return .notModified }
+        guard (200...299).contains(http.statusCode) else {
+            throw SyncError.http(SyncHTTPFailure(
+                statusCode: http.statusCode,
+                method: "GET",
+                url: req.url?.absoluteString ?? baseURL.absoluteString,
+                responseBody: String(data: data, encoding: .utf8) ?? "",
+                context: "fetch gallery"
+            ))
+        }
         guard let decoded = try? JSONDecoder().decode(GalleryResponse.self, from: data) else {
+            throw SyncError.decode
+        }
+        return .modified(decoded)
+    }
+
+    /// Cheap poll for the currently shown photo (catches cron rotations without a full catalog pull).
+    public func fetchCurrentPhoto() async throws -> CurrentPhotoResponse {
+        let data = try await request(path: "/api/gallery/current", method: "GET")
+        guard let decoded = try? JSONDecoder().decode(CurrentPhotoResponse.self, from: data) else {
             throw SyncError.decode
         }
         return decoded
@@ -232,11 +270,12 @@ public struct SyncClient: Sendable {
         return decoded
     }
 
-    public func imageURL(for photo: PhotoEntry) -> URL {
-        if let urlString = photo.downloadUrl, let url = URL(string: urlString) {
-            return url
+    public func imageURL(for photo: PhotoEntry, width: Int? = nil) -> URL {
+        var url = baseURL.appending(path: "api/gallery/photos/\(photo.id)/image")
+        if let width {
+            url.append(queryItems: [URLQueryItem(name: "w", value: String(width))])
         }
-        return baseURL.appending(path: "api/gallery/photos/\(photo.id)/image")
+        return url
     }
 
     public func listDevices() async throws -> [RegisteredDevicePublic] {
@@ -279,9 +318,29 @@ public struct SyncClient: Sendable {
     }
 
     public func cachePhotoIfMissing(_ photo: PhotoEntry) async throws {
-        let dest = AppConfig.cacheURL(for: photo.id)
+        try await downloadImageIfMissing(
+            photo,
+            width: nil,
+            to: AppConfig.cacheURL(for: photo.id)
+        )
+    }
+
+    /// Downloads a width-bounded thumbnail variant for the grid (much smaller than the full image).
+    public func cacheThumbnailIfMissing(_ photo: PhotoEntry, width: Int) async throws {
+        try await downloadImageIfMissing(
+            photo,
+            width: width,
+            to: AppConfig.thumbnailCacheURL(for: photo.id, width: width)
+        )
+    }
+
+    private func downloadImageIfMissing(
+        _ photo: PhotoEntry,
+        width: Int?,
+        to dest: URL
+    ) async throws {
         if FileManager.default.fileExists(atPath: dest.path) { return }
-        var req = URLRequest(url: imageURL(for: photo))
+        var req = URLRequest(url: imageURL(for: photo, width: width))
         req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
         let (data, res) = try await session.data(for: req)
         guard let http = res as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
@@ -291,7 +350,7 @@ public struct SyncClient: Sendable {
                 method: "GET",
                 url: req.url?.absoluteString ?? baseURL.absoluteString,
                 responseBody: "image download failed",
-                context: "cache photo \(photo.id)"
+                context: "cache photo \(photo.id)\(width.map { " w=\($0)" } ?? "")"
             ))
         }
         try data.write(to: dest, options: .atomic)

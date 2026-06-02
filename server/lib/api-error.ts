@@ -19,11 +19,12 @@ import { buildGalleryResponse } from "./gallery-service";
 import { StaleGalleryError } from "./manifest-errors";
 
 /** Map storage / Blob SDK failures to HTTP status + client-visible message. */
-export async function staleGalleryResponse(
+export function staleGalleryResponse(
   request: Request,
   err: StaleGalleryError
-): Promise<Response> {
-  const gallery = await buildGalleryResponse(request, err.state);
+): Response {
+  void request;
+  const gallery = buildGalleryResponse(err.state);
   return Response.json(
     { error: "gallery stale", ...gallery },
     { status: 409, headers: { "Cache-Control": "no-store" } }

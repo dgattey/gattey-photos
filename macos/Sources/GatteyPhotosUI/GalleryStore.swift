@@ -140,6 +140,16 @@ public final class GalleryStore: ObservableObject {
         state = next.withResolvedCurrentPhoto()
     }
 
+    /// Apply a cheap current-photo poll without a full catalog pull (cron rotations).
+    private func applyCurrentPhoto(_ current: CurrentPhotoResponse) {
+        guard state.currentPhotoId != current.currentPhotoId else { return }
+        var next = state
+        next.currentPhotoId = current.currentPhotoId
+        next.currentPhotoUpdatedBy = current.currentPhotoUpdatedBy
+        applyState(next)
+        try? AppConfig.saveLocalState(state)
+    }
+
     private func makeSyncClient() throws -> SyncClient {
         try SyncClient(settings: settings)
     }
@@ -149,7 +159,7 @@ public final class GalleryStore: ObservableObject {
         client: SyncClient? = nil,
         downloadMissing: Bool = false
     ) async throws {
-        let next = response.state.mergingDownloadURLs(from: response.photos)
+        let next = response.state
         if downloadMissing {
             let sync = try client ?? makeSyncClient()
             try await sync.downloadMissing(for: next)
@@ -207,6 +217,22 @@ public final class GalleryStore: ObservableObject {
             try await client.cachePhotoIfMissing(photo)
         } catch {
             log.log(error: error, category: .gallery, context: "Cache photo \(photoID)")
+        }
+    }
+
+    /// Ensures a small width-bounded thumbnail is cached for the grid (downloads the resized variant).
+    func ensureThumbnailCached(photoID: PhotoID, width: Int) async {
+        guard session?.isUnlocked == true,
+              let photo = state.photos[photoID],
+              !photo.isDeleted
+        else { return }
+        let cacheURL = AppConfig.thumbnailCacheURL(for: photoID, width: width)
+        if FileManager.default.fileExists(atPath: cacheURL.path) { return }
+        do {
+            let client = try makeSyncClient()
+            try await client.cacheThumbnailIfMissing(photo, width: width)
+        } catch {
+            log.log(error: error, category: .gallery, context: "Cache thumbnail \(photoID)")
         }
     }
 
@@ -433,8 +459,18 @@ public final class GalleryStore: ObservableObject {
         let previousCurrentId = state.currentPhotoId
         do {
             let client = try makeSyncClient()
-            let response = try await client.fetchGallery()
-            try await commit(response, client: client, downloadMissing: true)
+            // Periodic pulls are conditional: 304 when the catalog is unchanged transfers nothing.
+            let conditionalETag = kind == .periodic ? state.updatedAt : nil
+            switch try await client.fetchGallery(ifNoneMatch: conditionalETag) {
+            case .modified(let response):
+                try await commit(response, client: client, downloadMissing: true)
+            case .notModified:
+                break
+            }
+            // Cheap current-photo poll catches cron rotations even when the catalog is unchanged.
+            if let current = try? await client.fetchCurrentPhoto() {
+                applyCurrentPhoto(current)
+            }
             notePullSuccess()
             noteServerOK()
             logPulledCurrentPhotoChange(

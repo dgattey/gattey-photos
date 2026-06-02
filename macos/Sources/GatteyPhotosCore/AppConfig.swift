@@ -85,4 +85,9 @@ public enum AppConfig {
     public static func cacheURL(for photoID: PhotoID) -> URL {
         cacheFolder.appendingPathComponent("\(photoID).jpg")
     }
+
+    /// Cache path for a width-bounded thumbnail variant (grid). Distinct from the full-size cache.
+    public static func thumbnailCacheURL(for photoID: PhotoID, width: Int) -> URL {
+        cacheFolder.appendingPathComponent("\(photoID)_w\(width).jpg")
+    }
 }

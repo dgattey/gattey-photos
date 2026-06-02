@@ -1,40 +1,46 @@
 import { assertSessionToken } from "@/lib/auth";
-import { jsonApiError, staleGalleryResponse, storageErrorResponse } from "@/lib/api-error";
+import { jsonApiError, storageErrorResponse } from "@/lib/api-error";
 import { setCurrentPhoto } from "@/lib/gallery";
-import { applyGalleryMutation, parseBaseUpdatedAt } from "@/lib/gallery-mutation";
 import { buildGalleryResponse } from "@/lib/gallery-service";
 import { pushCurrentPhotoToAllDevices } from "@/lib/bloomin8/push-gallery";
-import { StaleGalleryError } from "@/lib/manifest-errors";
+import * as storage from "@/lib/storage";
 import type { PhotoId } from "@/lib/types";
 
+/** Cheap poll: only the currently shown photo, so clients catch cron rotations without a full pull. */
+export async function GET(request: Request) {
+  const auth = await assertSessionToken(request);
+  if (auth) return auth;
+  const current = await storage.readCurrent();
+  return Response.json(current, { headers: { "Cache-Control": "no-store" } });
+}
+
+/**
+ * Set the shown photo. Writes only `current.json` (last-write-wins with the cron), so it never
+ * rewrites the photo catalog or bumps its version.
+ */
 export async function PUT(request: Request) {
   const auth = await assertSessionToken(request);
   if (auth) return auth;
 
-  const body = (await request.json()) as {
-    photoId?: PhotoId;
-    baseUpdatedAt?: unknown;
-  };
+  const body = (await request.json()) as { photoId?: PhotoId };
   if (!body.photoId || typeof body.photoId !== "string") {
     return jsonApiError(400, "photoId required");
   }
-  const base = parseBaseUpdatedAt(body.baseUpdatedAt);
-  if (base instanceof Response) return base;
 
   try {
-    const saved = await applyGalleryMutation(base, (state) =>
-      setCurrentPhoto(state, body.photoId!)
-    );
-    if (saved.currentPhotoId !== body.photoId) {
+    const state = await storage.readManifest();
+    const next = setCurrentPhoto(state, body.photoId);
+    if (next.currentPhotoId !== body.photoId) {
       return jsonApiError(400, "photo not active");
     }
-    await pushCurrentPhotoToAllDevices(saved);
-    const gallery = await buildGalleryResponse(request, saved);
-    return Response.json(gallery);
+    await storage.writeCurrent({
+      currentPhotoId: next.currentPhotoId ?? null,
+      currentPhotoUpdatedBy: "manual",
+      updatedAt: new Date().toISOString(),
+    });
+    await pushCurrentPhotoToAllDevices(next);
+    return Response.json(buildGalleryResponse(next));
   } catch (err) {
-    if (err instanceof StaleGalleryError) {
-      return staleGalleryResponse(request, err);
-    }
     return storageErrorResponse(err, "[gallery current]");
   }
 }

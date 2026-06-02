@@ -1,7 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
-import type { GalleryState, RawManifest } from "../types";
-import { MANIFEST_PATH, emptyGallery } from "../gallery";
+import type { CurrentManifest, RawCurrent, RawManifest } from "../types";
+import { CURRENT_PATH, MANIFEST_PATH } from "../gallery";
 
 const root = () => path.join(process.cwd(), ".data");
 
@@ -15,14 +15,30 @@ export async function readManifest(): Promise<RawManifest> {
     const raw = await fs.readFile(file, "utf8");
     return JSON.parse(raw) as RawManifest;
   } catch {
-    return emptyGallery();
+    return {};
   }
 }
 
-export async function writeManifest(state: GalleryState): Promise<void> {
+export async function readCurrent(): Promise<RawCurrent | null> {
+  const file = path.join(root(), CURRENT_PATH);
+  try {
+    const raw = await fs.readFile(file, "utf8");
+    return JSON.parse(raw) as RawCurrent;
+  } catch {
+    return null;
+  }
+}
+
+export async function writeManifest(library: RawManifest): Promise<void> {
   const file = path.join(root(), MANIFEST_PATH);
   await ensureDir(file);
-  await fs.writeFile(file, JSON.stringify(state, null, 2), "utf8");
+  await fs.writeFile(file, JSON.stringify(library, null, 2), "utf8");
+}
+
+export async function writeCurrent(current: CurrentManifest): Promise<void> {
+  const file = path.join(root(), CURRENT_PATH);
+  await ensureDir(file);
+  await fs.writeFile(file, JSON.stringify(current, null, 2), "utf8");
 }
 
 export async function putBytes(blobPath: string, bytes: Buffer): Promise<void> {

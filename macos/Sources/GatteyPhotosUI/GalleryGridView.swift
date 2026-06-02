@@ -1129,8 +1129,13 @@ struct PhotoThumb: View {
             .aspectRatio(thumbAspectRatio, contentMode: .fit)
             .frame(maxWidth: .infinity)
             .overlay {
-                CachedPhotoImage(photoID: photo.id, maxPixelSize: thumbMaxPixelSize, contentMode: .fill)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                CachedPhotoImage(
+                    photoID: photo.id,
+                    maxPixelSize: thumbMaxPixelSize,
+                    contentMode: .fill,
+                    thumbnailWidth: thumbMaxPixelSize
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .clipped()
     }

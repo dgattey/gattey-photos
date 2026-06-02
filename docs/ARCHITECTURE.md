@@ -28,13 +28,31 @@ interface GalleryState {
 
 Legacy manifests may still store `uploadedBy` on photos without `uploaderId`; reads coalesce each distinct name to a deterministic id and fill `uploaders`. New uploads register the client’s `uploadedBy` form field via `ensureUploaderId` and persist `uploaderId` on the photo only.
 
-Clients cache JPEG bytes under `~/Library/Application Support/GatteyPhotos/cache/{id}.jpg` (macOS) or the app container on iOS.
+Clients cache JPEG bytes under `~/Library/Application Support/GatteyPhotos/cache/{id}.jpg` (full) and `{id}_w{width}.jpg` (grid thumbnails) on macOS, or the app container on iOS.
+
+## Storage layout (two blobs)
+
+`GalleryState` is assembled at read time from two blobs so the frequently-rotated current photo never rewrites the catalog:
+
+- `gallery/manifest.json` — the catalog: `updatedAt`, `order`, `photos`, `uploaders`. Written only by upload / delete / reorder / rename.
+- `gallery/current.json` — `{ currentPhotoId, currentPhotoUpdatedBy, updatedAt }`. Written only by the cron rotate and manual "set current".
+
+Both are read from origin (`useCache: false`) for read-after-write consistency, written with a 60s max cache. `storage.readManifest()` merges them and validates `currentPhotoId` against the active order.
 
 ## Sync (timestamp concurrency)
 
-Every gallery mutation (upload, delete, reorder, set current, rename uploader) is a single atomic server write. The client sends `baseUpdatedAt` (the `updatedAt` it last saw). If the on-disk manifest is **newer** than `baseUpdatedAt`, the server responds **409** with the current gallery; the client applies that state and retries the same intent with the new timestamp (up to a few attempts).
+Catalog mutations (upload, delete, reorder, rename uploader) are single atomic catalog writes. The client sends `baseUpdatedAt` (the `updatedAt` it last saw). If the catalog is **newer**, the server responds **409** with the current gallery; the client applies that state and retries (up to a few attempts). Setting the current photo is last-write-wins against the cron and writes only `current.json`.
 
-Pulls (`GET /api/gallery`) replace local state entirely — no merge. Failed pulls use exponential backoff so periodic sync does not hammer an unreachable server.
+Pulls replace local state, no merge. Two cheap pull paths:
+
+- `GET /api/gallery` is conditional: it returns an `ETag` of the catalog `updatedAt` and `304 Not Modified` when the client sends a matching `If-None-Match`, so an unchanged periodic pull transfers nothing.
+- `GET /api/gallery/current` is a tiny payload the client polls to catch cron rotations without a full catalog pull.
+
+The response carries only `state` (no duplicated photos array, no per-photo download URLs); clients build image URLs from the photo id. Failed pulls use exponential backoff.
+
+## Images
+
+`GET /api/gallery/photos/{id}/image` serves the original, or a resized JPEG when given `?w=<width>` (sharp, clamped 64–2048). The grid requests thumbnails at the cell width; the lightbox and device preview use the original.
 
 ## Runtime components
 

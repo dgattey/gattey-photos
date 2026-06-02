@@ -1,10 +1,15 @@
-import { coalesceUploaders, normalizeManifest, resolveCurrentPhoto } from "../gallery";
+import { coalesceUploaders, resolveCurrentPhoto } from "../gallery";
 import { emptyGalleryUpdatedAt } from "../gallery-mutation";
-import type { GalleryState, RawManifest } from "../types";
+import type {
+  CurrentManifest,
+  GalleryState,
+  RawCurrent,
+  RawManifest,
+} from "../types";
 
 const useLocal = () => process.env.GATTEY_LOCAL_STORAGE === "1";
 
-async function readRawManifest(): Promise<RawManifest> {
+async function readLibraryRaw(): Promise<RawManifest> {
   if (useLocal()) {
     const local = await import("./local");
     return local.readManifest();
@@ -13,35 +18,82 @@ async function readRawManifest(): Promise<RawManifest> {
   return blob.readManifest();
 }
 
-function coalesceManifest(raw: RawManifest): GalleryState {
-  const { photos, uploaders } = coalesceUploaders(raw.photos ?? {}, raw.uploaders);
+async function readCurrentRaw(): Promise<RawCurrent | null> {
+  if (useLocal()) {
+    const local = await import("./local");
+    return local.readCurrent();
+  }
+  const blob = await import("./blob");
+  return blob.readCurrent();
+}
+
+/** Merge the library catalog with the separately-stored current photo, then validate current. */
+function assemble(rawLib: RawManifest, rawCurrent: RawCurrent | null): GalleryState {
+  const { photos, uploaders } = coalesceUploaders(rawLib.photos ?? {}, rawLib.uploaders);
   const state: GalleryState = {
-    updatedAt: raw.updatedAt?.trim() || emptyGalleryUpdatedAt(),
-    order: raw.order ?? [],
+    updatedAt: rawLib.updatedAt?.trim() || emptyGalleryUpdatedAt(),
+    order: rawLib.order ?? [],
     photos,
     uploaders,
-    currentPhotoId: raw.currentPhotoId ?? null,
-    currentPhotoUpdatedBy: raw.currentPhotoUpdatedBy,
+    currentPhotoId: rawCurrent?.currentPhotoId ?? null,
+    currentPhotoUpdatedBy: rawCurrent?.currentPhotoUpdatedBy ?? null,
   };
   return resolveCurrentPhoto(state).state;
 }
 
-/** Read manifest from storage; normalize in memory only (no read-time writes). */
+/** Assembled gallery (library catalog + current photo). Reads from origin, no CDN cache. */
 export async function readManifest(): Promise<GalleryState> {
-  return coalesceManifest(await readRawManifest());
+  const [lib, current] = await Promise.all([readLibraryRaw(), readCurrentRaw()]);
+  return assemble(lib, current);
 }
 
-/** Persist manifest after normalization; returns the stored state (API responses must use this). */
+/** Just the currently shown photo (cheap poll). Falls back to the assembled state until first write. */
+export async function readCurrent(): Promise<CurrentManifest> {
+  const raw = await readCurrentRaw();
+  if (raw && raw.currentPhotoId !== undefined) {
+    return {
+      currentPhotoId: raw.currentPhotoId ?? null,
+      currentPhotoUpdatedBy: raw.currentPhotoUpdatedBy ?? null,
+      updatedAt: raw.updatedAt?.trim() || emptyGalleryUpdatedAt(),
+    };
+  }
+  const state = await readManifest();
+  return {
+    currentPhotoId: state.currentPhotoId ?? null,
+    currentPhotoUpdatedBy: state.currentPhotoUpdatedBy ?? null,
+    updatedAt: state.updatedAt,
+  };
+}
+
+/** Persist the library catalog only; `currentPhotoId` is owned by `writeCurrent`. Returns assembled state. */
 export async function writeManifest(state: GalleryState): Promise<GalleryState> {
-  const normalized = normalizeManifest(state);
+  const { photos, uploaders } = coalesceUploaders(state.photos, state.uploaders);
+  const library: RawManifest = {
+    updatedAt: state.updatedAt,
+    order: state.order,
+    photos,
+    uploaders,
+  };
   if (useLocal()) {
     const local = await import("./local");
-    await local.writeManifest(normalized);
-    return normalized;
+    await local.writeManifest(library);
+  } else {
+    const blob = await import("./blob");
+    await blob.writeManifest(library);
   }
-  const blob = await import("./blob");
-  await blob.writeManifest(normalized);
-  return normalized;
+  return resolveCurrentPhoto({ ...state, photos, uploaders }).state;
+}
+
+/** Persist only the currently shown photo (cron rotate / manual set). */
+export async function writeCurrent(current: CurrentManifest): Promise<CurrentManifest> {
+  if (useLocal()) {
+    const local = await import("./local");
+    await local.writeCurrent(current);
+  } else {
+    const blob = await import("./blob");
+    await blob.writeCurrent(current);
+  }
+  return current;
 }
 
 export async function putPhotoBytes(

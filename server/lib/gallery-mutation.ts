@@ -60,7 +60,7 @@ export async function respondGalleryMutation(
 ): Promise<Response> {
   try {
     const saved = await applyGalleryMutation(baseUpdatedAt, update);
-    const gallery = await buildGalleryResponse(request, saved);
+    const gallery = buildGalleryResponse(saved);
     const headers: Record<string, string> = {};
     if (init.cacheControl) headers["Cache-Control"] = init.cacheControl;
     return Response.json(gallery, { status: init.status ?? 200, headers });
