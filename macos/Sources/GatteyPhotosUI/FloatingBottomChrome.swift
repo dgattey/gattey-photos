@@ -14,6 +14,7 @@ struct BottomFloatingChrome<Content: View>: View {
 
     var body: some View {
         content()
+            .fixedSize(horizontal: true, vertical: false)
             .frame(maxWidth: BottomFloatingChromeMetrics.actionBarMaxWidth)
             .frame(maxWidth: .infinity)
             .padding(.horizontal, BottomFloatingChromeMetrics.horizontalInset)
@@ -26,15 +27,14 @@ struct FloatingActionBarStyle: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         content
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
             .background {
-                FloatingGlassPanelBackground(cornerRadius: 12)
+                FloatingGlassPanelBackground(capsule: true)
             }
             .compositingGroup()
-            .clipShape(shape)
+            .clipShape(Capsule())
             .shadow(color: .black.opacity(colorScheme == .dark ? 0.22 : 0.10), radius: 10, y: 3)
     }
 }

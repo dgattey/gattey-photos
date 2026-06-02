@@ -21,7 +21,9 @@ After **each** edit session that touches `macos/` (every agent turn with macOS c
 ./scripts/launch.sh macos
 ```
 
-Do **not** treat the task as done until this has run for that session’s macOS edits. Agents must not skip relaunch.
+**Never end a macOS UI task without running this.** Do **not** treat the task as done until `launch.sh macos` has run in the same turn for that session’s macOS edits. Agents must not skip relaunch.
+
+**Never ask the user to relaunch as primary verification.** Do not end with “run `./scripts/launch.sh macos` when you can” or “please rebuild to check the UI” instead of running the script yourself. Manual relaunch is only for when the user is driving iteration outside an agent turn.
 
 - **One relaunch per macOS change batch** — if you edited `macos/` in this turn, relaunch before ending the turn.
 - **Active UI iteration** — when the user is tuning SwiftUI or visual behavior, do **not** stack multiple macOS edits and relaunch once at the end. Relaunch after each logical UI change so they can verify in a fresh process.
@@ -123,7 +125,7 @@ One-time hook install (blocks push when checks fail):
 
 | Touched | Before task end (this turn) |
 |---------|-----------------------------|
-| `macos/` only | `./scripts/launch.sh macos` from repo root — required even if build succeeded |
+| `macos/` only | `./scripts/launch.sh macos` from repo root — required even if build succeeded; run it yourself, never delegate relaunch to the user |
 | `server/` only (runtime) | `stop-server.sh` + `start-server.sh`, then `cd server && npm run typecheck` |
 | Both | Server restart, then `./scripts/launch.sh macos` |
 | Before push | `./scripts/verify.sh` — required; do not claim deploy-safe without a green build |

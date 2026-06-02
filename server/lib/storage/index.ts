@@ -1,10 +1,10 @@
-import { normalizeManifest } from "../gallery";
+import { coalesceUploaders, normalizeManifest, resolveCurrentPhoto } from "../gallery";
 import { emptyGalleryUpdatedAt } from "../gallery-mutation";
-import type { GalleryState } from "../types";
+import type { GalleryState, RawManifest } from "../types";
 
 const useLocal = () => process.env.GATTEY_LOCAL_STORAGE === "1";
 
-async function readRawManifest(): Promise<GalleryState> {
+async function readRawManifest(): Promise<RawManifest> {
   if (useLocal()) {
     const local = await import("./local");
     return local.readManifest();
@@ -13,26 +13,27 @@ async function readRawManifest(): Promise<GalleryState> {
   return blob.readManifest();
 }
 
-export async function readManifest(): Promise<GalleryState> {
-  const raw = await readRawManifest();
-  let state: GalleryState = {
+function coalesceManifest(raw: RawManifest): GalleryState {
+  const { photos, uploaders } = coalesceUploaders(raw.photos ?? {}, raw.uploaders);
+  const state: GalleryState = {
     updatedAt: raw.updatedAt?.trim() || emptyGalleryUpdatedAt(),
     order: raw.order ?? [],
-    photos: raw.photos ?? {},
+    photos,
+    uploaders,
     currentPhotoId: raw.currentPhotoId ?? null,
     currentPhotoUpdatedBy: raw.currentPhotoUpdatedBy,
   };
-  const { state: normalized, dirty: normalizedDirty } = normalizeManifest(state);
-  state = normalized;
-  if (normalizedDirty) {
-    return writeManifest(state);
-  }
-  return state;
+  return resolveCurrentPhoto(state).state;
+}
+
+/** Read manifest from storage; normalize in memory only (no read-time writes). */
+export async function readManifest(): Promise<GalleryState> {
+  return coalesceManifest(await readRawManifest());
 }
 
 /** Persist manifest after normalization; returns the stored state (API responses must use this). */
 export async function writeManifest(state: GalleryState): Promise<GalleryState> {
-  const { state: normalized } = normalizeManifest(state);
+  const normalized = normalizeManifest(state);
   if (useLocal()) {
     const local = await import("./local");
     await local.writeManifest(normalized);

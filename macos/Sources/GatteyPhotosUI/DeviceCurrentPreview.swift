@@ -25,6 +25,23 @@ struct DeviceCurrentPreview: View {
     }
 
     var body: some View {
+        #if os(macOS)
+        VStack(alignment: .leading, spacing: PreviewPaneLayout.macOSPanePaddingLeading) {
+            Text("Gattey Photos")
+                .font(AppTypography.primaryTitle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, PreviewPaneLayout.macOSPanePaddingLeading)
+                .padding(.top, PreviewPaneLayout.macOSPanePaddingVertical)
+
+            previewGeometry
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        #else
+        previewGeometry
+        #endif
+    }
+
+    private var previewGeometry: some View {
         GeometryReader { geo in
             let screenW = screenWidth(in: geo.size)
             let framedSize = DevicePreviewChrome.framedDimensions(
@@ -35,10 +52,9 @@ struct DeviceCurrentPreview: View {
             framedPreview(screenWidth: screenW)
                 .frame(width: framedSize.width, alignment: .topLeading)
             #if os(macOS)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
             .padding(.leading, PreviewPaneLayout.macOSPanePaddingLeading)
-            .padding(.trailing, PreviewPaneLayout.macOSPanePaddingTrailing)
-            .padding(.vertical, PreviewPaneLayout.macOSPanePaddingVertical)
+            .padding(.bottom, PreviewPaneLayout.macOSPanePaddingLeading)
             #else
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(panePadding)
@@ -50,7 +66,7 @@ struct DeviceCurrentPreview: View {
     /// Width-first in the macOS split column (pane width is intrinsic from height); height-first on iOS.
     private func screenWidth(in geoSize: CGSize) -> CGFloat {
         #if os(macOS)
-        let usableH = max(0, geoSize.height - PreviewPaneLayout.macOSPaneVerticalPadding)
+        let usableH = max(0, geoSize.height - PreviewPaneLayout.macOSPanePaddingLeading)
         let available = CGSize(
             width: max(0, geoSize.width - PreviewPaneLayout.macOSPaneHorizontalPadding),
             height: usableH > 1 ? usableH : .greatestFiniteMagnitude
@@ -137,7 +153,6 @@ struct DeviceCurrentPreview: View {
     #if os(macOS)
     @ViewBuilder
     private func devicePreviewHoverBadge(for photo: PhotoEntry) -> some View {
-        let cornerTag = store.showingTag(for: photo.id)
         Text(store.devicePreviewCaption(for: photo))
             .font(AppTypography.devicePreviewHoverBadge)
             .foregroundStyle(.white)
@@ -145,7 +160,7 @@ struct DeviceCurrentPreview: View {
             .multilineTextAlignment(.trailing)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(cornerTag == "Showing today" ? Color.black : AppBrandColor.accentGreen)
+            .background(Color.black)
             .padding(10)
     }
     #endif

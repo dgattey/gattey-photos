@@ -16,10 +16,7 @@ function blobAccessHint(): string {
 }
 
 import { buildGalleryResponse } from "./gallery-service";
-import {
-  ManifestUpdateConflictError,
-  StaleGalleryError,
-} from "./manifest-errors";
+import { StaleGalleryError } from "./manifest-errors";
 
 /** Map storage / Blob SDK failures to HTTP status + client-visible message. */
 export async function staleGalleryResponse(
@@ -37,14 +34,6 @@ export function storageErrorResponse(
   err: unknown,
   logPrefix: string
 ): Response {
-  if (err instanceof ManifestUpdateConflictError) {
-    console.error(logPrefix, err.message);
-    return jsonApiError(
-      503,
-      "Gallery manifest busy; retry upload in a moment"
-    );
-  }
-
   const name = err instanceof Error ? err.name : "";
   const message =
     err instanceof Error && err.message.trim().length > 0

@@ -100,15 +100,24 @@ public final class GalleryStore: ObservableObject {
     }
 
     func showingTag(for photoID: PhotoID) -> String? {
+        // "Showing for today" follows the server's live current photo, not the local schedule:
+        // the cron can advance after local midnight, so a predicted slot may not be live yet.
+        if state.currentPhotoId == photoID {
+            return PhotoFormatters.showingTodayTag
+        }
         guard let date = rotationPlan?.showingStartByPhotoID[photoID] else { return nil }
-        return PhotoFormatters.showingTag(start: date)
+        return PhotoFormatters.showingStartDate(date)
     }
 
     func devicePreviewCaption(for photo: PhotoEntry) -> String {
         if let until = rotationPlan?.currentShowingUntil, state.currentPhotoId == photo.id {
-            return PhotoFormatters.addedByUntilFriendly(photo: photo, until: until)
+            return PhotoFormatters.addedByUntilFriendly(
+                photo: photo,
+                until: until,
+                uploaders: state.uploaders
+            )
         }
-        return PhotoFormatters.addedBy(photo)
+        return PhotoFormatters.addedBy(photo, uploaders: state.uploaders)
     }
 
     /// Lightbox secondary line when this photo is the device current (rotation end date).
@@ -739,38 +748,58 @@ public final class GalleryStore: ObservableObject {
 
     /// Full-size JPEG: macOS → Downloads folder; iOS → share sheet with temp file.
     func downloadPhoto(photoID: PhotoID) async {
-        guard let photo = state.photos[photoID] else { return }
-        await downloadPhoto(photo)
+        await downloadPhotos(ids: [photoID])
     }
 
     func downloadPhoto(_ photo: PhotoEntry) async {
-        guard session?.isUnlocked == true else { return }
-        log.log(.gallery, level: .info, "Download photo", detail: photo.filename)
-        await run(label: "Download", category: .gallery) {
-            let jpegData = try await fullSizeJPEGData(for: photo)
-            let filename = Self.downloadFilename(for: photo)
-            #if os(macOS)
-            guard let downloads = FileManager.default.urls(
-                for: .downloadsDirectory,
-                in: .userDomainMask
-            ).first else {
-                throw NSError(
-                    domain: "GatteyPhotos",
-                    code: 1,
-                    userInfo: [NSLocalizedDescriptionKey: "Downloads folder unavailable"]
-                )
+        await downloadPhotos(ids: [photo.id])
+    }
+
+    func downloadPhotos(ids: Set<PhotoID>) async {
+        guard session?.isUnlocked == true, !ids.isEmpty else { return }
+        let orderedIDs = state.order.filter { ids.contains($0) }
+        let trailing = ids.subtracting(orderedIDs)
+        let photos = (orderedIDs + trailing.sorted()).compactMap { state.photos[$0] }
+        guard !photos.isEmpty else { return }
+        let count = photos.count
+        log.log(
+            .gallery,
+            level: .info,
+            count == 1 ? "Download photo" : "Downloading \(count) photos",
+            detail: count == 1 ? photos[0].filename : "count=\(count)"
+        )
+        let label = count == 1 ? "Download" : "Download (\(count))"
+        await run(label: label, category: .gallery) {
+            for photo in photos {
+                try await writeFullSizeJPEGDownload(for: photo)
             }
-            let dest = Self.uniqueFileURL(in: downloads, filename: filename)
-            try jpegData.write(to: dest, options: .atomic)
-            log.log(.gallery, level: .success, "Saved to Downloads", detail: dest.lastPathComponent)
-            #else
-            let temp = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
-            try? FileManager.default.removeItem(at: temp)
-            try jpegData.write(to: temp, options: .atomic)
-            photoShareItem = PhotoShareItem(url: temp)
-            log.log(.gallery, level: .success, "Ready to share", detail: filename)
-            #endif
         }
+    }
+
+    private func writeFullSizeJPEGDownload(for photo: PhotoEntry) async throws {
+        let jpegData = try await fullSizeJPEGData(for: photo)
+        let filename = Self.downloadFilename(for: photo)
+        #if os(macOS)
+        guard let downloads = FileManager.default.urls(
+            for: .downloadsDirectory,
+            in: .userDomainMask
+        ).first else {
+            throw NSError(
+                domain: "GatteyPhotos",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Downloads folder unavailable"]
+            )
+        }
+        let dest = Self.uniqueFileURL(in: downloads, filename: filename)
+        try jpegData.write(to: dest, options: .atomic)
+        log.log(.gallery, level: .success, "Saved to Downloads", detail: dest.lastPathComponent)
+        #else
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        try? FileManager.default.removeItem(at: temp)
+        try jpegData.write(to: temp, options: .atomic)
+        photoShareItem = PhotoShareItem(url: temp)
+        log.log(.gallery, level: .success, "Ready to share", detail: filename)
+        #endif
     }
 
     #if os(iOS)

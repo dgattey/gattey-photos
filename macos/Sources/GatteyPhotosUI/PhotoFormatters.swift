@@ -48,19 +48,19 @@ enum PhotoFormatters {
         return "Last push \(display.string(from: date))"
     }
 
-    static func addedBy(_ photo: PhotoEntry) -> String {
-        let raw = photo.uploadedBy?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let name = raw.isEmpty ? "Dylan" : raw
+    static func addedBy(_ photo: PhotoEntry, uploaders: [UploaderID: String]) -> String {
+        let raw = uploaders[photo.uploaderId]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let name = raw.isEmpty ? legacyUploaderDisplayName : raw
         return "Added by \(name)"
     }
 
-    static func showingTag(start: Date, calendar: Calendar = .current) -> String {
-        let startDay = calendar.startOfDay(for: start)
-        let today = calendar.startOfDay(for: Date())
-        if startDay == today {
-            return "Showing today"
-        }
-        return showingShort.string(from: start)
+    /// Corner badge text for the photo the server is currently showing (shared so grid styling can't drift).
+    static let showingTodayTag = "Showing for today"
+
+    /// Upcoming slot start date for a non-current photo. Date only; the live current photo uses
+    /// `showingTodayTag` instead, since the schedule can predict a slot before the cron actually advances.
+    static func showingStartDate(_ start: Date) -> String {
+        showingShort.string(from: start)
     }
 
     static func showingUntil(_ until: Date) -> String {
@@ -68,8 +68,13 @@ enum PhotoFormatters {
     }
 
     /// Device preview hover: `Added by Dylan / until tomorrow` (single line, `/` separator).
-    static func addedByUntilFriendly(photo: PhotoEntry, until: Date, calendar: Calendar = .current) -> String {
-        "\(addedBy(photo)) / \(untilFriendlyPhrase(until: until, calendar: calendar))"
+    static func addedByUntilFriendly(
+        photo: PhotoEntry,
+        until: Date,
+        uploaders: [UploaderID: String],
+        calendar: Calendar = .current
+    ) -> String {
+        "\(addedBy(photo, uploaders: uploaders)) / \(untilFriendlyPhrase(until: until, calendar: calendar))"
     }
 
     private static func untilFriendlyPhrase(until: Date, calendar: Calendar) -> String {

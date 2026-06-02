@@ -5,15 +5,24 @@ import SwiftUI
 /// Translucent blur + light brand wash for bottom-floating action bars.
 struct FloatingGlassPanelBackground: View {
     var cornerRadius: CGFloat = 12
+    /// Pill panel for gallery selection chrome; default is rounded rect for other callers.
+    var capsule: Bool = false
     @Environment(\.colorScheme) private var colorScheme
 
-    private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+    var body: some View {
+        if capsule {
+            glassPanel(in: Capsule())
+        } else {
+            glassPanel(
+                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
+        }
     }
 
-    var body: some View {
+    @ViewBuilder
+    private func glassPanel<S: InsettableShape>(in shape: S) -> some View {
         ZStack {
-            floatingMaterialLayer
+            floatingMaterialLayer(in: shape)
             shape
                 .fill(AppBrandColor.glassTint(for: colorScheme))
                 .opacity(Self.brandWashOpacity)
@@ -21,7 +30,7 @@ struct FloatingGlassPanelBackground: View {
     }
 
     @ViewBuilder
-    private var floatingMaterialLayer: some View {
+    private func floatingMaterialLayer<S: InsettableShape>(in shape: S) -> some View {
         if #available(macOS 26.0, iOS 26.0, *) {
             shape
                 .fill(.clear)

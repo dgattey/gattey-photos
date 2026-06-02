@@ -10,12 +10,12 @@ struct GlassVibrancyBackground: View {
     var body: some View {
         ZStack {
             GlassVibrancyRepresentable(
-                material: .underWindowBackground,
+                material: .sidebar,
                 blendingMode: .behindWindow,
                 colorScheme: colorScheme
             )
             AppBrandColor.glassTint(for: colorScheme)
-                .opacity(AppBrandColor.glassTintOpacity)
+                .opacity(AppBrandColor.glassTintOpacity * 0.5)
         }
     }
 }
@@ -132,19 +132,19 @@ struct TransparentWindowConfigurator: NSViewRepresentable {
 }
 
 public extension NSWindow {
-    /// Gallery: unified toolbar host for macOS 26 Liquid Glass + `scrollEdgeEffectStyle` on the grid.
-    /// `titlebarAppearsTransparent = true` lets the toolbar render as Liquid Glass over the content instead of
-    /// a solid titlebar slab; the full-window `PushedDetailBackground` (`.withinWindow`) fills under the toolbar,
-    /// so the glass samples app content (no desktop bleed). Do not force a toolbar background on 26+.
+    /// Gallery: translucent, borderless toolbar. `titlebarAppearsTransparent = true` removes the system
+    /// toolbar background bar; `isOpaque = false` + clear background let the `WindowGlassBackground`
+    /// vibrancy (and desktop) show through the whole window. The scroll edge is faked with a top
+    /// `VariableBlurView` strip in the gallery, since the real effect needs the system toolbar bar.
     func applyGatteyPhotosGalleryChrome() {
         styleMask.insert(.fullSizeContentView)
-        isMovableByWindowBackground = true
+        isMovableByWindowBackground = false
         isOpaque = false
         backgroundColor = .clear
         hasShadow = true
         toolbarStyle = .unified
         titlebarAppearsTransparent = true
-        titlebarSeparatorStyle = .automatic
+        titlebarSeparatorStyle = .none
     }
 
     /// Unlock / launch: full glass titlebar (no toolbar items).

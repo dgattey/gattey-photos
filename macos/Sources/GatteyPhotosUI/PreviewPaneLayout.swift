@@ -8,8 +8,14 @@ enum PreviewPaneLayout {
     static let macOSPanePaddingTrailing: CGFloat = 12
     static let macOSPanePaddingVertical: CGFloat = 20
 
+    /// Vertical space the "Gattey Photos" title block (serif title + its top padding + VStack spacing)
+    /// takes above the framed preview. Subtracted from pane height so the intrinsic pane width matches
+    /// the height-constrained preview and leaves no trailing gap.
+    static let macOSTitleBlockHeight: CGFloat = 54
+
+    /// Leading inset only around title + framed preview; trailing sits flush against the grid gutter.
     static var macOSPaneHorizontalPadding: CGFloat {
-        macOSPanePaddingLeading + macOSPanePaddingTrailing
+        macOSPanePaddingLeading
     }
 
     static var macOSPaneVerticalPadding: CGFloat {
@@ -56,7 +62,7 @@ enum PreviewPaneLayout {
         contentHeight: CGFloat,
         screenAspectRatio: CGFloat
     ) -> CGFloat {
-        let availableH = max(0, contentHeight - macOSPaneVerticalPadding)
+        let availableH = max(0, contentHeight - macOSPaneVerticalPadding - macOSTitleBlockHeight)
         let screenW = DevicePreviewChrome.screenWidth(
             for: CGSize(width: .greatestFiniteMagnitude, height: availableH),
             screenAspectRatio: screenAspectRatio

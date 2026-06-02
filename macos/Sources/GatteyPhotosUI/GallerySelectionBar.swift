@@ -25,10 +25,9 @@ struct GallerySelectionBar: View {
     }
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 12) {
             Text(selectionLabel)
                 .font(AppTypography.sectionTitle)
-            Spacer()
             if let id = singleSelectedID {
                 Button("Show for today") {
                     Task { await store.setAsCurrent(photoID: id) }

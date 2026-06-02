@@ -35,7 +35,6 @@ export async function DELETE(request: Request, { params }: Params) {
     request,
     "[gallery delete]",
     base,
-    (state) => softDelete(state, id) ?? state,
-    (state) => state.photos[id]?.deletedAt != null
+    (state) => softDelete(state, id) ?? state
   );
 }

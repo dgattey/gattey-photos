@@ -1,9 +1,15 @@
 import { emptyGalleryUpdatedAt } from "./gallery-mutation";
-import type { GalleryState, PhotoEntry, PhotoId } from "./types";
+import type {
+  GalleryState,
+  PhotoEntry,
+  PhotoId,
+  RawPhotoEntry,
+  UploaderId,
+} from "./types";
 
 export const MANIFEST_PATH = "gallery/manifest.json";
 
-/** Backfill value for manifest entries written before uploader attribution. */
+/** Name assigned to photos uploaded before uploader attribution existed. */
 export const LEGACY_UPLOADER_NAME = "Dylan";
 
 export function emptyGallery(): GalleryState {
@@ -11,7 +17,73 @@ export function emptyGallery(): GalleryState {
     updatedAt: emptyGalleryUpdatedAt(),
     order: [],
     photos: {},
+    uploaders: {},
     currentPhotoId: null,
+  };
+}
+
+/**
+ * Deterministic uploader id for a pre-uploaderId display name. Stable across reads so
+ * in-memory normalization yields the same id every pull until a write bakes it in.
+ */
+export function legacyUploaderId(name: string): UploaderId {
+  const s = name.trim() || LEGACY_UPLOADER_NAME;
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return `u-${(h >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+/**
+ * Parse raw manifest photos into id-keyed entries plus the uploaders map. Photos written before
+ * uploader ids carry a `uploadedBy` string; collapse each distinct name to one deterministic id.
+ */
+export function coalesceUploaders(
+  rawPhotos: Record<PhotoId, RawPhotoEntry>,
+  rawUploaders: Record<UploaderId, string> | undefined
+): { photos: Record<PhotoId, PhotoEntry>; uploaders: Record<UploaderId, string> } {
+  const uploaders: Record<UploaderId, string> = { ...(rawUploaders ?? {}) };
+  const photos: Record<PhotoId, PhotoEntry> = {};
+  for (const [id, raw] of Object.entries(rawPhotos)) {
+    let uploaderId = raw.uploaderId;
+    if (!uploaderId) {
+      const name = (raw.uploadedBy ?? "").trim() || LEGACY_UPLOADER_NAME;
+      uploaderId = legacyUploaderId(name);
+      if (!uploaders[uploaderId]) uploaders[uploaderId] = name;
+    } else if (!uploaders[uploaderId]) {
+      uploaders[uploaderId] = (raw.uploadedBy ?? "").trim() || LEGACY_UPLOADER_NAME;
+    }
+    photos[id] = {
+      id: raw.id,
+      filename: raw.filename,
+      blobPath: raw.blobPath,
+      sizeBytes: raw.sizeBytes,
+      updatedAt: raw.updatedAt,
+      deletedAt: raw.deletedAt,
+      uploaderId,
+    };
+  }
+  return { photos, uploaders };
+}
+
+/**
+ * Find the uploader id already mapped to `name`, or register `newId` for it. Keeps one id per
+ * display name so a person's uploads share an id and a single rename covers them all.
+ */
+export function ensureUploaderId(
+  state: GalleryState,
+  name: string,
+  newId: UploaderId
+): { state: GalleryState; uploaderId: UploaderId } {
+  const trimmed = name.trim() || LEGACY_UPLOADER_NAME;
+  for (const [id, mapped] of Object.entries(state.uploaders)) {
+    if (mapped === trimmed) return { state, uploaderId: id };
+  }
+  return {
+    state: { ...state, uploaders: { ...state.uploaders, [newId]: trimmed } },
+    uploaderId: newId,
   };
 }
 
@@ -147,32 +219,13 @@ export function resolveCurrentPhoto(state: GalleryState): {
   return { state: { ...state, currentPhotoId: active[0]! }, dirty: true };
 }
 
-/** Backfill `uploadedBy` and repair `currentPhotoId`; returns whether persistence is needed. */
-export function normalizeManifest(state: GalleryState): {
-  state: GalleryState;
-  dirty: boolean;
-} {
-  let next = state;
-  let dirty = false;
-  const photos = { ...next.photos };
-  for (const id of Object.keys(photos)) {
-    const photo = photos[id]!;
-    if (!photo.uploadedBy) {
-      photos[id] = { ...photo, uploadedBy: LEGACY_UPLOADER_NAME };
-      dirty = true;
-    }
-  }
-  if (dirty) {
-    next = { ...next, photos };
-  }
-  const resolved = resolveCurrentPhoto(next);
-  return {
-    state: resolved.state,
-    dirty: dirty || resolved.dirty,
-  };
+/** Collapse legacy uploaders into the map and repair `currentPhotoId` before storage. */
+export function normalizeManifest(state: GalleryState): GalleryState {
+  const { photos, uploaders } = coalesceUploaders(state.photos, state.uploaders);
+  return resolveCurrentPhoto({ ...state, photos, uploaders }).state;
 }
 
-/** Rewrite `uploadedBy` on all entries that exactly match `fromName` (settings rename). */
+/** Point every uploader id named `fromName` at `toName` (settings rename). One map write; photos untouched. */
 export function renameUploader(
   state: GalleryState,
   fromName: string,
@@ -183,26 +236,25 @@ export function renameUploader(
   if (!from || !to || from === to) return state;
 
   let dirty = false;
-  const photos = { ...state.photos };
-  const now = new Date().toISOString();
-  for (const id of Object.keys(photos)) {
-    const photo = photos[id]!;
-    if (photo.uploadedBy === from) {
-      photos[id] = { ...photo, uploadedBy: to, updatedAt: now };
+  const uploaders = { ...state.uploaders };
+  for (const id of Object.keys(uploaders)) {
+    if (uploaders[id] === from) {
+      uploaders[id] = to;
       dirty = true;
     }
   }
   if (!dirty) return state;
-  return { ...state, photos };
+  return { ...state, uploaders };
 }
 
+/** True once no uploader id still maps to `fromName` (manifest-write visibility check). */
 export function renameUploaderApplied(
   state: GalleryState,
   fromName: string
 ): boolean {
   const from = fromName.trim();
   if (!from) return true;
-  return !Object.values(state.photos).some((p) => p.uploadedBy === from);
+  return !Object.values(state.uploaders).some((name) => name === from);
 }
 
 export function upsertPhoto(state: GalleryState, entry: PhotoEntry): GalleryState {

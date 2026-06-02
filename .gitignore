@@ -22,3 +22,4 @@ macos/AppIcon.icns
 .dev-advance-cron.pid
 .dev-advance-cron.log
 *.tsbuildinfo
+.chrome-verify/

@@ -80,7 +80,8 @@ struct RootView: View {
     private var galleryRoot: some View {
         GalleryGridView()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(WindowGlassBackground())
+            // Translucent brand glass; the top VariableBlurView strip fakes the scroll edge.
+            .background(WindowGlassBackground())
         .task {
             if store.activePhotos.isEmpty {
                 store.markAwaitingInitialGalleryPull()

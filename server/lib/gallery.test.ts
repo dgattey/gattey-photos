@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { renameUploader, renameUploaderApplied } from "./gallery";
+import {
+  coalesceUploaders,
+  legacyUploaderId,
+  renameUploader,
+} from "./gallery";
 import { emptyGalleryUpdatedAt, touchGallery } from "./gallery-mutation";
-import type { GalleryState } from "./types";
+import type { GalleryState, RawPhotoEntry } from "./types";
 
-function photo(id: string, uploadedBy: string) {
+function photo(id: string, uploaderId: string) {
   return {
     id,
     filename: `${id}.jpg`,
@@ -12,25 +16,32 @@ function photo(id: string, uploadedBy: string) {
     sizeBytes: 1,
     updatedAt: "2020-01-01T00:00:00.000Z",
     deletedAt: null,
-    uploadedBy,
+    uploaderId,
   };
 }
 
 describe("renameUploader", () => {
+  const alexId = legacyUploaderId("Alex");
+  const samId = legacyUploaderId("Sam");
   const base: GalleryState = {
     updatedAt: "2024-01-01T00:00:00.000Z",
     order: ["a", "b"],
     photos: {
-      a: photo("a", "Alex"),
-      b: photo("b", "Sam"),
+      a: photo("a", alexId),
+      b: photo("b", samId),
+    },
+    uploaders: {
+      [alexId]: "Alex",
+      [samId]: "Sam",
     },
     currentPhotoId: "a",
   };
 
-  it("updates matching entries", () => {
+  it("updates matching uploader names in the map", () => {
     const next = renameUploader(base, "Alex", "Alexander");
-    assert.equal(next.photos.a!.uploadedBy, "Alexander");
-    assert.equal(next.photos.b!.uploadedBy, "Sam");
+    assert.equal(next.uploaders[alexId], "Alexander");
+    assert.equal(next.photos.a!.uploaderId, alexId);
+    assert.equal(next.uploaders[samId], "Sam");
     assert.equal(next.updatedAt, base.updatedAt);
   });
 
@@ -38,10 +49,43 @@ describe("renameUploader", () => {
     assert.equal(renameUploader(base, "Alex", "Alex"), base);
     assert.equal(renameUploader(base, "", "X"), base);
   });
+});
 
-  it("renameUploaderApplied reflects remaining old names", () => {
-    assert.equal(renameUploaderApplied(base, "Alex"), false);
-    assert.equal(renameUploaderApplied(renameUploader(base, "Alex", "A"), "Alex"), true);
+describe("coalesceUploaders", () => {
+  it("derives uploader ids from legacy uploadedBy strings", () => {
+    const raw: Record<string, RawPhotoEntry> = {
+      a: {
+        id: "a",
+        filename: "a.jpg",
+        blobPath: "photos/a.jpg",
+        sizeBytes: 1,
+        updatedAt: "2020-01-01T00:00:00.000Z",
+        deletedAt: null,
+        uploadedBy: "Alex",
+      },
+    };
+    const { photos, uploaders } = coalesceUploaders(raw, undefined);
+    const alexId = legacyUploaderId("Alex");
+    assert.equal(photos.a!.uploaderId, alexId);
+    assert.equal(uploaders[alexId], "Alex");
+  });
+
+  it("fills missing map entries for existing uploader ids", () => {
+    const uid = legacyUploaderId("Sam");
+    const raw: Record<string, RawPhotoEntry> = {
+      b: {
+        id: "b",
+        filename: "b.jpg",
+        blobPath: "photos/b.jpg",
+        sizeBytes: 1,
+        updatedAt: "2020-01-01T00:00:00.000Z",
+        deletedAt: null,
+        uploaderId: uid,
+        uploadedBy: "Sam",
+      },
+    };
+    const { uploaders } = coalesceUploaders(raw, {});
+    assert.equal(uploaders[uid], "Sam");
   });
 });
 
@@ -51,6 +95,7 @@ describe("gallery mutation", () => {
       updatedAt: "2024-01-01T00:00:00.000Z",
       order: [],
       photos: {},
+      uploaders: {},
     };
     const newer = touchGallery(older);
     assert.ok(newer.updatedAt > older.updatedAt);

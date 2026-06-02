@@ -1,13 +1,13 @@
 import { list } from "@vercel/blob";
-import type { GalleryState } from "../types";
+import type { GalleryState, RawManifest } from "../types";
 import { MANIFEST_PATH, emptyGallery } from "../gallery";
 import { readBlobBytes, writeBlob } from "./blob-access";
 
-export async function readManifest(): Promise<GalleryState> {
+export async function readManifest(): Promise<RawManifest> {
   const bytes = await readBlobBytes(MANIFEST_PATH);
   if (!bytes) return emptyGallery();
   try {
-    return JSON.parse(bytes.toString("utf8")) as GalleryState;
+    return JSON.parse(bytes.toString("utf8")) as RawManifest;
   } catch {
     return emptyGallery();
   }

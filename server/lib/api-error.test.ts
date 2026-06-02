@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { storageErrorResponse } from "./api-error";
-import { ManifestUpdateConflictError } from "./manifest-errors";
 
 describe("storageErrorResponse", () => {
   it("maps missing blob credentials to 503 with setup hint", async () => {
@@ -23,15 +22,5 @@ describe("storageErrorResponse", () => {
     assert.equal(res.status, 503);
     const body = (await res.json()) as { error: string };
     assert.match(body.error, /GATTEY_BLOB_ACCESS|access rejected/i);
-  });
-
-  it("maps manifest update conflicts to 503", async () => {
-    const res = storageErrorResponse(
-      new ManifestUpdateConflictError(),
-      "[test]"
-    );
-    assert.equal(res.status, 503);
-    const body = (await res.json()) as { error: string };
-    assert.match(body.error, /retry upload/i);
   });
 });

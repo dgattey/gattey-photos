@@ -1,4 +1,5 @@
 export type PhotoId = string;
+export type UploaderId = string;
 
 export interface PhotoEntry {
   id: PhotoId;
@@ -7,8 +8,8 @@ export interface PhotoEntry {
   sizeBytes: number;
   updatedAt: string;
   deletedAt: string | null;
-  /** Display name of the family member who uploaded this photo. */
-  uploadedBy: string;
+  /** Stable id of the family member who uploaded this; resolves to a name via `GalleryState.uploaders`. */
+  uploaderId: UploaderId;
 }
 
 export interface GalleryState {
@@ -16,9 +17,27 @@ export interface GalleryState {
   updatedAt: string;
   order: PhotoId[];
   photos: Record<PhotoId, PhotoEntry>;
+  /** Uploader id → current display name. Renaming a person updates one entry here, not every photo. */
+  uploaders: Record<UploaderId, string>;
   /** Photo the Bloomin8 device is showing. */
   currentPhotoId?: PhotoId | null;
   /** How `currentPhotoId` last changed (for client activity log on pull). */
+  currentPhotoUpdatedBy?: "cron" | "manual" | null;
+}
+
+/** Manifest photo as read from storage; may carry the pre-uploaderId `uploadedBy` string. */
+export type RawPhotoEntry = Omit<PhotoEntry, "uploaderId"> & {
+  uploaderId?: UploaderId;
+  uploadedBy?: string;
+};
+
+/** Manifest JSON as read from storage, before boundary normalization into `GalleryState`. */
+export interface RawManifest {
+  updatedAt?: string;
+  order?: PhotoId[];
+  photos?: Record<PhotoId, RawPhotoEntry>;
+  uploaders?: Record<UploaderId, string>;
+  currentPhotoId?: PhotoId | null;
   currentPhotoUpdatedBy?: "cron" | "manual" | null;
 }
 

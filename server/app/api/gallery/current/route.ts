@@ -22,10 +22,8 @@ export async function PUT(request: Request) {
   if (base instanceof Response) return base;
 
   try {
-    const saved = await applyGalleryMutation(
-      base,
-      (state) => setCurrentPhoto(state, body.photoId!),
-      (state) => state.currentPhotoId === body.photoId
+    const saved = await applyGalleryMutation(base, (state) =>
+      setCurrentPhoto(state, body.photoId!)
     );
     if (saved.currentPhotoId !== body.photoId) {
       return jsonApiError(400, "photo not active");

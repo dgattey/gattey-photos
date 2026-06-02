@@ -1,7 +1,8 @@
 import { v4 as uuid } from "uuid";
 import { assertSessionToken } from "@/lib/auth";
 import { jsonApiError, storageErrorResponse } from "@/lib/api-error";
-import { upsertPhoto } from "@/lib/gallery";
+import { ensureUploaderId, legacyUploaderId, upsertPhoto } from "@/lib/gallery";
+import type { PhotoEntry } from "@/lib/types";
 import {
   parseBaseUpdatedAt,
   respondGalleryMutation,
@@ -45,24 +46,27 @@ export async function POST(request: Request) {
     await storage.putPhotoBytes(blobPath, bytes);
 
     const now = new Date().toISOString();
-    const entry = {
-      id,
-      filename,
-      blobPath,
-      sizeBytes: bytes.length,
-      updatedAt: now,
-      deletedAt: null,
-      uploadedBy,
-    };
 
     return respondGalleryMutation(
       request,
       "[gallery upload]",
       base,
-      (state) => upsertPhoto(state, entry),
       (state) => {
-        const photo = state.photos[id];
-        return photo != null && photo.deletedAt === null;
+        const { state: withUploader, uploaderId } = ensureUploaderId(
+          state,
+          uploadedBy,
+          legacyUploaderId(uploadedBy)
+        );
+        const entry: PhotoEntry = {
+          id,
+          filename,
+          blobPath,
+          sizeBytes: bytes.length,
+          updatedAt: now,
+          deletedAt: null,
+          uploaderId,
+        };
+        return upsertPhoto(withUploader, entry);
       },
       { status: 201 }
     );

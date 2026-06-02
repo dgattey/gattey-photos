@@ -14,16 +14,19 @@ interface PhotoEntry {
   sizeBytes: number;
   updatedAt: string;    // ISO-8601
   deletedAt: string | null;
-  uploadedBy: string;     // family member display name at upload; legacy entries backfill to "Dylan" on read; `PATCH /api/gallery/uploaders` rewrites matching names when a client saves a new display name in settings
+  uploaderId: string;   // stable id for the family member who uploaded; display name via `uploaders`
 }
 
 interface GalleryState {
   updatedAt: string;      // ISO-8601; bumped on every manifest write (gallery revision)
   order: PhotoId[];       // display order, excludes soft-deleted unless tombstone needed
   photos: Record<PhotoId, PhotoEntry>;
+  uploaders: Record<string, string>;  // uploader id → display name; `PATCH /api/gallery/uploaders` renames one map entry when settings change
   currentPhotoId?: PhotoId | null;  // Bloomin8 display; Bloomin8 upload uses show_now on this id
 }
 ```
+
+Legacy manifests may still store `uploadedBy` on photos without `uploaderId`; reads coalesce each distinct name to a deterministic id and fill `uploaders`. New uploads register the client’s `uploadedBy` form field via `ensureUploaderId` and persist `uploaderId` on the photo only.
 
 Clients cache JPEG bytes under `~/Library/Application Support/GatteyPhotos/cache/{id}.jpg` (macOS) or the app container on iOS.
 

@@ -13,11 +13,7 @@ async function handleAdvance(request: Request) {
   const changed = after.currentPhotoId !== before.currentPhotoId;
 
   const saved = changed
-    ? await applyGalleryMutation(
-        before.updatedAt,
-        () => after,
-        (state) => state.currentPhotoId === after.currentPhotoId
-      )
+    ? await applyGalleryMutation(before.updatedAt, () => after)
     : before;
 
   if (changed) {

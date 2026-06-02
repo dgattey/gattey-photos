@@ -66,8 +66,14 @@ struct GalleryGridView: View {
             )
         }
         #if os(macOS)
-        .modifier(GalleryMacOSToolbarChrome())
         .modifier(GalleryMacOSToolbarTitleRemoval())
+        .overlay(alignment: .top) {
+            VariableBlurView(maxBlurRadius: 4, direction: .blurredTopClearBottom)
+                .frame(height: 68)
+                .frame(maxWidth: .infinity)
+                .ignoresSafeArea(edges: .top)
+                .allowsHitTesting(false)
+        }
         #endif
         #if os(macOS)
         // Fallback for chrome outside the grid; populated grids use AppKit targets (see thumbnailGridColumn).
@@ -324,7 +330,6 @@ private struct ThumbnailGridSelectionChrome: View {
 
 /// Grid layout and gallery list only — does not observe selection (per-cell views do).
 private struct GalleryPhotoGrid: View {
-    @Environment(GallerySelectionStore.self) private var selection
     @EnvironmentObject private var store: GalleryStore
     let gridContainerWidth: CGFloat
     let currentPhotoID: PhotoID?
@@ -371,17 +376,12 @@ private struct GalleryPhotoGrid: View {
         return r > 0 ? min(r, 1) : Bloomin8Screen.defaultAspectRatio
     }
 
-    private var selectionBarBottomPadding: CGFloat {
-        selection.selectedIDs.isEmpty ? 0 : 88
-    }
-
     var body: some View {
         LazyVGrid(columns: gridColumns, spacing: 0) {
             ForEach(Array(store.activePhotos.enumerated()), id: \.element.id) { index, photo in
                 gridItem(index: index, photo: photo)
             }
         }
-        .padding(.bottom, selectionBarBottomPadding)
         .onAppear {
             settledGridWidth = gridContainerWidth
         }
@@ -848,24 +848,6 @@ private struct GalleryMacOSToolbarActionButtonStyle: ViewModifier {
 #endif
 
 #if os(macOS)
-/// macOS 26+: default unified-toolbar Liquid Glass (no `.hidden` / `.regularMaterial` — both block scroll edge).
-/// Pre-26: visible material when scroll edge is unavailable.
-private struct GalleryMacOSToolbarChrome: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
-            // No forced toolbar background: a visible/opaque background overrides Liquid Glass and
-            // suppresses the automatic scroll edge effect (WWDC25 "Build a SwiftUI app with the new design").
-            content
-        } else if #available(macOS 15.0, *) {
-            content
-                .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
-                .toolbarBackground(.regularMaterial, for: .windowToolbar)
-        } else {
-            content.toolbarBackground(.regularMaterial, for: .windowToolbar)
-        }
-    }
-}
-
 private extension View {
     /// macOS 26+: soft Liquid Glass scroll edge as the grid scrolls under the unified toolbar.
     @ViewBuilder
@@ -1133,7 +1115,7 @@ struct PhotoThumb: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 4)
-                        .background(cornerTag == "Showing today" ? Color.black : AppBrandColor.accentGreen)
+                        .background(cornerTag == PhotoFormatters.showingTodayTag ? Color.black : AppBrandColor.accentGreen)
                         .padding(6)
                 }
             }

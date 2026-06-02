@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import type { GalleryState } from "../types";
+import type { GalleryState, RawManifest } from "../types";
 import { MANIFEST_PATH, emptyGallery } from "../gallery";
 
 const root = () => path.join(process.cwd(), ".data");
@@ -9,11 +9,11 @@ async function ensureDir(filePath: string) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
 }
 
-export async function readManifest(): Promise<GalleryState> {
+export async function readManifest(): Promise<RawManifest> {
   const file = path.join(root(), MANIFEST_PATH);
   try {
     const raw = await fs.readFile(file, "utf8");
-    return JSON.parse(raw) as GalleryState;
+    return JSON.parse(raw) as RawManifest;
   } catch {
     return emptyGallery();
   }

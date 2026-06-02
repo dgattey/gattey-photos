@@ -24,6 +24,9 @@ struct GatteyPhotosApp: App {
                 }
         }
         .defaultSize(width: 900, height: 600)
+        #if os(macOS)
+        .windowToolbarStyle(.unified)
+        #endif
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandGroup(after: .pasteboard) {

@@ -58,17 +58,9 @@ final class DevicePreviewTiltMouseTrackerNSView: NSView {
     override var isFlipped: Bool { true }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        guard enabled else { return nil }
-        switch NSApp.currentEvent?.type {
-        case .leftMouseDown, .leftMouseUp, .leftMouseDragged,
-             .rightMouseDown, .rightMouseUp, .rightMouseDragged,
-             .scrollWheel, .smartMagnify, .magnify, .swipe, .rotate:
-            return nil
-        case .mouseMoved, .mouseEntered, .mouseExited, .cursorUpdate, .none:
-            return self
-        default:
-            return nil
-        }
+        // Always pass through: tilt uses `NSTrackingArea`, not hit testing. Returning `self` for
+        // mouse-move events blocked SwiftUI `.onHover` on the device preview (hover badge).
+        nil
     }
 
     func syncPointerTrackingAreas() {
@@ -79,6 +71,7 @@ final class DevicePreviewTiltMouseTrackerNSView: NSView {
         let options: NSTrackingArea.Options = [
             .activeInKeyWindow,
             .mouseMoved,
+            .mouseEnteredAndExited,
             .inVisibleRect,
             .enabledDuringMouseDrag,
         ]

@@ -1,6 +1,6 @@
 import { assertSessionToken } from "@/lib/auth";
 import { jsonApiError } from "@/lib/api-error";
-import { renameUploader, renameUploaderApplied } from "@/lib/gallery";
+import { renameUploader } from "@/lib/gallery";
 import {
   parseBaseUpdatedAt,
   respondGalleryMutation,
@@ -32,7 +32,6 @@ export async function PATCH(request: Request) {
     "[gallery uploaders]",
     base,
     (state) => renameUploader(state, fromName, toName),
-    (state) => renameUploaderApplied(state, fromName),
     { cacheControl: "no-store" }
   );
 }

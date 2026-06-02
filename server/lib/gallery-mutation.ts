@@ -1,9 +1,6 @@
 import { buildGalleryResponse } from "./gallery-service";
 import { jsonApiError, staleGalleryResponse, storageErrorResponse } from "./api-error";
-import {
-  ManifestUpdateConflictError,
-  StaleGalleryError,
-} from "./manifest-errors";
+import { StaleGalleryError } from "./manifest-errors";
 import type { GalleryState } from "./types";
 import * as storage from "./storage";
 
@@ -33,29 +30,22 @@ export function parseBaseUpdatedAt(value: unknown): string | Response {
   return value.trim();
 }
 
-/** Atomic manifest write; 409 when `baseUpdatedAt` is older than on disk. */
+/**
+ * Optimistic manifest write. Throws `StaleGalleryError` (409) when `baseUpdatedAt`
+ * is older than what is on disk. `writeManifest` resolves only once the blob is
+ * durably stored and returns the normalized written state, so callers trust that
+ * return value instead of re-reading (a re-read goes through the Blob CDN cache and
+ * can serve a stale copy of the path we just overwrote).
+ */
 export async function applyGalleryMutation(
   baseUpdatedAt: string,
-  update: (state: GalleryState) => GalleryState,
-  isApplied: (state: GalleryState) => boolean,
-  maxAttempts = 10
+  update: (state: GalleryState) => GalleryState
 ): Promise<GalleryState> {
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const state = await storage.readManifest();
-    if (isNewerThan(state, baseUpdatedAt)) {
-      throw new StaleGalleryError(state);
-    }
-    const next = touchGallery(update(state));
-    await storage.writeManifest(next);
-    const verify = await storage.readManifest();
-    if (isApplied(verify) && parseTs(verify.updatedAt) >= parseTs(next.updatedAt)) {
-      return verify;
-    }
-    console.warn(
-      `[gallery] write not visible (attempt ${attempt + 1}/${maxAttempts})`
-    );
+  const state = await storage.readManifest();
+  if (isNewerThan(state, baseUpdatedAt)) {
+    throw new StaleGalleryError(state);
   }
-  throw new ManifestUpdateConflictError();
+  return storage.writeManifest(touchGallery(update(state)));
 }
 
 type GalleryRouteInit = { status?: number; cacheControl?: string };
@@ -66,11 +56,10 @@ export async function respondGalleryMutation(
   logPrefix: string,
   baseUpdatedAt: string,
   update: (state: GalleryState) => GalleryState,
-  isApplied: (state: GalleryState) => boolean,
   init: GalleryRouteInit = {}
 ): Promise<Response> {
   try {
-    const saved = await applyGalleryMutation(baseUpdatedAt, update, isApplied);
+    const saved = await applyGalleryMutation(baseUpdatedAt, update);
     const gallery = await buildGalleryResponse(request, saved);
     const headers: Record<string, string> = {};
     if (init.cacheControl) headers["Cache-Control"] = init.cacheControl;

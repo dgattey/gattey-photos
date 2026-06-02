@@ -1,6 +1,10 @@
 import Foundation
 
 public typealias PhotoID = String
+public typealias UploaderID = String
+
+/// Display name for photos uploaded before uploader attribution existed.
+public let legacyUploaderDisplayName = "Dylan"
 
 public enum CurrentPhotoUpdatedBy: String, Codable, Sendable {
     case cron
@@ -19,11 +23,32 @@ public struct PhotoEntry: Codable, Equatable, Identifiable, Sendable {
     public var sizeBytes: Int
     public var updatedAt: String
     public var deletedAt: String?
-    /// Family member who uploaded this photo (from server manifest).
-    public var uploadedBy: String?
+    /// Stable id of the family member who uploaded this; name via `GalleryState.uploaders`.
+    public var uploaderId: UploaderID
     public var downloadUrl: String?
 
     public var isDeleted: Bool { deletedAt != nil }
+
+    public init(
+        id: PhotoID,
+        filename: String,
+        blobPath: String,
+        sizeBytes: Int,
+        updatedAt: String,
+        deletedAt: String?,
+        uploaderId: UploaderID,
+        downloadUrl: String? = nil
+    ) {
+        self.id = id
+        self.filename = filename
+        self.blobPath = blobPath
+        self.sizeBytes = sizeBytes
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.uploaderId = uploaderId
+        self.downloadUrl = downloadUrl
+    }
+
 }
 
 public struct GalleryState: Codable, Equatable, Sendable {
@@ -31,6 +56,8 @@ public struct GalleryState: Codable, Equatable, Sendable {
     public var updatedAt: String
     public var order: [PhotoID]
     public var photos: [PhotoID: PhotoEntry]
+    /// Uploader id → current display name; rename updates one entry, not every photo.
+    public var uploaders: [UploaderID: String]
     /// Photo the Bloomin8 frame is showing (synced across clients).
     public var currentPhotoId: PhotoID?
     /// How `currentPhotoId` last changed on the server (`cron` advance vs manual set).
@@ -42,18 +69,93 @@ public struct GalleryState: Codable, Equatable, Sendable {
         updatedAt: String,
         order: [PhotoID],
         photos: [PhotoID: PhotoEntry],
+        uploaders: [UploaderID: String] = [:],
         currentPhotoId: PhotoID? = nil,
         currentPhotoUpdatedBy: CurrentPhotoUpdatedBy? = nil
     ) {
         self.updatedAt = updatedAt
         self.order = order
         self.photos = photos
+        self.uploaders = uploaders
         self.currentPhotoId = currentPhotoId
         self.currentPhotoUpdatedBy = currentPhotoUpdatedBy
     }
 
     public static var empty: GalleryState {
-        GalleryState(updatedAt: emptyUpdatedAt, order: [], photos: [:], currentPhotoId: nil)
+        GalleryState(updatedAt: emptyUpdatedAt, order: [], photos: [:], uploaders: [:], currentPhotoId: nil)
+    }
+
+    /// FNV-1a id for a pre-`uploaderId` display name; matches server `legacyUploaderId`.
+    public static func legacyUploaderId(forDisplayName name: String) -> UploaderID {
+        let s = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = s.isEmpty ? legacyUploaderDisplayName : s
+        var h: UInt32 = 0x811c9dc5
+        for scalar in normalized.unicodeScalars {
+            h ^= UInt32(scalar.value)
+            h = h &* 0x0100_0193
+        }
+        return String(format: "u-%08x", h)
+    }
+
+    /// Collapse legacy `uploadedBy` on manifest photos into `uploaders` (matches server `coalesceUploaders`).
+    public static func coalescingUploaders(
+        rawPhotos: [PhotoID: RawManifestPhoto],
+        rawUploaders: [UploaderID: String]?
+    ) -> (photos: [PhotoID: PhotoEntry], uploaders: [UploaderID: String]) {
+        var uploaders = rawUploaders ?? [:]
+        var photos: [PhotoID: PhotoEntry] = [:]
+        for (id, raw) in rawPhotos {
+            var uploaderId = raw.uploaderId
+            if uploaderId == nil {
+                let name = raw.uploadedBy?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let display = name.isEmpty ? legacyUploaderDisplayName : name
+                uploaderId = legacyUploaderId(forDisplayName: display)
+                if uploaders[uploaderId!] == nil {
+                    uploaders[uploaderId!] = display
+                }
+            } else if uploaders[uploaderId!] == nil {
+                let name = raw.uploadedBy?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                uploaders[uploaderId!] = name.isEmpty ? legacyUploaderDisplayName : name
+            }
+            photos[id] = PhotoEntry(
+                id: raw.id,
+                filename: raw.filename,
+                blobPath: raw.blobPath,
+                sizeBytes: raw.sizeBytes,
+                updatedAt: raw.updatedAt,
+                deletedAt: raw.deletedAt,
+                uploaderId: uploaderId!,
+                downloadUrl: raw.downloadUrl
+            )
+        }
+        return (photos, uploaders)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case updatedAt, order, photos, uploaders, currentPhotoId, currentPhotoUpdatedBy
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        updatedAt = try c.decode(String.self, forKey: .updatedAt)
+        order = try c.decode([PhotoID].self, forKey: .order)
+        let rawPhotos = try c.decode([PhotoID: RawManifestPhoto].self, forKey: .photos)
+        let rawUploaders = try c.decodeIfPresent([UploaderID: String].self, forKey: .uploaders)
+        let coalesced = Self.coalescingUploaders(rawPhotos: rawPhotos, rawUploaders: rawUploaders)
+        photos = coalesced.photos
+        uploaders = coalesced.uploaders
+        currentPhotoId = try c.decodeIfPresent(PhotoID.self, forKey: .currentPhotoId)
+        currentPhotoUpdatedBy = try c.decodeIfPresent(CurrentPhotoUpdatedBy.self, forKey: .currentPhotoUpdatedBy)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encode(order, forKey: .order)
+        try c.encode(photos, forKey: .photos)
+        try c.encode(uploaders, forKey: .uploaders)
+        try c.encodeIfPresent(currentPhotoId, forKey: .currentPhotoId)
+        try c.encodeIfPresent(currentPhotoUpdatedBy, forKey: .currentPhotoUpdatedBy)
     }
 
     public func activePhotos() -> [PhotoEntry] {
@@ -122,6 +224,19 @@ public struct GalleryState: Codable, Equatable, Sendable {
         next.currentPhotoId = active[0].id
         return next
     }
+}
+
+/// Manifest photo JSON before `uploaders` normalization (may include legacy `uploadedBy`).
+public struct RawManifestPhoto: Decodable, Sendable {
+    public var id: PhotoID
+    public var filename: String
+    public var blobPath: String
+    public var sizeBytes: Int
+    public var updatedAt: String
+    public var deletedAt: String?
+    public var uploaderId: UploaderID?
+    public var uploadedBy: String?
+    public var downloadUrl: String?
 }
 
 public struct GalleryResponse: Codable, Sendable {

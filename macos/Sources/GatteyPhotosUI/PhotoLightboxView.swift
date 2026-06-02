@@ -11,7 +11,6 @@ struct PhotoLightboxView: View {
     private static let sideColumnPreferredWidth: CGFloat = 400
     private static let sideBySideClusterSpacing: CGFloat = 44
     private static let lightboxAttributionBlockSpacing: CGFloat = 16
-    private static let lightboxAttributionInnerSpacing: CGFloat = 6
     private static let macOSSideColumnMinWidth: CGFloat = 640
 
     private var photo: PhotoEntry? {
@@ -227,17 +226,9 @@ struct PhotoLightboxView: View {
         let textAlignment: TextAlignment = sideBySide ? .trailing : .leading
         return VStack(alignment: metaAlignment, spacing: 20) {
                 VStack(alignment: metaAlignment, spacing: Self.lightboxAttributionBlockSpacing) {
-                    VStack(alignment: metaAlignment, spacing: Self.lightboxAttributionInnerSpacing) {
-                        Text(PhotoFormatters.addedBy(photo))
-                            .font(AppTypography.lightboxAttribution)
-                            .multilineTextAlignment(textAlignment)
-                        if let showingUntil = store.lightboxShowingUntilCaption(for: photo) {
-                            Text(showingUntil)
-                                .font(AppTypography.lightboxMeta)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(textAlignment)
-                        }
-                    }
+                    Text(PhotoFormatters.addedBy(photo, uploaders: store.state.uploaders))
+                        .font(AppTypography.lightboxAttribution)
+                        .multilineTextAlignment(textAlignment)
                     Text(photo.filename)
                         .font(AppTypography.lightboxFilename)
                         .multilineTextAlignment(textAlignment)

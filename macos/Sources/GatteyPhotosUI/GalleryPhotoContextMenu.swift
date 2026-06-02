@@ -9,7 +9,7 @@ struct GalleryPhotoContextMenuItems: View {
     let photoID: PhotoID
 
     /// Same batch as the selection bar when the menu target is part of the current selection.
-    private var deleteTargetIDs: Set<PhotoID> {
+    private var actionTargetIDs: Set<PhotoID> {
         selection.selectedIDs.contains(photoID) ? selection.selectedIDs : Set([photoID])
     }
 
@@ -18,7 +18,7 @@ struct GalleryPhotoContextMenuItems: View {
     }
 
     private var canDelete: Bool {
-        store.canDeletePhotos(ids: deleteTargetIDs) && !store.isBusy
+        store.canDeletePhotos(ids: actionTargetIDs) && !store.isBusy
     }
 
     var body: some View {
@@ -28,13 +28,13 @@ struct GalleryPhotoContextMenuItems: View {
         .disabled(!canSetCurrent)
 
         Button("Download") {
-            Task { await store.downloadPhoto(photoID: photoID) }
+            Task { await store.downloadPhotos(ids: actionTargetIDs) }
         }
         .disabled(store.isBusy)
 
         // Context menus use system destructive styling (red label); not `galleryDestructiveButtonStyle`.
         Button("Delete", role: .destructive) {
-            galleryDeleteRequest?(deleteTargetIDs)
+            galleryDeleteRequest?(actionTargetIDs)
         }
         .disabled(!canDelete)
     }
