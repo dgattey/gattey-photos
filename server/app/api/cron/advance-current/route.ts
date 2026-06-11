@@ -11,6 +11,7 @@ async function handleAdvance(request: Request) {
   const after = advanceCurrentPhoto(before);
   const changed = after.currentPhotoId !== before.currentPhotoId;
 
+  let devicePush = null;
   // Rotation writes only the tiny sync-token blob; the photo catalog and its version are untouched.
   if (changed) {
     await storage.writeCurrent({
@@ -19,7 +20,7 @@ async function handleAdvance(request: Request) {
       currentPhotoUpdatedBy: "cron",
       updatedAt: new Date().toISOString(),
     });
-    await pushCurrentPhotoToAllDevices(after);
+    devicePush = await pushCurrentPhotoToAllDevices(after);
   }
 
   return Response.json({
@@ -28,6 +29,7 @@ async function handleAdvance(request: Request) {
     previousPhotoId: before.currentPhotoId ?? null,
     currentPhotoId: after.currentPhotoId ?? null,
     updatedAt: after.updatedAt,
+    devicePush,
   });
 }
 
