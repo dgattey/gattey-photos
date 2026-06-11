@@ -16,5 +16,7 @@ EOF
 fi
 
 chmod +x "$ROOT/scripts/start-server.sh" "$ROOT/scripts/package-macos.sh"
-"$ROOT/scripts/start-server.sh"
+# dev.sh sequences start -> package -> open, so the launcher must return even
+# headless; the supervisor it spawns keeps running in the background.
+GATTEY_FOREGROUND_HOLD=0 "$ROOT/scripts/start-server.sh"
 "$ROOT/scripts/package-macos.sh"

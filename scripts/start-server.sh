@@ -41,6 +41,7 @@ if [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
   if curl -sf --max-time 1 http://127.0.0.1:3000/api/health >/dev/null; then
     echo "Sync server already running (supervisor pid $(cat "$PID_FILE"))"
     start_advance_cron
+    hold_foreground_if_headless "$(cat "$PID_FILE")"
     exit 0
   fi
   kill "$(cat "$PID_FILE")" 2>/dev/null || true
@@ -54,12 +55,14 @@ cd "$SERVER"
 [[ -d node_modules ]] || npm install
 
 nohup "$ROOT/scripts/server-supervisor.sh" >>"$LOG_FILE" 2>&1 &
-echo $! >"$PID_FILE"
+SUPERVISOR_PID=$!
+echo "$SUPERVISOR_PID" >"$PID_FILE"
 
 for i in $(seq 1 30); do
   if curl -sf --max-time 1 http://127.0.0.1:3000/api/health >/dev/null; then
     echo "Sync API ready at http://127.0.0.1:3000 (supervisor pid $(cat "$PID_FILE"))"
     start_advance_cron
+    hold_foreground_if_headless "$SUPERVISOR_PID"
     exit 0
   fi
   sleep 0.5
