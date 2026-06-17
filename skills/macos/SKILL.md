@@ -32,6 +32,10 @@ iOS/iPad app (shared `GatteyPhotosUI` + `GatteyPhotosCore`): see **`skills/ios/S
 
 Single **G** group: `glass: true`, solid white layer fill, translucency/specular on the group. Rebuild: `./scripts/generate-app-icon.sh` then relaunch.
 
+## Auto-update (Sparkle)
+
+The app self-updates via Sparkle 2 (SPM dep in `Package.swift`, linked into `GatteyPhotosApp` only). Built for a small family install: ad-hoc code signing + EdDSA-signed updates, no Apple Developer ID. `package-macos.sh` embeds + signs `Sparkle.framework` inside-out and writes `SUFeedURL` (`https://photos.gattey.com/appcast.xml`) + `SUPublicEDKey` into `Info.plist`. `AppUpdater.swift` starts the updater only when both are present, so dev builds run with **Check for Updates…** disabled. `scripts/package-release.sh <ver>` writes the zip + appcast into `server/public/` (served by the Vercel server); one-time key setup via `scripts/generate-sparkle-key.sh`. See **`docs/DISTRIBUTION.md`**.
+
 ## State
 
 - `GalleryStore` (`GalleryStore.swift`) — UI-facing `ObservableObject`

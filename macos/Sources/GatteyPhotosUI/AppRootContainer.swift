@@ -36,11 +36,51 @@ public struct AppRootContainer: View {
 }
 
 private struct LaunchSessionCheckingView: View {
+    // 420 approximates the login form column height so the photo lands in the same place.
+    private let loadingPhotoHeight: CGFloat = 420
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
     package var body: some View {
+        Group {
+            if horizontalSizeClass == .regular {
+                HStack(alignment: .center, spacing: 48) {
+                    UnlockWelcomePhotoPanel(contentHeight: loadingPhotoHeight)
+                        .layoutPriority(-1)
+                    spinnerColumn
+                }
+            } else {
+                VStack(spacing: 20) {
+                    UnlockWelcomePhotoPanel(contentHeight: loadingPhotoHeight)
+                    spinnerColumn
+                }
+            }
+        }
+        #if os(iOS)
+        .padding(.horizontal, loadingOuterPadding)
+        #else
+        .padding(loadingOuterPadding)
+        #endif
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(UnlockGlassBackground())
+        .background(TransparentWindowConfigurator())
+        #if os(macOS)
+        // Hide the titlebar background strip so it blends into the glass (matches login); traffic lights stay.
+        .toolbarBackground(.hidden, for: .windowToolbar)
+        #endif
+    }
+
+    private var spinnerColumn: some View {
+        // Centered in the same 520-wide slot the login form occupies (the second column).
         ProgressView()
             .controlSize(.large)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(WindowGlassBackground())
-            .background(TransparentWindowConfigurator())
+            .frame(maxWidth: 520, alignment: .center)
+    }
+
+    private var loadingOuterPadding: CGFloat {
+        #if os(iOS)
+        horizontalSizeClass == .regular ? 40 : IOSContentWidth.unlockCompactHorizontalPadding
+        #else
+        horizontalSizeClass == .regular ? 56 : 20
+        #endif
     }
 }

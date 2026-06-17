@@ -13,6 +13,10 @@ let package = Package(
         .executable(name: "GatteyPhotos", targets: ["GatteyPhotosApp"]),
         .executable(name: "GatteyPhotosIOS", targets: ["GatteyPhotosIOS"]),
     ],
+    dependencies: [
+        // macOS auto-update (canonical for non-App-Store apps). Linked only into the macOS shell.
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.0"),
+    ],
     targets: [
         .target(
             name: "GatteyPhotosCore",
@@ -31,9 +35,20 @@ let package = Package(
         ),
         .executableTarget(
             name: "GatteyPhotosApp",
-            dependencies: ["GatteyPhotosCore", "GatteyPhotosUI"],
+            dependencies: [
+                "GatteyPhotosCore",
+                "GatteyPhotosUI",
+                .product(name: "Sparkle", package: "Sparkle", condition: .when(platforms: [.macOS])),
+            ],
             path: "Sources/GatteyPhotosApp",
-            swiftSettings: [.unsafeFlags(["-parse-as-library"], .when(configuration: .debug))]
+            swiftSettings: [.unsafeFlags(["-parse-as-library"], .when(configuration: .debug))],
+            linkerSettings: [
+                // package-macos.sh embeds Sparkle.framework under Contents/Frameworks.
+                .unsafeFlags(
+                    ["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"],
+                    .when(platforms: [.macOS])
+                ),
+            ]
         ),
         .executableTarget(
             name: "GatteyPhotosIOS",

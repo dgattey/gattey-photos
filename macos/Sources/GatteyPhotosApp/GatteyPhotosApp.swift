@@ -9,6 +9,7 @@ struct GatteyPhotosApp: App {
     @StateObject private var session = AppSession()
     @StateObject private var store = GalleryStore()
     @StateObject private var activityLog = ActivityLogStore.shared
+    @StateObject private var updater = AppUpdaterModel()
 
     var body: some Scene {
         Window("", id: "main") {
@@ -28,6 +29,9 @@ struct GatteyPhotosApp: App {
         .windowToolbarStyle(.unified)
         #endif
         .commands {
+            CommandGroup(after: .appInfo) {
+                CheckForUpdatesMenuItem(updater: updater)
+            }
             CommandGroup(replacing: .newItem) {}
             CommandGroup(after: .pasteboard) {
                 Button("Sync") {
