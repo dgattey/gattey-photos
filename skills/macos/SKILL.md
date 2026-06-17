@@ -57,6 +57,8 @@ Verify live with `.chrome-verify/capture-toolbar.sh <label>` (drives the running
 
 **Glass chrome:** `GlassChromeStyle.swift` — floating panel background; `WindowGlassBackground.swift` — unlock/launch vibrancy; gallery uses `PushedDetailBackground`.
 
+**Seamless titlebar (unlock + launch/checking).** Hide the titlebar *background* with `.toolbarBackground(.hidden, for: .windowToolbar)` over `UnlockGlassBackground()`, and keep the traffic lights. `WindowGlassBackground` (`.behindWindow`) leaves a darker titlebar strip, and hiding the `standardWindowButton`s is the wrong lever (it removes the traffic lights). When matching one screen's chrome to another, grep the baseline view (e.g. `UnlockView`) for the exact modifier and copy it, instead of guessing by eye or waiting for a screenshot.
+
 ## Settings popover
 
 `UnlockView` / `AppSession` — name + family password only at unlock (`POST /api/auth/session` → `syncSessionToken`). All sync calls use session Bearer only.

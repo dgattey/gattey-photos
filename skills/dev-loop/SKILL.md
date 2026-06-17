@@ -43,6 +43,16 @@ Both paths regenerate the dock icon every time (`generate-app-icon.sh` → `Asse
 3. **Do not stop after `swift build`**. The running `.app` is assembled by `package-macos.sh` (copy into `dist/`). `.build/release/GatteyPhotos` alone is not what `open` uses.
 4. Check the script prints a new `CFBundleVersion` and timestamp after package; if unsure, run `./scripts/launch.sh macos` again.
 
+### Verifying a transient or non-frontmost macOS window
+
+To inspect a short-lived phase (e.g. the `.checking` launch screen), gate it behind a temporary hold in the view model so it stays on screen, then revert the hold. A plain `screencapture -x -o` usually grabs the IDE, not the app, because `activate` loses focus, and pyobjc/Quartz is not installed. Capture the app window directly by its bounds:
+
+```bash
+osascript -e 'tell application "System Events" to get position of window 1 of (first process whose name contains "Gattey")'
+osascript -e 'tell application "System Events" to get size of window 1 of (first process whose name contains "Gattey")'
+screencapture -x -R<x>,<y>,<w>,<h> /tmp/win.png
+```
+
 ## Backend / server (Next.js under `server/`)
 
 After **each** edit session under `server/` that affects runtime behavior (routes, `lib/`, env handling), restart the local sync API so the running process picks up changes:
