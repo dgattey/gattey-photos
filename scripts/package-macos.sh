@@ -177,7 +177,7 @@ fi
 [[ -e "$FWV/Updater.app" ]] && csign "$FWV/Updater.app"
 csign "$FW"
 
-# Ad-hoc dist builds: omit associated-domains (SIGKILL at launch). Production uses GatteyPhotos.entitlements + real cert.
+# Dist builds use local entitlements only (associated-domains needs an Apple Developer ID).
 csign --entitlements "$SIGN_ENTITLEMENTS" "$APP"
 
 APP_SIZE="$(du -sh "$APP" | cut -f1)"

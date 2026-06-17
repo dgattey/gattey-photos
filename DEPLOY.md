@@ -9,6 +9,8 @@
 
 Vercel only deploys `server/` when root directory is set. No monorepo rewrite is needed.
 
+macOS Sparkle files in `server/public/` are committed by `.github/workflows/release-macos.yml` when the app changes. Vercel’s normal Git Production deploy serves them; no extra Vercel settings required. See `docs/DISTRIBUTION.md`.
+
 ## Environment variables (Production)
 
 | Variable | Purpose |

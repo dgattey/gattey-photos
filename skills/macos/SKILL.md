@@ -34,7 +34,7 @@ Single **G** group: `glass: true`, solid white layer fill, translucency/specular
 
 ## Auto-update (Sparkle)
 
-The app self-updates via Sparkle 2 (SPM dep in `Package.swift`, linked into `GatteyPhotosApp` only). Built for a small family install: ad-hoc code signing + EdDSA-signed updates, no Apple Developer ID. `package-macos.sh` embeds + signs `Sparkle.framework` inside-out and writes `SUFeedURL` (`https://photos.gattey.com/appcast.xml`) + `SUPublicEDKey` into `Info.plist`. `AppUpdater.swift` starts the updater only when both are present, so dev builds run with **Check for Updates…** disabled. `scripts/package-release.sh <ver>` writes the zip + appcast into `server/public/` (served by the Vercel server); one-time key setup via `scripts/generate-sparkle-key.sh`. See **`docs/DISTRIBUTION.md`**.
+The app self-updates via Sparkle 2 (SPM dep in `Package.swift`, linked into `GatteyPhotosApp` only). Family distribution uses a **stable self-signed** cert (`scripts/setup-self-signed-cert.sh`) plus EdDSA (`scripts/generate-sparkle-key.sh`). Push to **`main`** with `macos/` changes → `.github/workflows/release-macos.yml` commits `server/public/` once; Vercel Git deploys it (`paths-ignore` on `server/public/**` prevents a loop). See **`docs/DISTRIBUTION.md`**.
 
 ## State
 

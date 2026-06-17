@@ -1,0 +1,93 @@
+# Build a signed macOS release and commit server/public/ for Vercel Git deploys.
+# Loop prevention: this workflow ignores pushes that only touch server/public/**.
+name: release-macos
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'server/public/**'
+      - '**.md'
+      - '.github/workflows/verify.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-macos
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether to rebuild the macOS app
+        id: macos
+        run: |
+          if ./scripts/macos-release-inputs-changed.sh; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Import code-signing certificate
+        if: steps.macos.outputs.build == 'true'
+        env:
+          P12_BASE64: ${{ secrets.GATTEY_CODESIGN_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.GATTEY_CODESIGN_P12_PASSWORD }}
+        run: |
+          if [[ -z "$P12_BASE64" || -z "$P12_PASSWORD" ]]; then
+            echo "Missing GATTEY_CODESIGN_P12_BASE64 / GATTEY_CODESIGN_P12_PASSWORD (see docs/DISTRIBUTION.md)." >&2
+            exit 1
+          fi
+          echo "$P12_BASE64" | base64 -d > /tmp/codesign.p12
+          security create-keychain -p "$P12_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$P12_PASSWORD" build.keychain
+          security import /tmp/codesign.p12 -k build.keychain -P "$P12_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k build.keychain
+          rm -f /tmp/codesign.p12
+
+      - name: Import Sparkle EdDSA private key
+        if: steps.macos.outputs.build == 'true'
+        env:
+          KEY_BASE64: ${{ secrets.SPARKLE_ED_PRIVATE_KEY_BASE64 }}
+        run: |
+          if [[ -z "$KEY_BASE64" ]]; then
+            echo "Missing SPARKLE_ED_PRIVATE_KEY_BASE64 (see docs/DISTRIBUTION.md)." >&2
+            exit 1
+          fi
+          echo "$KEY_BASE64" | base64 -d > /tmp/sparkle_ed.key
+          echo "SPARKLE_ED_KEY_FILE=/tmp/sparkle_ed.key" >> "$GITHUB_ENV"
+
+      - name: Build Swift release
+        if: steps.macos.outputs.build == 'true'
+        working-directory: macos
+        run: swift build -c release --product GatteyPhotos
+
+      - name: Package macOS release
+        if: steps.macos.outputs.build == 'true'
+        id: package
+        run: |
+          VERSION="$(./scripts/next-release-version.sh)"
+          echo "release-macos: packaging v${VERSION}"
+          ./scripts/package-release.sh "$VERSION"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push release artifacts
+        if: steps.macos.outputs.build == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add server/public/
+          if git diff --staged --quiet; then
+            echo "release-macos: no changes to server/public — skipping commit"
+            exit 0
+          fi
+          git commit -m "Release v${{ steps.package.outputs.version }}"
+          git push

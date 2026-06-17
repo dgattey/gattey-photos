@@ -1,64 +1,72 @@
 # Distributing Gattey Photos (macOS auto-update)
 
-The macOS app self-updates with [Sparkle 2](https://sparkle-project.org). This is set up for a small
-family install (a handful of people), so it deliberately skips the Apple Developer Program.
+Small family install: **self-signed** code signing + Sparkle EdDSA. No Apple Developer Program.
 
-- **No Apple Developer ID, no notarization.** The app is ad-hoc code-signed; updates are
-  EdDSA-signed. Sparkle installs an update when *either* the EdDSA signature *or* the code signature
-  matches, and the EdDSA one always does, so updates verify and install fine without an Apple account.
-- **One-time cost:** the first time each person opens the downloaded app, macOS Gatekeeper blocks it
-  (true for any non-notarized app). They approve it once (below). Sparkle updates after that install
-  in place without prompting.
-- **Feed + app are hosted on `photos.gattey.com`** (the Vercel server), as static files under
-  `server/public/`. No GitHub Releases, no Blob tokens.
+- Stable self-signed cert in the keychain lets Sparkle replace the app in place. Ad-hoc (`-`) can show updates but **cannot install** them.
+- EdDSA signs the zip in `appcast.xml` (`scripts/generate-sparkle-key.sh`).
+- One-time per Mac: Gatekeeper **Open** / **Open Anyway** on first install; Sparkle updates after that.
+- Feed + zip live in `server/public/` and deploy with the Next.js app on Vercel (normal Git integration).
 
 ## How it works
 
-- The app embeds `Sparkle.framework` and checks `https://photos.gattey.com/appcast.xml` daily.
-- `Info.plist` (written by `scripts/package-macos.sh`) carries `SUFeedURL`, `SUPublicEDKey` (from
-  `macos/sparkle-public-key.txt`, when present), `SUEnableAutomaticChecks`, and a daily interval.
-- `AppUpdaterModel` starts the updater only when both `SUFeedURL` and `SUPublicEDKey` are present, so
-  unkeyed dev builds run cleanly with **Check for Updates…** (under the app menu) just disabled.
+- App checks `https://photos.gattey.com/appcast.xml` (Sparkle 2, HTTPS only).
+- `AppUpdaterModel` runs only when `SUFeedURL` and `SUPublicEDKey` are in the built app.
+- Push to **`main`** with `macos/` (or packaging script) changes → `.github/workflows/release-macos.yml` builds, commits `server/public/`, pushes once.
+- That release commit only touches `server/public/**`, so the workflow does **not** run again (no loop). Vercel’s usual Git deploy picks up the new zip (often a second Production deploy after your code push — that is fine).
+
+PRs into `main` work the same way: merge → one code push (maybe + one `Release v…` commit). No release branch and no manual steps.
 
 ## One-time setup
 
-Create the EdDSA key that signs every update:
+### EdDSA key
 
 ```bash
-cd macos && swift build          # makes the Sparkle CLI tools available
+cd macos && swift build
 ./scripts/generate-sparkle-key.sh
 ```
 
-The **private** key stays in your login keychain (never committed); the **public** key is written to
-`macos/sparkle-public-key.txt`, which you commit. Back it up:
-`macos/.build/artifacts/sparkle/Sparkle/bin/generate_keys -x sparkle_private.key`.
-
-## Cutting a release
+Commit `macos/sparkle-public-key.txt`. Back up the private key (1Password, etc.):
 
 ```bash
-./scripts/package-release.sh 1.0.1
-git add server/public && git commit -m "Release v1.0.1" && git push
+macos/.build/artifacts/sparkle/Sparkle/bin/generate_keys -x sparkle_private.key
 ```
 
-That builds the app (ad-hoc signed), EdDSA-signs it, writes `server/public/Gattey-Photos-1.0.1.zip`
-and `server/public/appcast.xml`, and keeps only the latest zip. Pushing triggers a Vercel deploy, so
-`photos.gattey.com/appcast.xml` updates and everyone's app picks it up on the next check (or via
-**Check for Updates…**).
+### Self-signed certificate (local builds + CI export)
 
-## First install (each family member, once)
+```bash
+./scripts/setup-self-signed-cert.sh
+```
+
+Trust on Macs that build releases (once, admin):
+
+```bash
+sudo security add-trusted-cert -d -r trustAsRoot -k /Library/Keychains/System.keychain .cert/gattey-photos.crt
+security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k ~/Library/Keychains/login.keychain-db
+```
+
+### GitHub secrets
+
+```bash
+./scripts/export-ci-secrets.sh
+```
+
+| Secret | Purpose |
+|--------|---------|
+| `GATTEY_CODESIGN_P12_BASE64` | Self-signed `.p12` |
+| `GATTEY_CODESIGN_P12_PASSWORD` | P12 password |
+| `SPARKLE_ED_PRIVATE_KEY_BASE64` | EdDSA private key |
+
+Leave Vercel **Production** Git deploys enabled (default). You do not need to change anything in the Vercel dashboard for this setup.
+
+## First install (each family Mac, once)
 
 1. Download `https://photos.gattey.com/Gattey-Photos-<version>.zip`, unzip, drag to Applications.
-2. First open is blocked by Gatekeeper. Either right-click the app and choose **Open**, or go to
-   **System Settings → Privacy & Security** and click **Open Anyway**. This is needed once per person.
+2. Right-click → **Open**, or **Privacy & Security → Open Anyway**.
 
-After that, updates are automatic.
+Anyone on an old **ad-hoc** build needs one install of the current self-signed zip; then Sparkle works.
 
 ## Notes
 
-- Build numbers use the git commit count (monotonic across releases). Dev builds use a timestamp and
-  are never distributed, so the two never collide for family members.
-- Only the latest zip is kept in `server/public/`; the appcast describes that version, and Sparkle
-  jumps any older install straight to it.
-- **Optional upgrade path:** if you ever get an Apple Developer ID, set `GATTEY_SIGN_IDENTITY` (and
-  `GATTEY_NOTARY_PROFILE` for notarization) before `package-release.sh`. That removes the one-time
-  "Open Anyway" step. Nothing else changes; keep the same EdDSA key.
+- Releases use `GatteyPhotos.local.entitlements` only (no `associated-domains`).
+- `CFBundleVersion` is monotonic (`git rev-list --count` or last `appcast.xml` + 1).
+- Only the latest zip is kept in `server/public/`.

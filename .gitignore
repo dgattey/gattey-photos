@@ -13,6 +13,10 @@ macos/.derivedData-ios/
 .build-ios-check/
 .swiftpm/
 dist/
+.cert/
+*.p12
+sparkle_private.key
+sparkle_ed.key
 macos/.icon-build/
 macos/Assets.car
 macos/AppIcon.icns
@@ -21,5 +25,4 @@ macos/AppIcon.icns
 .dev-server.log
 .dev-advance-cron.pid
 .dev-advance-cron.log
-*.tsbuildinfo
 .chrome-verify/
