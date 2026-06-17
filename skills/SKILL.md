@@ -35,3 +35,13 @@ See **`skills/dev-loop/SKILL.md`** for rebuild, server restart, and `npm run typ
 - **Deploy:** Vercel project rooted at `server/`; remove `GATTEY_LOCAL_STORAGE`.
 
 Read `docs/ARCHITECTURE.md` before structural changes.
+
+## Working agreements
+
+Hard-won from past sessions; they bind future agents in this repo.
+
+- **Match means copy the baseline, not re-derive it.** When asked to make one surface match another, the baseline is the spec. Grep it for the exact mechanism (e.g. a SwiftUI modifier) and render both to compare, rather than guessing by eye. A "make X match Y" subtask counts even when it is buried inside a larger feature.
+- **Do not override an explicit instruction with your own taste.** Proceed-without-asking autonomy covers decisions the user left open, not re-deciding something they specified (layout, alignment, copy). Verify against the instruction.
+- **Delegate intent, not finished code.** A subagent prompt carries the goal, constraints, and success criteria. Pasting the solution turns the subagent into a transcriber, so a wrong interpretation ships unreviewed.
+- **The smallest change must also be reversible.** Prefer the small diff, but binaries, generated artifacts, and secrets committed to git are append-only debt, removable only by a history rewrite. When the small option compounds, the larger-now option is the lazy one.
+- **Security pass before shipping a delivery surface.** Code that signs, authenticates, or auto-updates the app reaches every user's machine. Threat-model it and settle key custody before shipping, do not wait to be asked.
