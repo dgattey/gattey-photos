@@ -14,23 +14,29 @@ if [[ -z "${SPARKLE_ED_PRIVATE_KEY_BASE64:-}" ]]; then
   exit 1
 fi
 
-echo "$GATTEY_CODESIGN_P12_BASE64" | base64 -d > /tmp/codesign.p12
-if ! openssl pkcs12 -in /tmp/codesign.p12 -noout -passin "pass:${GATTEY_CODESIGN_P12_PASSWORD}" 2>/dev/null; then
-  echo "ci-build-macos-release: P12 failed openssl check — GATTEY_CODESIGN_P12_PASSWORD may not match the file." >&2
+decode_secret_b64() {
+  printf '%s' "$1" | tr -d '[:space:]' | base64 -d
+}
+
+P12_PASS="$(printf '%s' "$GATTEY_CODESIGN_P12_PASSWORD" | tr -d '[:space:]')"
+decode_secret_b64 "$GATTEY_CODESIGN_P12_BASE64" > /tmp/codesign.p12
+if ! openssl pkcs12 -in /tmp/codesign.p12 -noout -passin "pass:${P12_PASS}" 2>/dev/null && \
+   ! openssl pkcs12 -in /tmp/codesign.p12 -legacy -noout -passin "pass:${P12_PASS}" 2>/dev/null; then
+  echo "ci-build-macos-release: P12 failed openssl check (size $(wc -c </tmp/codesign.p12 | tr -d ' ') bytes)." >&2
   exit 1
 fi
 echo "ci-build-macos-release: P12 size=$(wc -c </tmp/codesign.p12 | tr -d ' ') bytes" >&2
-echo "$SPARKLE_ED_PRIVATE_KEY_BASE64" | base64 -d > /tmp/sparkle_ed.key
+decode_secret_b64 "$SPARKLE_ED_PRIVATE_KEY_BASE64" > /tmp/sparkle_ed.key
 export SPARKLE_ED_KEY_FILE=/tmp/sparkle_ed.key
 
 security delete-keychain build.keychain 2>/dev/null || true
-security create-keychain -p "$GATTEY_CODESIGN_P12_PASSWORD" build.keychain
+security create-keychain -p "$P12_PASS" build.keychain
 security set-keychain-settings -lut 21600 build.keychain
 security default-keychain -s build.keychain
-security unlock-keychain -p "$GATTEY_CODESIGN_P12_PASSWORD" build.keychain
-security import /tmp/codesign.p12 -k build.keychain -f pkcs12 -P "$GATTEY_CODESIGN_P12_PASSWORD" -A \
+security unlock-keychain -p "$P12_PASS" build.keychain
+security import /tmp/codesign.p12 -k build.keychain -f pkcs12 -P "$P12_PASS" -A \
   -T /usr/bin/codesign -T /usr/bin/security
-security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$GATTEY_CODESIGN_P12_PASSWORD" build.keychain
+security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$P12_PASS" build.keychain
 security list-keychains -d user -s build.keychain
 rm -f /tmp/codesign.p12
 
