@@ -7,9 +7,12 @@ on:
 
 jobs:
   verify:
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+
+      - name: Use Xcode 26.5
+        run: sudo xcode-select -s /Applications/Xcode_26.5.app/Contents/Developer
 
       - uses: jdx/mise-action@v2
 
