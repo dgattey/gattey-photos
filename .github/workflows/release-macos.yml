@@ -71,6 +71,16 @@ jobs:
           echo "$KEY_BASE64" | base64 -d > /tmp/sparkle_ed.key
           echo "SPARKLE_ED_KEY_FILE=/tmp/sparkle_ed.key" >> "$GITHUB_ENV"
 
+      - name: Activate build keychain
+        if: steps.macos.outputs.build == 'true'
+        env:
+          P12_PASSWORD: ${{ secrets.GATTEY_CODESIGN_P12_PASSWORD }}
+        run: |
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$P12_PASSWORD" build.keychain
+          security list-keychains -d user -s build.keychain
+          security find-identity -v -p codesigning
+
       - name: Build Swift release
         if: steps.macos.outputs.build == 'true'
         working-directory: macos
