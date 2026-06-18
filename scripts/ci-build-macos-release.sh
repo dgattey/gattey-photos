@@ -15,11 +15,16 @@ if [[ -z "${SPARKLE_ED_PRIVATE_KEY_BASE64:-}" ]]; then
 fi
 
 decode_secret_b64() {
-  printf '%s' "$1" | tr -d '[:space:]' | base64 -d
+  printf '%s' "$1" | tr -d '[:space:]' | base64 -D 2>/dev/null || printf '%s' "$1" | tr -d '[:space:]' | base64 -d
 }
 
 P12_PASS="$(printf '%s' "$GATTEY_CODESIGN_P12_PASSWORD" | tr -d '[:space:]')"
 decode_secret_b64 "$GATTEY_CODESIGN_P12_BASE64" > /tmp/codesign.p12
+p12_size="$(wc -c </tmp/codesign.p12 | tr -d ' ')"
+if [[ "$p12_size" -lt 500 ]]; then
+  echo "ci-build-macos-release: decoded P12 is only ${p12_size} bytes — re-run ./scripts/export-ci-secrets.sh" >&2
+  exit 1
+fi
 if ! openssl pkcs12 -in /tmp/codesign.p12 -noout -passin "pass:${P12_PASS}" 2>/dev/null && \
    ! openssl pkcs12 -in /tmp/codesign.p12 -legacy -noout -passin "pass:${P12_PASS}" 2>/dev/null; then
   echo "ci-build-macos-release: P12 failed openssl check (size $(wc -c </tmp/codesign.p12 | tr -d ' ') bytes)." >&2

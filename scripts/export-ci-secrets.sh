@@ -137,13 +137,17 @@ resolve_sparkle_key_file() {
 }
 
 push_github_secret() {
-  local name=$1 value=$2
+  local name=$1 value=$2 tmp
+  tmp="$(mktemp)"
+  printf '%s' "$value" >"$tmp"
   if [[ "$DRY_RUN" == true ]]; then
     echo "export-ci-secrets: [dry-run] would set $name (${#value} chars) on $REPO"
+    rm -f "$tmp"
     return 0
   fi
-  printf '%s' "$value" | gh secret set "$name" --repo "$REPO" -b -
-  echo "export-ci-secrets: set $name on $REPO"
+  gh secret set "$name" --repo "$REPO" <"$tmp"
+  rm -f "$tmp"
+  echo "export-ci-secrets: set $name on $REPO (${#value} chars)"
 }
 
 ensure_p12
