@@ -50,12 +50,14 @@ jobs:
           fi
           echo "$P12_BASE64" | base64 -d > /tmp/codesign.p12
           security create-keychain -p "$P12_PASSWORD" build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p "$P12_PASSWORD" build.keychain
-          security import /tmp/codesign.p12 -k build.keychain -P "$P12_PASSWORD" \
+          security import /tmp/codesign.p12 -k build.keychain -P "$P12_PASSWORD" -A \
             -T /usr/bin/codesign -T /usr/bin/security
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k build.keychain -p "$P12_PASSWORD"
+          security list-keychains -d -s build.keychain
           rm -f /tmp/codesign.p12
+          security find-identity -v -p codesigning build.keychain
 
       - name: Import Sparkle EdDSA private key
         if: steps.macos.outputs.build == 'true'
