@@ -28,7 +28,7 @@ security create-keychain -p "$GATTEY_CODESIGN_P12_PASSWORD" build.keychain
 security set-keychain-settings -lut 21600 build.keychain
 security default-keychain -s build.keychain
 security unlock-keychain -p "$GATTEY_CODESIGN_P12_PASSWORD" build.keychain
-security import /tmp/codesign.p12 -k build.keychain -P "$GATTEY_CODESIGN_P12_PASSWORD" -A \
+security import /tmp/codesign.p12 -k build.keychain -f pkcs12 -P "$GATTEY_CODESIGN_P12_PASSWORD" -A \
   -T /usr/bin/codesign -T /usr/bin/security
 security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$GATTEY_CODESIGN_P12_PASSWORD" build.keychain
 security list-keychains -d user -s build.keychain
@@ -41,7 +41,16 @@ security find-identity -v 2>&1 >&2 || true
 SIGN_ID="$(resolve_sign_identity)"
 if [[ "$SIGN_ID" == "-" ]]; then
   echo "ci-build-macos-release: no self-signed identity in build.keychain after import." >&2
-  echo "ci-build-macos-release: re-export with ./scripts/export-ci-secrets.sh and update GitHub secrets." >&2
+  smoke="$(mktemp)"
+  cp /bin/echo "$smoke"
+  if codesign --force --sign "$GATTEY_SELF_SIGNED_NAME" "$smoke" 2>/dev/null; then
+    SIGN_ID="$GATTEY_SELF_SIGNED_NAME"
+    echo "ci-build-macos-release: codesign smoke test OK (using name ${SIGN_ID})" >&2
+  fi
+  rm -f "$smoke"
+fi
+if [[ "$SIGN_ID" == "-" ]]; then
+  echo "ci-build-macos-release: re-export with ./scripts/export-ci-secrets.sh" >&2
   exit 1
 fi
 echo "ci-build-macos-release: signing identity=${SIGN_ID}" >&2

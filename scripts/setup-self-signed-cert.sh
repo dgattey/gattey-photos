@@ -44,7 +44,11 @@ fi
 
 openssl req -new -key "$KEY" -out "$CSR" -subj "/CN=${CN}/O=Gattey Photos/C=US"
 openssl x509 -req -in "$CSR" -signkey "$KEY" -sha256 -days "$DAYS" -out "$CRT" -extfile "$EXT"
-openssl pkcs12 -export -legacy -inkey "$KEY" -in "$CRT" -out "$P12" -passout "pass:${P12_PASS}"
+openssl pkcs12 -export -legacy \
+  -inkey "$KEY" -in "$CRT" -out "$P12" \
+  -passout "pass:${P12_PASS}" \
+  -name "$NAME" \
+  -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES
 
 # Replace any prior import with the same common name.
 security delete-identity -c "$CN" 2>/dev/null || true

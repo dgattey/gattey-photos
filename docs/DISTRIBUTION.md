@@ -46,15 +46,22 @@ security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k ~/Library/
 
 ### GitHub secrets
 
+From the repo root (after `./scripts/setup-self-signed-cert.sh`):
+
 ```bash
+gh auth login   # once
 ./scripts/export-ci-secrets.sh
 ```
 
+That openssl-checks the P12 and pushes secrets with `gh secret set` on **this** repository. The script does not create temporary keychains (that caused "Keychain Not Found" dialogs). Do not paste base64 into the GitHub UI by hand.
+
 | Secret | Purpose |
 |--------|---------|
-| `GATTEY_CODESIGN_P12_BASE64` | Self-signed `.p12` |
-| `GATTEY_CODESIGN_P12_PASSWORD` | P12 password |
+| `GATTEY_CODESIGN_P12_BASE64` | Self-signed `.p12` from `.cert/` (openssl-built, not `security export`) |
+| `GATTEY_CODESIGN_P12_PASSWORD` | P12 password (default `gattey-photos`) |
 | `SPARKLE_ED_PRIVATE_KEY_BASE64` | EdDSA private key |
+
+Options: `--print-only`, `--dry-run`, `--skip-sparkle`, `--sparkle-key-file path`, `--repo owner/name`.
 
 Leave Vercel **Production** Git deploys enabled (default). You do not need to change anything in the Vercel dashboard for this setup.
 
