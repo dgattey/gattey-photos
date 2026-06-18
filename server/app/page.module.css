@@ -1,0 +1,181 @@
+.page {
+  --accent: #467e61;
+  --accent-hover: #3a6b52;
+  --glass-base: #f2f2f0;
+  --glass-tint: rgba(70, 126, 97, 0.1);
+  --text: #1c1c1e;
+  --text-secondary: rgba(60, 60, 67, 0.72);
+  --frame: #141414;
+  --mat: #ffffff;
+
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 56px 40px;
+  color: var(--text);
+  background:
+    radial-gradient(ellipse 120% 80% at 20% 0%, rgba(70, 126, 97, 0.14), transparent 55%),
+    radial-gradient(ellipse 90% 70% at 100% 100%, rgba(70, 126, 97, 0.08), transparent 50%),
+    var(--glass-base);
+}
+
+@media (prefers-color-scheme: dark) {
+  .page {
+    --glass-base: #141416;
+    --glass-tint: rgba(70, 126, 97, 0.12);
+    --text: #f5f5f7;
+    --text-secondary: rgba(235, 235, 245, 0.65);
+    --mat: #f5f5f5;
+    background:
+      radial-gradient(ellipse 120% 80% at 20% 0%, rgba(70, 126, 97, 0.2), transparent 55%),
+      radial-gradient(ellipse 90% 70% at 100% 100%, rgba(70, 126, 97, 0.1), transparent 50%),
+      var(--glass-base);
+  }
+}
+
+.shell {
+  width: min(100%, 1080px);
+  display: flex;
+  align-items: center;
+  gap: 48px;
+}
+
+.photoColumn {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.downloadColumn {
+  flex: 0 0 auto;
+  width: min(100%, 520px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 36px;
+}
+
+.headingBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.title {
+  margin: 0;
+  font-family: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+  font-size: clamp(2rem, 4vw, 2.375rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 1.25rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.downloadButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 28px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  width: 100%;
+  max-width: 520px;
+}
+
+.downloadButton:hover {
+  background: var(--accent-hover);
+}
+
+.downloadButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* Framed e-ink preview (matches DevicePreviewChrome + UnlockWelcomePhotoPanel). */
+.frameOuter {
+  background: var(--frame);
+  padding: 24px;
+  max-width: 420px;
+  width: 100%;
+}
+
+.frameMat {
+  background: var(--mat);
+  padding: 18px;
+}
+
+.frameScreen {
+  position: relative;
+  aspect-ratio: 1200 / 1600;
+  overflow: hidden;
+  background: #000;
+}
+
+.frameScreen img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: left center;
+}
+
+.vignette {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.14), transparent 28px),
+    linear-gradient(to top, rgba(0, 0, 0, 0.06), transparent 18px),
+    linear-gradient(to right, rgba(0, 0, 0, 0.11), transparent 22px),
+    linear-gradient(to left, rgba(0, 0, 0, 0.07), transparent 18px);
+}
+
+@media (max-width: 900px) {
+  .page {
+    padding: 24px 20px 32px;
+    align-items: flex-start;
+  }
+
+  .shell {
+    flex-direction: column;
+    gap: 28px;
+    align-items: stretch;
+  }
+
+  .photoColumn {
+    justify-content: center;
+  }
+
+  .frameOuter {
+    max-width: min(100%, 360px);
+    margin: 0 auto;
+  }
+
+  .downloadColumn {
+    width: 100%;
+    gap: 28px;
+  }
+}

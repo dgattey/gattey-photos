@@ -7,7 +7,7 @@ description: Change the Gattey Photos Next.js sync API on Vercel (gallery routes
 
 ## Entry points
 
-- `app/route.ts` — `GET /` returns `404` with empty body (no public home page; use `/api/health` for status)
+- `app/page.tsx` — `GET /` download splash (framed welcome photo + macOS zip from `public/appcast.xml`)
 - `app/api/gallery/route.ts` — GET manifest
 - `app/api/gallery/photos/route.ts` — POST upload
 - `app/api/gallery/photos/[id]/route.ts` — DELETE
