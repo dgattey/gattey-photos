@@ -65,6 +65,7 @@ if [[ "$SIGN_ID" == "-" ]]; then
   exit 1
 fi
 echo "ci-build-macos-release: signing identity=${SIGN_ID}" >&2
+export GATTEY_SIGN_IDENTITY="$SIGN_ID"
 
 cd "$ROOT/macos"
 swift build -c release --product GatteyPhotos
