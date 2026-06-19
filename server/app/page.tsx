@@ -21,8 +21,8 @@ export default async function HomePage() {
                 <img
                   src="/unlock-welcome.png"
                   alt=""
-                  width={1200}
-                  height={1600}
+                  width={680}
+                  height={1024}
                   fetchPriority="high"
                 />
                 <div className={styles.vignette} aria-hidden />
@@ -73,13 +73,16 @@ export default async function HomePage() {
                     <li>Open the app again.</li>
                   </ol>
                   <figure className={styles.manualApprovalFigure}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src="/macos-open-anyway.png"
-                      alt='Privacy and Security settings showing Gattey Photos was blocked with an Open Anyway button'
-                      width={520}
-                      height={360}
-                    />
+                    <div className={styles.manualApprovalMedia}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src="/macos-open-anyway.png"
+                        alt='Privacy and Security settings showing Gattey Photos was blocked with an Open Anyway button'
+                        width={1024}
+                        height={903}
+                        decoding="async"
+                      />
+                    </div>
                     <figcaption>
                       Open Anyway appears after you try to launch the app once.
                     </figcaption>

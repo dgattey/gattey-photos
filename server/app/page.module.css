@@ -10,7 +10,7 @@
 
   min-height: 100dvh;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: 56px 40px;
   color: var(--text);
@@ -37,7 +37,7 @@
 .shell {
   width: min(100%, 1080px);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 48px;
 }
 
@@ -173,14 +173,23 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 100%;
 }
 
-.manualApprovalFigure img {
-  display: block;
+.manualApprovalMedia {
   width: 100%;
-  height: auto;
+  aspect-ratio: 1024 / 903;
+  overflow: hidden;
   border-radius: 8px;
   border: 1px solid rgba(60, 60, 67, 0.16);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.manualApprovalMedia img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .manualApprovalFigure figcaption {
@@ -204,7 +213,7 @@
 
 .frameScreen {
   position: relative;
-  aspect-ratio: 1200 / 1600;
+  aspect-ratio: 680 / 1024;
   overflow: hidden;
   background: #000;
 }
