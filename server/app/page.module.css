@@ -115,62 +115,6 @@
   gap: 20px;
 }
 
-.trustBlock {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding-top: 4px;
-}
-
-.trustLead {
-  margin: 0;
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.trustButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  padding: 0 22px;
-  border: 1.5px solid var(--accent);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--accent);
-  font-size: 0.9375rem;
-  font-weight: 600;
-  text-decoration: none;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
-  width: 100%;
-}
-
-.trustButton:hover {
-  background: var(--accent);
-  color: #fff;
-}
-
-.trustButton:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-
-.trustSteps {
-  margin: 0;
-  padding-left: 1.25rem;
-  font-size: 0.875rem;
-  line-height: 1.55;
-  color: var(--text-secondary);
-}
-
-.trustSteps li + li {
-  margin-top: 6px;
-}
-
 .hint {
   margin: 0;
   font-size: 0.9375rem;
@@ -210,6 +154,18 @@
 
 .finePrint {
   margin: 0;
+}
+
+.manualSteps {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.manualSteps li + li {
+  margin-top: 6px;
 }
 
 .manualApprovalFigure {

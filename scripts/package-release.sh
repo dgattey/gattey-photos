@@ -63,14 +63,7 @@ GA_ARGS=(--download-url-prefix "https://photos.gattey.com/" --link "https://phot
 rm -f "$PUBLIC_DIR"/Gattey-Photos-*.zip
 cp "$ZIP" "$PUBLIC_DIR/"
 cp "$WORK/appcast.xml" "$PUBLIC_DIR/appcast.xml"
-if [[ -f "$ROOT/.cert/gattey-photos.crt" ]]; then
-  cp "$ROOT/.cert/gattey-photos.crt" "$PUBLIC_DIR/gattey-photos-self-signed.crt"
-  "$ROOT/scripts/generate-trust-profile.sh"
-fi
 
 echo "package-release: v${VERSION} (build ${BUILD_NUMBER}), identity=${SIGN_ID}"
 echo "  server/public/$(basename "$ZIP")"
 echo "  server/public/appcast.xml"
-if [[ -f "$PUBLIC_DIR/gattey-photos-trust.mobileconfig" ]]; then
-  echo "  server/public/gattey-photos-trust.mobileconfig"
-fi

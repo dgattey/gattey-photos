@@ -1,9 +1,7 @@
 import { getMacOSRelease } from "@/lib/macos-release";
 import styles from "./page.module.css";
 
-export const dynamic = "force-static";
-
-const TRUST_PROFILE_PATH = "/gattey-photos-trust.mobileconfig";
+export const dynamic = "force-dynamic";
 
 export default function HomePage() {
   const release = getMacOSRelease();
@@ -40,40 +38,21 @@ export default function HomePage() {
 
           {release ? (
             <div className={styles.downloadActions}>
-              <a className={styles.downloadButton} href={release.zipPath} download>
+              <a className={styles.downloadButton} href="/download/macos">
                 Download for macOS{release.version ? ` (v${release.version})` : ""}
               </a>
 
-              <div className={styles.trustBlock}>
-                <p className={styles.trustLead}>First time on this Mac?</p>
-                <a
-                  className={styles.trustButton}
-                  href={TRUST_PROFILE_PATH}
-                  download="gattey-photos-trust.mobileconfig"
-                >
-                  Install macOS trust
-                </a>
-                <ol className={styles.trustSteps}>
-                  <li>Click the button above — macOS downloads a small profile.</li>
-                  <li>Open it (double-click the download or follow the Safari prompt).</li>
-                  <li>
-                    In System Settings, install <strong>Gattey Photos — macOS trust</strong>{" "}
-                    and enter your Mac password.
-                  </li>
-                  <li>Then download the app and open it from Applications.</li>
-                </ol>
-              </div>
-
               <details className={styles.manualApproval}>
-                <summary>If macOS still blocks the app</summary>
+                <summary>First time on this Mac? macOS may block the app</summary>
                 <div className={styles.manualApprovalBody}>
                   <p className={styles.finePrint}>
-                    You may need to approve the app once in System Settings even after installing
-                    the trust profile.
+                    After you download and try to open Gattey Photos once, approve it in System
+                    Settings.
                   </p>
-                  <ol className={styles.trustSteps}>
+                  <ol className={styles.manualSteps}>
                     <li>
-                      Try opening <strong>Gattey Photos</strong> once so macOS records the block.
+                      Try opening <strong>Gattey Photos</strong> from Applications so macOS
+                      records the block.
                     </li>
                     <li>
                       Open <strong>System Settings → Privacy & Security</strong>.
@@ -82,7 +61,7 @@ export default function HomePage() {
                       Under Security, click <strong>Open Anyway</strong> next to the Gattey Photos
                       message.
                     </li>
-                    <li>Open the app again from Applications.</li>
+                    <li>Open the app again.</li>
                   </ol>
                   <figure className={styles.manualApprovalFigure}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}

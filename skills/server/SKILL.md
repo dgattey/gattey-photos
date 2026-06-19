@@ -7,7 +7,8 @@ description: Change the Gattey Photos Next.js sync API on Vercel (gallery routes
 
 ## Entry points
 
-- `app/page.tsx` — `GET /` download splash (macOS zip + **Install macOS trust** profile from `public/gattey-photos-trust.mobileconfig`)
+- `app/page.tsx` — `GET /` download splash (macOS via `/download/macos`; collapsed Open Anyway steps)
+- `app/download/macos/route.ts` — redirects to the zip in `public/appcast.xml`
 - `app/api/gallery/route.ts` — GET manifest
 - `app/api/gallery/photos/route.ts` — POST upload
 - `app/api/gallery/photos/[id]/route.ts` — DELETE
