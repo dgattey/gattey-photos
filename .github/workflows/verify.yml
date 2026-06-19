@@ -6,7 +6,55 @@ on:
   pull_request:
 
 jobs:
-  verify:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      server: ${{ steps.filter.outputs.server }}
+      macos: ${{ steps.filter.outputs.macos }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            server:
+              - 'server/**'
+            macos:
+              - 'macos/**'
+              - 'scripts/verify.sh'
+              - 'scripts/package-macos.sh'
+              - 'scripts/package-release.sh'
+              - 'scripts/ci-build-macos-release.sh'
+              - 'scripts/launch.sh'
+              - 'scripts/generate-app-icon.sh'
+              - 'scripts/macos-release-inputs-changed.sh'
+              - '.github/workflows/verify.yml'
+              - '.github/workflows/release-macos.yml'
+              - 'skills/macos/**'
+
+  verify-server:
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jdx/mise-action@v2
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Server typecheck, tests, and production build
+        working-directory: server
+        run: |
+          npm run typecheck
+          npm run test
+          npm run build
+
+  verify-macos:
+    needs: changes
+    if: needs.changes.outputs.macos == 'true'
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
@@ -20,5 +68,5 @@ jobs:
         working-directory: server
         run: npm ci
 
-      - name: Run pre-push checks
+      - name: Run macOS and full-stack pre-push checks
         run: ./scripts/verify.sh

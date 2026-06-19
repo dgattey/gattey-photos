@@ -1,14 +1,22 @@
 # Build a signed macOS release and commit server/public/ for Vercel Git deploys.
-# Loop prevention: this workflow ignores pushes that only touch server/public/**.
+# Only runs when macOS or packaging inputs change (not site-only server edits).
 name: release-macos
 
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - 'server/public/**'
-      - '**.md'
-      - '.github/workflows/verify.yml'
+    paths:
+      - 'macos/**'
+      - 'scripts/package-macos.sh'
+      - 'scripts/package-release.sh'
+      - 'scripts/ci-build-macos-release.sh'
+      - 'scripts/macos-release-inputs-changed.sh'
+      - 'scripts/export-ci-secrets.sh'
+      - 'scripts/lib/signing.sh'
+      - 'scripts/next-release-version.sh'
+      - 'scripts/setup-self-signed-cert.sh'
+      - 'scripts/fetch-live-macos-release.sh'
+      - '.github/workflows/release-macos.yml'
   workflow_dispatch:
 
 permissions:

@@ -8,7 +8,7 @@ export default function HomePage() {
 
   return (
     <main className={styles.page}>
-      <div className={styles.shell}>
+      <div className={styles.heroUnit}>
         <div className={styles.photoColumn}>
           <div className={styles.frameOuter}>
             <div className={styles.frameMat}>

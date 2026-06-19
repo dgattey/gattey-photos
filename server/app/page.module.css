@@ -10,14 +10,19 @@
 
   min-height: 100dvh;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
   padding: 56px 40px;
   color: var(--text);
+  overflow-y: auto;
   background:
     radial-gradient(ellipse 120% 80% at 20% 0%, rgba(70, 126, 97, 0.14), transparent 55%),
     radial-gradient(ellipse 90% 70% at 100% 100%, rgba(70, 126, 97, 0.08), transparent 50%),
     var(--glass-base);
+}
+
+.page:has(.manualApproval[open]) {
+  padding-bottom: max(56px, 32vh);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -34,10 +39,10 @@
   }
 }
 
-.shell {
+.heroUnit {
   width: min(100%, 1080px);
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 48px;
 }
 
@@ -61,6 +66,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  overflow-anchor: none;
 }
 
 .title {
@@ -80,6 +86,7 @@
 }
 
 .downloadActions {
+  position: relative;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -129,6 +136,7 @@
 }
 
 .manualApproval {
+  position: relative;
   width: 100%;
   font-size: 0.8125rem;
   line-height: 1.5;
@@ -157,6 +165,22 @@
   flex-direction: column;
   gap: 12px;
   overflow-anchor: none;
+}
+
+.manualApproval[open] .manualApprovalBody {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 0;
+  right: 0;
+  margin-top: 0;
+  padding: 14px 16px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(60, 60, 67, 0.14);
+  background: var(--glass-base);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+  z-index: 2;
+  max-height: min(70vh, 720px);
+  overflow-y: auto;
 }
 
 .finePrint {
@@ -249,7 +273,11 @@
     padding: 24px 20px 32px;
   }
 
-  .shell {
+  .page:has(.manualApproval[open]) {
+    padding-bottom: max(32px, 40vh);
+  }
+
+  .heroUnit {
     flex-direction: column;
     gap: 28px;
     align-items: stretch;
@@ -276,7 +304,7 @@
     padding: 16px 16px 24px;
   }
 
-  .shell {
+  .heroUnit {
     gap: 24px;
   }
 
