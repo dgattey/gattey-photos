@@ -4,7 +4,7 @@ Small family install: **self-signed** code signing + Sparkle EdDSA. No Apple Dev
 
 - Stable self-signed cert in the keychain lets Sparkle replace the app in place. Ad-hoc (`-`) can show updates but **cannot install** them.
 - EdDSA signs the zip in `appcast.xml` (`scripts/generate-sparkle-key.sh`).
-- One-time per Mac: Gatekeeper **Open** / **Open Anyway** on first install; Sparkle updates after that.
+- One-time per Mac: install **Gattey Photos — macOS trust** from [photos.gattey.com](https://photos.gattey.com) (configuration profile), or **Privacy & Security → Open Anyway** after a blocked launch; Sparkle updates after that.
 - Feed + zip live in `server/public/` and deploy with the Next.js app on Vercel (normal Git integration).
 
 ## How it works
@@ -67,8 +67,14 @@ Leave Vercel **Production** Git deploys enabled (default). You do not need to ch
 
 ## First install (each family Mac, once)
 
-1. Download `https://photos.gattey.com/Gattey-Photos-<version>.zip`, unzip, drag to Applications.
-2. Right-click → **Open**, or **Privacy & Security → Open Anyway**.
+1. On [photos.gattey.com](https://photos.gattey.com), click **Install macOS trust** and install the downloaded profile in System Settings (Mac login password once).
+2. Click **Download for macOS**, unzip, drag **Gattey Photos** to Applications, and open it.
+
+If Gatekeeper still blocks after the profile: open the app once, then **System Settings → Privacy & Security → Open Anyway**.
+
+The release zip is correctly self-signed; macOS blocks unknown developers until you install trust or approve the app. That is not a broken build.
+
+Maintainers regenerate the profile when the signing cert changes: `./scripts/generate-trust-profile.sh` (also runs from `package-release.sh`).
 
 Anyone on an old **ad-hoc** build needs one install of the current self-signed zip; then Sparkle works.
 

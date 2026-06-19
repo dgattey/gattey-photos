@@ -83,6 +83,10 @@ for bundle in GatteyPhotos_GatteyPhotosApp GatteyPhotos_GatteyPhotosUI; do
   fi
 done
 cp "$ROOT/macos/Assets.car" "$RESOURCES/Assets.car"
+UI_RESOURCE_BUNDLE=".build/release/GatteyPhotos_GatteyPhotosUI.bundle"
+if [[ -f "$UI_RESOURCE_BUNDLE/unlock-welcome.png" ]]; then
+  cp "$UI_RESOURCE_BUNDLE/unlock-welcome.png" "$RESOURCES/unlock-welcome.png"
+fi
 chmod +x "$MACOS_BIN/GatteyPhotos"
 
 # Embed Sparkle.framework. ditto preserves the framework symlinks codesign needs.

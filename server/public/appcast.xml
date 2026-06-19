@@ -3,14 +3,14 @@
     <channel>
         <title>Gattey Photos</title>
         <item>
-            <title>1.0.5</title>
-            <pubDate>Thu, 18 Jun 2026 23:40:03 +0000</pubDate>
+            <title>1.0.6</title>
+            <pubDate>Thu, 18 Jun 2026 17:16:12 -0700</pubDate>
             <link>https://photos.gattey.com</link>
-            <sparkle:version>43</sparkle:version>
-            <sparkle:shortVersionString>1.0.5</sparkle:shortVersionString>
+            <sparkle:version>44</sparkle:version>
+            <sparkle:shortVersionString>1.0.6</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://photos.gattey.com/Gattey-Photos-1.0.5.zip" length="3861281" type="application/octet-stream" sparkle:edSignature="uhLtg3y5XR0/qmVPwIBJQj0FmQEh/kPfVBqoWaYrhcGuWxAmpI1SrPwjvYL7LAEaqa/bqefISb1dAMLnpz3YBQ=="/>
+            <enclosure url="https://photos.gattey.com/Gattey-Photos-1.0.6.zip" length="4050982" type="application/octet-stream" sparkle:edSignature="Z+bnaR+Pmh2X+oD3ebImxkCQwLVNmlX4fmQG44tjrvHU2jwCBEUDAdHdWaB6ta6lA4fY84LOXeZHv642vUQ0AA=="/>
         </item>
     </channel>
 </rss>

@@ -122,7 +122,10 @@ struct UnlockWelcomePhotoPanel: View {
     #endif
 
     private static let bundledWelcomeImage: PlatformWelcomeImage? = {
-        guard let url = Bundle.module.url(forResource: "unlock-welcome", withExtension: "png") else {
+        guard let url = GatteyPhotosUIResources.bundle.url(
+            forResource: "unlock-welcome",
+            withExtension: "png"
+        ) else {
             return nil
         }
         #if os(macOS)

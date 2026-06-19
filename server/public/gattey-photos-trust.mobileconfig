@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>PayloadCertificateFileName</key>
+      <string>gattey-photos-self-signed.cer</string>
+      <key>PayloadContent</key>
+      <data>
+MIIDbjCCAlagAwIBAgIUVA6LuzkXLh1t9K4bPPGMFEyJsN0wDQYJKoZIhvcNAQELBQAwSTEiMCAGA1UEAwwZR2F0dGV5IFBob3RvcyBTZWxmLVNpZ25lZDEWMBQGA1UECgwNR2F0dGV5IFBob3RvczELMAkGA1UEBhMCVVMwHhcNMjYwNjE4MjEzMTA1WhcNMzYwNjE1MjEzMTA1WjBJMSIwIAYDVQQDDBlHYXR0ZXkgUGhvdG9zIFNlbGYtU2lnbmVkMRYwFAYDVQQKDA1HYXR0ZXkgUGhvdG9zMQswCQYDVQQGEwJVUzCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAKSsvHROQerEewROVfTwjq/c0qiJ2NaBFDqJuciKNPMd1CP7i62G1ERX1qTZNFcj8RSHcVzIRXEkvZXL1RGtTP8AzaZtDjUeUyI0z7/jI+kJRs5fsObQMyC+HhMIG49W7XRRZ2ubyPgzRpslYTu0A+V0sQYma18A1NcQ3ZtwTuy0vIyvPIXLsHpue44lzfcDWr0eeyRMhqyY4QVCqpeYnFy8aUqi+NQpRo+m1m3HhelnwQDDzSWpwzc3ZT8s6lt3j8wgIM+Rh/0a/TStCp2EJZQe6jnqwPwahoGstKJRoIgC2hIoFvR4B5AO1tBSybKFeHOk5cqFYigvu3c9E+MnwhcCAwEAAaNOMEwwCQYDVR0TBAIwADALBgNVHQ8EBAMCB4AwEwYDVR0lBAwwCgYIKwYBBQUHAwMwHQYDVR0OBBYEFAhkfyV+Cr2mhAat/5/UwAgKHjMrMA0GCSqGSIb3DQEBCwUAA4IBAQAPT/aEhyEtWD43QOV8qj+fIR5AMrpOGQ8HMYW8SV9Rn2otONN8piXyV6HSkL7WYN0Lq1u9CXUpXWdIMxHekYKFi9XKdB2Pk+AP2V8Y2ggQ92e+RN9ksJB5/hW+gaDHoRY5gwGYyXyB5NFossgflvKNK6YiztFoZQLoSwndEE/1pfd+cz2gyuKz8/w2tRO3xslsj2LOeIGcqu08+0k5MoP9miQcuoTXUH+h7vhG8t+5KG7SJ1jfoPkiQEclMw1E7g0N252VaYSQ27xInDd5NyVVuvlhTZzal9Y8FRzepxEFNdEjptkSkeGn0ynl1RV+7SnDnJRON8yzmBU4HAjF3UD5
+      </data>
+      <key>PayloadDescription</key>
+      <string>Trust Gattey Photos on this Mac (self-signed app, not from the App Store).</string>
+      <key>PayloadDisplayName</key>
+      <string>Gattey Photos signing certificate</string>
+      <key>PayloadIdentifier</key>
+      <string>com.gattey.photos.signing-cert</string>
+      <key>PayloadType</key>
+      <string>com.apple.security.pem</string>
+      <key>PayloadUUID</key>
+      <string>a1b2c3d4-e5f6-4789-a012-3456789abcde</string>
+      <key>PayloadVersion</key>
+      <integer>1</integer>
+    </dict>
+  </array>
+  <key>PayloadDescription</key>
+  <string>One-time install so macOS allows Gattey Photos and future updates from photos.gattey.com.</string>
+  <key>PayloadDisplayName</key>
+  <string>Gattey Photos — macOS trust</string>
+  <key>PayloadIdentifier</key>
+  <string>com.gattey.photos.trust</string>
+  <key>PayloadOrganization</key>
+  <string>Gattey Photos</string>
+  <key>PayloadRemovalDisallowed</key>
+  <false/>
+  <key>PayloadType</key>
+  <string>Configuration</string>
+  <key>PayloadUUID</key>
+  <string>b2c3d4e5-f6a7-4890-b123-456789abcdef0</string>
+  <key>PayloadVersion</key>
+  <integer>1</integer>
+</dict>
+</plist>
