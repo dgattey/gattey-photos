@@ -47,47 +47,47 @@ export default function HomePage() {
                     That version is still deploying. Refresh in a minute if download fails.
                   </p>
                 ) : null}
+
+                <details className={styles.manualApproval}>
+                  <summary>First time on this Mac? macOS may block the app</summary>
+                  <div className={styles.manualApprovalBody}>
+                    <p className={styles.finePrint}>
+                      After you download and try to open Gattey Photos once, approve it in System
+                      Settings.
+                    </p>
+                    <ol className={styles.manualSteps}>
+                      <li>
+                        Try opening <strong>Gattey Photos</strong> from Applications so macOS
+                        records the block.
+                      </li>
+                      <li>
+                        Open <strong>System Settings → Privacy & Security</strong>.
+                      </li>
+                      <li>
+                        Under Security, click <strong>Open Anyway</strong> next to the Gattey
+                        Photos message.
+                      </li>
+                      <li>Open the app again.</li>
+                    </ol>
+                    <figure className={styles.manualApprovalFigure}>
+                      <div className={styles.manualApprovalMedia}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src="/macos-open-anyway.png"
+                          alt='Privacy and Security settings showing Gattey Photos was blocked with an Open Anyway button'
+                          width={1024}
+                          height={903}
+                          decoding="async"
+                        />
+                      </div>
+                      <figcaption>
+                        Open Anyway appears after you try to launch the app once.
+                      </figcaption>
+                    </figure>
+                  </div>
+                </details>
               </div>
             </div>
-
-            <details className={styles.manualApproval}>
-              <summary>First time on this Mac? macOS may block the app</summary>
-              <div className={styles.manualApprovalBody}>
-                <p className={styles.finePrint}>
-                  After you download and try to open Gattey Photos once, approve it in System
-                  Settings.
-                </p>
-                <ol className={styles.manualSteps}>
-                  <li>
-                    Try opening <strong>Gattey Photos</strong> from Applications so macOS records
-                    the block.
-                  </li>
-                  <li>
-                    Open <strong>System Settings → Privacy & Security</strong>.
-                  </li>
-                  <li>
-                    Under Security, click <strong>Open Anyway</strong> next to the Gattey Photos
-                    message.
-                  </li>
-                  <li>Open the app again.</li>
-                </ol>
-                <figure className={styles.manualApprovalFigure}>
-                  <div className={styles.manualApprovalMedia}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src="/macos-open-anyway.png"
-                      alt='Privacy and Security settings showing Gattey Photos was blocked with an Open Anyway button'
-                      width={1024}
-                      height={903}
-                      decoding="async"
-                    />
-                  </div>
-                  <figcaption>
-                    Open Anyway appears after you try to launch the app once.
-                  </figcaption>
-                </figure>
-              </div>
-            </details>
           </>
         ) : (
           <p className={styles.noRelease}>

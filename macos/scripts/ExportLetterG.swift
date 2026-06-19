@@ -4,9 +4,10 @@ import Foundation
 
 /// Renders a centered Georgia "G" path into `AppIcon.icon/Assets/Letter-G.svg`.
 let size: CGFloat = 1024
-/// Serif "G" looks left/low when bbox-centered; nudge in SVG points (x right, y up).
+/// Horizontal: serif G reads left when bbox-centered; nudge right.
 let opticalDX: CGFloat = 24
-let opticalDY: CGFloat = -20
+/// Vertical: bbox-centered in the square (no extra up-nudge).
+let opticalDY: CGFloat = 0
 
 func serifFont(pointSize: CGFloat) -> NSFont {
     for name in ["NewYork-Bold", "Georgia-Bold", "TimesNewRomanPS-BoldMT", "Baskerville-Bold"] {
