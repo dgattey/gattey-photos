@@ -37,6 +37,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    /// Sparkle closes its alert when installing; without this, a single-window app can quit before download/install runs.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        !SparkleUpdateSession.shared.blocksQuitOnLastWindowClosed
+    }
+
     /// Applies translucent chrome before SwiftUI mounts so the window never flashes the default opaque
     /// titlebar while the session is loading. `WindowChromeConfigurator` refines it per session phase
     /// once the UI is up (gallery and unlock chrome are both transparent, so there is no conflict).
