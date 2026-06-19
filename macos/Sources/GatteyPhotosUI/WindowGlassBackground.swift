@@ -91,6 +91,7 @@ struct WindowChromeConfigurator: NSViewRepresentable {
 
     private static func apply(unlocked: Bool, to window: NSWindow?) {
         guard let window else { return }
+        window.markAsGatteyPhotosMainWindowIfNeeded()
         if unlocked {
             window.applyGatteyPhotosGalleryChrome()
         } else {
@@ -127,11 +128,26 @@ struct TransparentWindowConfigurator: NSViewRepresentable {
     }
 
     private static func apply(to window: NSWindow?) {
-        window?.applyGatteyPhotosUnlockChrome()
+        guard let window else { return }
+        window.markAsGatteyPhotosMainWindowIfNeeded()
+        window.applyGatteyPhotosUnlockChrome()
     }
 }
 
 public extension NSWindow {
+    /// Matches SwiftUI `Window(id: "main")` — used so single-window enforcement ignores Sparkle dialogs.
+    static let gatteyPhotosMainSceneID = NSUserInterfaceItemIdentifier("main")
+
+    var isGatteyPhotosMainWindow: Bool {
+        identifier == Self.gatteyPhotosMainSceneID
+    }
+
+    func markAsGatteyPhotosMainWindowIfNeeded() {
+        if identifier != Self.gatteyPhotosMainSceneID {
+            identifier = Self.gatteyPhotosMainSceneID
+        }
+    }
+
     /// Gallery: translucent, borderless toolbar. `titlebarAppearsTransparent = true` removes the system
     /// toolbar background bar; `isOpaque = false` + clear background let the `WindowGlassBackground`
     /// vibrancy (and desktop) show through the whole window. The scroll edge is faked with a top

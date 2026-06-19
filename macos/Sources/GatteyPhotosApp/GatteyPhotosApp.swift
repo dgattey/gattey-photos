@@ -22,6 +22,7 @@ struct GatteyPhotosApp: App {
                 .frame(minWidth: 900, minHeight: 600)
                 .onAppear {
                     store.session = session
+                    updater.checkForUpdatesOnLaunch()
                 }
         }
         .defaultSize(width: 900, height: 600)

@@ -41,7 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// titlebar while the session is loading. `WindowChromeConfigurator` refines it per session phase
     /// once the UI is up (gallery and unlock chrome are both transparent, so there is no conflict).
     private func configureInitialWindowChrome() {
-        for window in NSApp.windows where window.canBecomeMain {
+        for window in Self.mainWindowCandidates {
             window.applyGatteyPhotosUnlockChrome()
             window.titleVisibility = .hidden
             window.title = ""
@@ -53,7 +53,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             forName: NSWindow.didBecomeMainNotification,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] notification in
+            guard let window = notification.object as? NSWindow, window.isGatteyPhotosMainWindow else {
+                return
+            }
             self?.enforceSingleMainWindow()
         }
     }
@@ -72,9 +75,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainWindowCandidates.first(where: \.isKeyWindow) ?? mainWindowCandidates.first
     }
 
+    /// Only the SwiftUI main scene — not Sparkle or other auxiliary windows.
     private static var mainWindowCandidates: [NSWindow] {
         NSApp.windows.filter { window in
-            window.canBecomeMain && !window.isSheet && window.level == .normal
+            window.isGatteyPhotosMainWindow
+                && window.canBecomeMain
+                && !window.isSheet
+                && window.level == .normal
         }
     }
 }
