@@ -1,6 +1,5 @@
 import fs from "fs";
 import path from "path";
-import { unstable_noStore as noStore } from "next/cache";
 
 export type MacOSRelease = {
   version: string;
@@ -9,7 +8,7 @@ export type MacOSRelease = {
   zipPath: string;
   /** Absolute URL used for download redirects. */
   downloadUrl: string;
-  /** False when appcast names a zip that is not on the site yet (release still deploying). */
+  /** False when appcast names a zip that is not in `server/public/` (broken tree or mid-release build). */
   downloadReady: boolean;
 };
 
@@ -48,45 +47,25 @@ export function getSiteOrigin(): string {
   return `http://localhost:${process.env.PORT ?? 3000}`;
 }
 
-async function readAppcastXml(): Promise<string | null> {
-  const origin = getSiteOrigin();
-  try {
-    const res = await fetch(`${origin}/appcast.xml`, {
-      cache: "no-store",
-      next: { revalidate: 0 },
-    });
-    if (res.ok) return await res.text();
-  } catch {
-    // Local dev or fetch failure — use the bundled file from this deployment.
-  }
-
+function readBundledAppcastXml(): string | null {
   const appcastPath = path.join(process.cwd(), "public", "appcast.xml");
   if (!fs.existsSync(appcastPath)) return null;
   return fs.readFileSync(appcastPath, "utf8");
 }
 
-async function zipIsAvailable(downloadUrl: string, zipPath: string): Promise<boolean> {
-  try {
-    const res = await fetch(downloadUrl, { method: "HEAD", cache: "no-store" });
-    if (res.ok) return true;
-  } catch {
-    // fall through to local public/
-  }
-
+function zipExistsInPublic(zipPath: string): boolean {
   const localZip = path.join(process.cwd(), "public", zipPath.replace(/^\//, ""));
   return fs.existsSync(localZip);
 }
 
-/** Reads the live appcast on each request (not statically baked at build time). */
-export async function getMacOSRelease(): Promise<MacOSRelease | null> {
-  noStore();
-
-  const xml = await readAppcastXml();
+/** Reads committed `server/public/` artifacts (static at build / deploy time). */
+export function getMacOSRelease(): MacOSRelease | null {
+  const xml = readBundledAppcastXml();
   if (!xml) return null;
 
   const parsed = parseAppcastXml(xml);
   if (!parsed) return null;
 
-  const downloadReady = await zipIsAvailable(parsed.downloadUrl, parsed.zipPath);
+  const downloadReady = zipExistsInPublic(parsed.zipPath);
   return { ...parsed, downloadReady };
 }

@@ -5,7 +5,7 @@ Small family install: **self-signed** code signing + Sparkle EdDSA. No Apple Dev
 - Stable self-signed cert in the keychain lets Sparkle replace the app in place. Ad-hoc (`-`) can show updates but **cannot install** them.
 - EdDSA signs the zip in `appcast.xml` (`scripts/generate-sparkle-key.sh`).
 - One-time per Mac: **Privacy & Security → Open Anyway** after a blocked launch; Sparkle updates after that.
-- Feed + zip live in `server/public/` and deploy with the Next.js app on Vercel (normal Git integration). The download splash reads `appcast.xml` on **each request** (SSR), not at static build time, so it stays in sync when the release workflow commits a new zip after a code deploy.
+- Feed + zip live in `server/public/` and deploy with the Next.js app on Vercel (normal Git integration). The download splash and `/download/macos` are **statically generated from that commit’s `public/` at deploy time** — same source as Sparkle’s `appcast.xml`. After a `macos/` push, the site may still show the previous version until the `Release v…` commit’s Vercel deploy finishes; that is expected.
 
 ## How it works
 

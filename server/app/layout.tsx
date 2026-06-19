@@ -14,6 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <link rel="preload" href="/unlock-welcome.png" as="image" />
+      </head>
       <body>{children}</body>
     </html>
   );

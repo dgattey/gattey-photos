@@ -10,7 +10,7 @@
 
   min-height: 100dvh;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
   padding: 56px 40px;
   color: var(--text);
@@ -34,27 +34,51 @@
   }
 }
 
-.shell {
+/* Photo + CTA on row 1; macOS help on row 2 so only the help block grows downward. */
+.heroUnit {
   width: min(100%, 1080px);
-  display: flex;
-  align-items: flex-start;
-  gap: 48px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) min(100%, 520px);
+  grid-template-rows: auto auto;
+  column-gap: 48px;
+  row-gap: 20px;
+  align-items: start;
 }
 
 .photoColumn {
-  flex: 1 1 auto;
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
   min-width: 0;
   display: flex;
   justify-content: flex-end;
 }
 
-.downloadColumn {
-  flex: 0 0 auto;
-  width: min(100%, 520px);
+.downloadPrimary {
+  grid-column: 2;
+  grid-row: 1;
+  width: 100%;
+  max-width: 520px;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
   gap: 36px;
+}
+
+.downloadCta {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.noRelease {
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0;
+  max-width: 520px;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
 }
 
 .headingBlock {
@@ -107,14 +131,6 @@
   outline-offset: 3px;
 }
 
-.downloadActions {
-  width: 100%;
-  max-width: 520px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
 .hint {
   margin: 0;
   font-size: 0.9375rem;
@@ -123,6 +139,8 @@
 }
 
 .manualApproval {
+  grid-column: 2;
+  grid-row: 2;
   width: 100%;
   max-width: 520px;
   font-size: 0.8125rem;
@@ -243,13 +261,14 @@
     align-items: flex-start;
   }
 
-  .shell {
-    flex-direction: column;
-    gap: 28px;
-    align-items: stretch;
+  .heroUnit {
+    grid-template-columns: 1fr;
+    row-gap: 28px;
   }
 
   .photoColumn {
+    grid-column: 1;
+    grid-row: 1;
     justify-content: center;
   }
 
@@ -258,8 +277,16 @@
     margin: 0 auto;
   }
 
-  .downloadColumn {
-    width: 100%;
-    gap: 28px;
+  .downloadPrimary,
+  .noRelease {
+    grid-column: 1;
+    grid-row: 2;
+    max-width: none;
+  }
+
+  .manualApproval {
+    grid-column: 1;
+    grid-row: 3;
+    max-width: none;
   }
 }
