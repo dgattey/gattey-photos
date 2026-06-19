@@ -1,10 +1,14 @@
 import { getMacOSRelease } from "@/lib/macos-release";
+import { connection } from "next/server";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
-export default function HomePage() {
-  const release = getMacOSRelease();
+export default async function HomePage() {
+  await connection();
+  const release = await getMacOSRelease();
 
   return (
     <main className={styles.page}>
@@ -41,6 +45,11 @@ export default function HomePage() {
               <a className={styles.downloadButton} href="/download/macos">
                 Download for macOS{release.version ? ` (v${release.version})` : ""}
               </a>
+              {!release.downloadReady ? (
+                <p className={styles.hint}>
+                  That version is still deploying. Refresh in a minute if download fails.
+                </p>
+              ) : null}
 
               <details className={styles.manualApproval}>
                 <summary>First time on this Mac? macOS may block the app</summary>

@@ -6,7 +6,7 @@
     "build": "next build",
     "start": "next start --port 3000",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test lib/auth.test.ts lib/api-error.test.ts lib/gallery.test.ts lib/gallery-mutation.test.ts"
+    "test": "tsx --test lib/auth.test.ts lib/api-error.test.ts lib/gallery.test.ts lib/gallery-mutation.test.ts lib/macos-release.test.ts"
   },
   "dependencies": {
     "@vercel/blob": "^2.4.0",

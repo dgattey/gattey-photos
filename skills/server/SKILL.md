@@ -7,8 +7,9 @@ description: Change the Gattey Photos Next.js sync API on Vercel (gallery routes
 
 ## Entry points
 
-- `app/page.tsx` — `GET /` download splash (macOS via `/download/macos`; collapsed Open Anyway steps)
-- `app/download/macos/route.ts` — redirects to the zip in `public/appcast.xml`
+- `app/page.tsx` — `GET /` download splash (SSR: live `appcast.xml` per request; download via `/download/macos`)
+- `app/download/macos/route.ts` — redirects to the current zip when `appcast.xml` and the file are both live
+- `lib/macos-release.ts` — parses appcast, checks zip with `HEAD`, sets `downloadReady`
 - `app/api/gallery/route.ts` — GET manifest
 - `app/api/gallery/photos/route.ts` — POST upload
 - `app/api/gallery/photos/[id]/route.ts` — DELETE
