@@ -87,7 +87,7 @@ public struct SyncHTTPFailure: Sendable, Equatable {
 
     private static func extractJSONErrorMessage(from text: String) -> String? {
         guard let data = text.data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return nil }
 
         let keys = ["error", "message", "detail", "title", "description"]

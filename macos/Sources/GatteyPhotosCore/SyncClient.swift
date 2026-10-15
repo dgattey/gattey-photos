@@ -137,30 +137,32 @@ public struct SyncClient: Sendable {
         let url = req.url ?? baseURL
         let (data, res) = try await session.data(for: req)
         guard let http = res as? HTTPURLResponse else {
-            throw SyncError.http(SyncHTTPFailure(
-                statusCode: -1,
-                method: method,
-                url: url.absoluteString,
-                responseBody: "no response",
-                requestBodyBytes: body?.count,
-                context: context
-            ))
+            throw SyncError.http(
+                SyncHTTPFailure(
+                    statusCode: -1,
+                    method: method,
+                    url: url.absoluteString,
+                    responseBody: "no response",
+                    requestBodyBytes: body?.count,
+                    context: context
+                ))
         }
         if http.statusCode == 409,
-           let payload = try? await BackgroundJSONCodec.decode(StaleGalleryPayload.self, from: data)
+            let payload = try? await BackgroundJSONCodec.decode(StaleGalleryPayload.self, from: data)
         {
             throw SyncError.stale(GalleryResponse(state: payload.state))
         }
         guard (200...299).contains(http.statusCode) else {
             let text = String(data: data, encoding: .utf8) ?? ""
-            throw SyncError.http(SyncHTTPFailure(
-                statusCode: http.statusCode,
-                method: method,
-                url: url.absoluteString,
-                responseBody: text,
-                requestBodyBytes: body?.count,
-                context: context
-            ))
+            throw SyncError.http(
+                SyncHTTPFailure(
+                    statusCode: http.statusCode,
+                    method: method,
+                    url: url.absoluteString,
+                    responseBody: text,
+                    requestBodyBytes: body?.count,
+                    context: context
+                ))
         }
         return data
     }
@@ -198,13 +200,14 @@ public struct SyncClient: Sendable {
         guard let http = res as? HTTPURLResponse else { throw SyncError.decode }
         if http.statusCode == 304 { return .notModified }
         guard (200...299).contains(http.statusCode) else {
-            throw SyncError.http(SyncHTTPFailure(
-                statusCode: http.statusCode,
-                method: "GET",
-                url: req.url?.absoluteString ?? baseURL.absoluteString,
-                responseBody: String(data: data, encoding: .utf8) ?? "",
-                context: "fetch gallery"
-            ))
+            throw SyncError.http(
+                SyncHTTPFailure(
+                    statusCode: http.statusCode,
+                    method: "GET",
+                    url: req.url?.absoluteString ?? baseURL.absoluteString,
+                    responseBody: String(data: data, encoding: .utf8) ?? "",
+                    context: "fetch gallery"
+                ))
         }
         let decoded = try await BackgroundJSONCodec.decode(GalleryResponse.self, from: data)
         return .modified(decoded)
@@ -320,7 +323,9 @@ public struct SyncClient: Sendable {
         return decoded.devices
     }
 
-    public func registerDevice(setupText: String, displayName: String?, registeredBy: String) async throws -> RegisteredDevicePublic {
+    public func registerDevice(setupText: String, displayName: String?, registeredBy: String) async throws
+        -> RegisteredDevicePublic
+    {
         struct Body: Encodable, Sendable {
             var setupText: String
             var displayName: String?
@@ -383,13 +388,14 @@ public struct SyncClient: Sendable {
             let (data, res) = try await urlSession.data(for: req)
             guard let http = res as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
                 let code = (res as? HTTPURLResponse)?.statusCode ?? -1
-                throw SyncError.http(SyncHTTPFailure(
-                    statusCode: code,
-                    method: "GET",
-                    url: req.url?.absoluteString ?? baseStr,
-                    responseBody: "image download failed",
-                    context: "cache photo \(photoID)\(width.map { " w=\($0)" } ?? "")"
-                ))
+                throw SyncError.http(
+                    SyncHTTPFailure(
+                        statusCode: code,
+                        method: "GET",
+                        url: req.url?.absoluteString ?? baseStr,
+                        responseBody: "image download failed",
+                        context: "cache photo \(photoID)\(width.map { " w=\($0)" } ?? "")"
+                    ))
             }
             try await Task.detached(priority: .utility) {
                 try data.write(to: dest, options: .atomic)

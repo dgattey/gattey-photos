@@ -53,11 +53,12 @@ public final class GallerySelectionStore {
     }
 
     private func applyRangeSelection(to id: PhotoID, photoOrder: [PhotoID]) {
-        let anchor = selectionAnchor
+        let anchor =
+            selectionAnchor
             ?? selectedIDs.compactMap { photoOrder.firstIndex(of: $0) }.min().flatMap { photoOrder[$0] }
             ?? id
         guard let from = photoOrder.firstIndex(of: anchor),
-              let to = photoOrder.firstIndex(of: id)
+            let to = photoOrder.firstIndex(of: id)
         else {
             selectedIDs = [id]
             selectionAnchor = id
@@ -87,7 +88,7 @@ public final class GallerySelectionStore {
 
     func openLightboxFromSelection(photoOrder: [PhotoID]) {
         guard !isLightboxOpen,
-              let id = preferredLightboxPhotoID(in: photoOrder)
+            let id = preferredLightboxPhotoID(in: photoOrder)
         else { return }
         openLightbox(id)
     }
@@ -126,7 +127,8 @@ public final class GallerySelectionStore {
         let count = photoOrder.count
         let startIndex: Int
         if let id = preferredLightboxPhotoID(in: photoOrder),
-           let index = photoOrder.firstIndex(of: id) {
+            let index = photoOrder.firstIndex(of: id)
+        {
             startIndex = index
         } else if linearDelta > 0 {
             startIndex = -1
@@ -145,8 +147,8 @@ public final class GallerySelectionStore {
     @discardableResult
     func navigateLightbox(by delta: Int, photoOrder: [PhotoID]) -> Bool {
         guard isLightboxOpen, photoOrder.count > 1,
-              let current = presentedLightboxPhotoID,
-              let index = photoOrder.firstIndex(of: current)
+            let current = presentedLightboxPhotoID,
+            let index = photoOrder.firstIndex(of: current)
         else { return false }
         let count = photoOrder.count
         let nextIndex = ((index + delta) % count + count) % count

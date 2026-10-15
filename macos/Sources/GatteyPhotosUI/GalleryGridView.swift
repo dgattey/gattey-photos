@@ -1,12 +1,11 @@
 import GatteyPhotosCore
+import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 
 #if os(macOS)
 import AppKit
 #endif
-
-import PhotosUI
 
 struct GalleryGridView: View {
     @Environment(AppChromeState.self) private var chrome
@@ -69,10 +68,10 @@ struct GalleryGridView: View {
         .modifier(GalleryMacOSToolbarTitleRemoval())
         .overlay(alignment: .top) {
             VariableBlurView(maxBlurRadius: 4, direction: .blurredTopClearBottom)
-                .frame(height: 68)
-                .frame(maxWidth: .infinity)
-                .ignoresSafeArea(edges: .top)
-                .allowsHitTesting(false)
+            .frame(height: 68)
+            .frame(maxWidth: .infinity)
+            .ignoresSafeArea(edges: .top)
+            .allowsHitTesting(false)
         }
         #endif
         #if os(macOS)
@@ -696,7 +695,9 @@ private final class PhotoGridClickNSView: NSView, NSDraggingSource {
         beginDraggingSession(with: [draggingItem], event: event, source: self)
     }
 
-    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext)
+        -> NSDragOperation
+    {
         .move
     }
 
@@ -739,7 +740,8 @@ private final class PhotoGridClickNSView: NSView, NSDraggingSource {
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         if let payload = GalleryFilePasteboard.extractDropPayload(from: sender),
-           let onFileDrop {
+            let onFileDrop
+        {
             onFileDropTargeted?(false)
             Task { @MainActor in
                 let fileURLs = await payload.materializeURLs()
@@ -784,7 +786,8 @@ private struct GalleryToolbarLeadingTitle: View {
         if isBootstrapping, count == 0 {
             return String(localized: "Loading photos…")
         }
-        let word = count == 1
+        let word =
+            count == 1
             ? String(localized: "photo")
             : String(localized: "photos")
         return "\(count) \(word)"
@@ -855,10 +858,10 @@ private struct GalleryMacOSToolbarActionButtonStyle: ViewModifier {
 #endif
 
 #if os(macOS)
-private extension View {
+extension View {
     /// macOS 26+: soft Liquid Glass scroll edge as the grid scrolls under the unified toolbar.
     @ViewBuilder
-    func galleryMacOSGridScrollEdgeEffect() -> some View {
+    fileprivate func galleryMacOSGridScrollEdgeEffect() -> some View {
         if #available(macOS 26.0, *) {
             scrollEdgeEffectStyle(.soft, for: .top)
         } else {
@@ -892,7 +895,7 @@ private struct GalleryThumbnailSizeToolbarControl: View {
             stepButton(delta: 1, systemImage: "square.grid.3x3", help: "Smaller thumbnails")
             Slider(
                 value: columnCountSliderBinding,
-                in: Double(AppSettings.galleryGridColumnCountMin) ... Double(AppSettings.galleryGridColumnCountMax),
+                in: Double(AppSettings.galleryGridColumnCountMin)...Double(AppSettings.galleryGridColumnCountMax),
                 step: 1
             )
             .frame(width: 120)
@@ -1131,13 +1134,16 @@ struct PhotoThumb: View {
             }
             .overlay(alignment: .bottomTrailing) {
                 if let cornerTag,
-                   selection.presentedLightboxPhotoID != photo.id {
+                    selection.presentedLightboxPhotoID != photo.id
+                {
                     Text(cornerTag)
                         .font(AppTypography.thumbBadge)
                         .foregroundStyle(.white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 4)
-                        .background(cornerTag == PhotoFormatters.showingTodayTag ? Color.black : AppBrandColor.accentGreen)
+                        .background(
+                            cornerTag == PhotoFormatters.showingTodayTag ? Color.black : AppBrandColor.accentGreen
+                        )
                         .padding(6)
                 }
             }
@@ -1193,4 +1199,3 @@ private enum GalleryThumbSizing {
         #endif
     }
 }
-

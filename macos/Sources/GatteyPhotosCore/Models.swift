@@ -89,7 +89,7 @@ public struct GalleryState: Codable, Equatable, Sendable {
     public static func uploaderId(forDisplayName name: String) -> UploaderID {
         let s = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalized = s.isEmpty ? defaultUploaderDisplayName : s
-        var h: UInt32 = 0x811c9dc5
+        var h: UInt32 = 0x811c_9dc5
         for scalar in normalized.unicodeScalars {
             h ^= UInt32(scalar.value)
             h = h &* 0x0100_0193
@@ -193,8 +193,8 @@ public struct GalleryState: Codable, Equatable, Sendable {
         var next = self
         for view in views {
             guard let raw = view.downloadUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !raw.isEmpty,
-                  var entry = next.photos[view.id]
+                !raw.isEmpty,
+                var entry = next.photos[view.id]
             else { continue }
             entry.downloadUrl = raw
             next.photos[view.id] = entry
@@ -291,7 +291,8 @@ public struct AppSettings: Codable, Sendable {
     public static let galleryGridColumnCountMin: Int = 2
     public static let galleryGridColumnCountMax: Int = 8
 
-    public static let debugAdvanceIntervalSecondsDefault: Int = GalleryRotationSchedule.defaultDebugAdvanceIntervalSeconds
+    public static let debugAdvanceIntervalSecondsDefault: Int = GalleryRotationSchedule
+        .defaultDebugAdvanceIntervalSeconds
 
     public static let defaultDisplayName = ""
 
@@ -353,13 +354,16 @@ public struct AppSettings: Codable, Sendable {
         galleryName = try c.decodeIfPresent(String.self, forKey: .galleryName) ?? d.galleryName
         let nameRaw = try c.decodeIfPresent(String.self, forKey: .displayName) ?? Self.defaultDisplayName
         displayName = nameRaw.trimmingCharacters(in: .whitespacesAndNewlines)
-        let splitRaw = try c.decodeIfPresent(Double.self, forKey: .previewPaneSplitFraction)
+        let splitRaw =
+            try c.decodeIfPresent(Double.self, forKey: .previewPaneSplitFraction)
             ?? Self.previewPaneSplitFractionDefault
         previewPaneSplitFraction = Self.clampedPreviewPaneSplitFraction(splitRaw)
-        let countRaw = try c.decodeIfPresent(Int.self, forKey: .galleryGridColumnCount)
+        let countRaw =
+            try c.decodeIfPresent(Int.self, forKey: .galleryGridColumnCount)
             ?? Self.galleryGridColumnCountDefault
         galleryGridColumnCount = Self.clampedGalleryGridColumnCount(countRaw)
-        let intervalRaw = try c.decodeIfPresent(Int.self, forKey: .debugAdvanceIntervalSeconds)
+        let intervalRaw =
+            try c.decodeIfPresent(Int.self, forKey: .debugAdvanceIntervalSeconds)
             ?? Self.debugAdvanceIntervalSecondsDefault
         debugAdvanceIntervalSeconds = Self.clampedDebugAdvanceIntervalSeconds(intervalRaw)
     }

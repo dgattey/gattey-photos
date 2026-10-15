@@ -45,11 +45,11 @@ public enum PhotoCacheJPEG: Sendable {
         maxPixelSize: Int = defaultMaxPixelSize
     ) throws -> Data {
         guard let source = CGImageSourceCreateWithData(raw as CFData, nil),
-              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-              let pixelWidth = props[kCGImagePropertyPixelWidth] as? Int,
-              let pixelHeight = props[kCGImagePropertyPixelHeight] as? Int,
-              pixelWidth > 0,
-              pixelHeight > 0
+            let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+            let pixelWidth = props[kCGImagePropertyPixelWidth] as? Int,
+            let pixelHeight = props[kCGImagePropertyPixelHeight] as? Int,
+            pixelWidth > 0,
+            pixelHeight > 0
         else {
             throw PhotoCacheJPEGError.unsupportedImageFile(name)
         }
@@ -57,11 +57,13 @@ public enum PhotoCacheJPEG: Sendable {
         if isJPEG(raw) && !needsOrientationBake(props) && fitsWithinMax {
             return raw
         }
-        guard let encoded = encodeAsJPEG(
-            from: source,
-            compressionQuality: compressionQuality,
-            maxPixelSize: maxPixelSize
-        ) else {
+        guard
+            let encoded = encodeAsJPEG(
+                from: source,
+                compressionQuality: compressionQuality,
+                maxPixelSize: maxPixelSize
+            )
+        else {
             throw PhotoCacheJPEGError.unsupportedImageFile(name)
         }
         return encoded
@@ -120,19 +122,23 @@ public enum PhotoCacheJPEG: Sendable {
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
         ]
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(
-            source,
-            0,
-            options as CFDictionary
-        ) else { return nil }
+        guard
+            let cgImage = CGImageSourceCreateThumbnailAtIndex(
+                source,
+                0,
+                options as CFDictionary
+            )
+        else { return nil }
 
         let out = NSMutableData()
-        guard let dest = CGImageDestinationCreateWithData(
-            out,
-            UTType.jpeg.identifier as CFString,
-            1,
-            nil
-        ) else { return nil }
+        guard
+            let dest = CGImageDestinationCreateWithData(
+                out,
+                UTType.jpeg.identifier as CFString,
+                1,
+                nil
+            )
+        else { return nil }
         let props: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: compressionQuality]
         CGImageDestinationAddImage(dest, cgImage, props as CFDictionary)
         guard CGImageDestinationFinalize(dest) else { return nil }

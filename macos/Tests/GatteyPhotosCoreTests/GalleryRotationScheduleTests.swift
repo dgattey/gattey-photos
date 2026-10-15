@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import GatteyPhotosCore
 
 final class GalleryRotationScheduleTests: XCTestCase {

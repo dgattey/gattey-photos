@@ -89,12 +89,12 @@ struct GalleryDeleteHandling: ViewModifier {
         content
             .environment(\.galleryDeleteRequest, requestDelete(photoIDs:))
             #if os(macOS)
-            .onDeleteCommand {
-                _ = triggerDeleteFromKeyboard()
-            }
+        .onDeleteCommand {
+            _ = triggerDeleteFromKeyboard()
+        }
             #else
-            .onKeyPress(.delete) { handleDeleteKey() }
-            .onKeyPress(.deleteForward) { handleDeleteKey() }
+        .onKeyPress(.delete) { handleDeleteKey() }
+        .onKeyPress(.deleteForward) { handleDeleteKey() }
             #endif
             .galleryDeleteAlertPresentation(
                 photoIDs: photoIDs,
@@ -150,8 +150,8 @@ struct GalleryDeleteHandling: ViewModifier {
     }
 }
 
-private extension View {
-    func galleryDeleteAlertPresentation(
+extension View {
+    fileprivate func galleryDeleteAlertPresentation(
         photoIDs: Set<PhotoID>,
         alert: Binding<GalleryDeleteAlert?>,
         onConfirm: @escaping () -> Void,
@@ -174,7 +174,9 @@ private extension View {
         }
     }
 
-    func confirmPresented(alert: Binding<GalleryDeleteAlert?>, onCancel: @escaping () -> Void) -> Binding<Bool> {
+    fileprivate func confirmPresented(alert: Binding<GalleryDeleteAlert?>, onCancel: @escaping () -> Void) -> Binding<
+        Bool
+    > {
         Binding(
             get: {
                 if case .confirm = alert.wrappedValue { return true }
@@ -184,7 +186,9 @@ private extension View {
         )
     }
 
-    func blockedPresented(alert: Binding<GalleryDeleteAlert?>, onCancel: @escaping () -> Void) -> Binding<Bool> {
+    fileprivate func blockedPresented(alert: Binding<GalleryDeleteAlert?>, onCancel: @escaping () -> Void) -> Binding<
+        Bool
+    > {
         Binding(
             get: {
                 if case .blocked = alert.wrappedValue { return true }
@@ -194,21 +198,21 @@ private extension View {
         )
     }
 
-    func blockedAlertMessage(alert: GalleryDeleteAlert?) -> String {
+    fileprivate func blockedAlertMessage(alert: GalleryDeleteAlert?) -> String {
         if case .blocked(let reason) = alert {
             return GalleryDeleteCopy.blockedMessage(reason: reason)
         }
         return GalleryDeleteCopy.blockedMessage(reason: .wouldRemoveAllPhotos)
     }
 
-    func alertConfirmTitle(alert: GalleryDeleteAlert?, fallbackCount: Int) -> String {
+    fileprivate func alertConfirmTitle(alert: GalleryDeleteAlert?, fallbackCount: Int) -> String {
         if case .confirm(let count) = alert {
             return GalleryDeleteCopy.confirmTitle(count: count)
         }
         return GalleryDeleteCopy.confirmTitle(count: fallbackCount)
     }
 
-    func alertConfirmMessage(alert: GalleryDeleteAlert?, fallbackCount: Int) -> String {
+    fileprivate func alertConfirmMessage(alert: GalleryDeleteAlert?, fallbackCount: Int) -> String {
         if case .confirm(let count) = alert {
             return GalleryDeleteCopy.confirmMessage(count: count)
         }
@@ -265,7 +269,7 @@ private struct GalleryClearSelectionKeyboardHandling: ViewModifier {
         content
             .onKeyPress(.escape) { handleEscapeKey() }
             #if os(macOS)
-            .onExitCommand { handleEscapeCommand() }
+        .onExitCommand { handleEscapeCommand() }
             #endif
     }
 
@@ -309,12 +313,14 @@ private struct GalleryArrowSelectionKeyboardHandling: ViewModifier {
         guard isEnabled else { return .ignored }
         let order = store.activePhotos.map(\.id)
         let columns = store.settings.galleryGridColumnCount
-        guard selection.navigateGridSelection(
-            horizontalDelta: horizontal,
-            verticalDelta: vertical,
-            photoOrder: order,
-            columnCount: columns
-        ) else { return .ignored }
+        guard
+            selection.navigateGridSelection(
+                horizontalDelta: horizontal,
+                verticalDelta: vertical,
+                photoOrder: order,
+                columnCount: columns
+            )
+        else { return .ignored }
         return .handled
     }
 }

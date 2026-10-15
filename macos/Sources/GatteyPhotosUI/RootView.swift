@@ -82,23 +82,23 @@ struct RootView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // Translucent brand glass; the top VariableBlurView strip fakes the scroll edge.
             .background(WindowGlassBackground())
-        .task {
-            if store.activePhotos.isEmpty {
-                store.markAwaitingInitialGalleryPull()
+            .task {
+                if store.activePhotos.isEmpty {
+                    store.markAwaitingInitialGalleryPull()
+                }
+                let serverAlreadyDown = store.serverLinkStatus == .down
+                if serverAlreadyDown {
+                    store.finishOfflineBootstrap()
+                }
+                async let status: Void = store.updateConnectionStatus()
+                if serverAlreadyDown {
+                    _ = await status
+                } else {
+                    async let gallery: Void = store.refresh()
+                    _ = await (gallery, status)
+                }
             }
-            let serverAlreadyDown = store.serverLinkStatus == .down
-            if serverAlreadyDown {
-                store.finishOfflineBootstrap()
-            }
-            async let status: Void = store.updateConnectionStatus()
-            if serverAlreadyDown {
-                _ = await status
-            } else {
-                async let gallery: Void = store.refresh()
-                _ = await (gallery, status)
-            }
-        }
-        #if os(macOS)
+            #if os(macOS)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willResignActiveNotification)) { _ in
             resignedActiveAt = Date()
         }
@@ -106,7 +106,7 @@ struct RootView: View {
             refreshConnectionIfInactiveLongEnough()
             Task { await store.pullOnReactivation() }
         }
-        #else
+            #else
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .background, .inactive:
@@ -117,12 +117,12 @@ struct RootView: View {
                 break
             }
         }
-        #endif
+            #endif
     }
 
     private func refreshConnectionIfInactiveLongEnough() {
         guard let resignedActiveAt,
-              Date().timeIntervalSince(resignedActiveAt) >= 5
+            Date().timeIntervalSince(resignedActiveAt) >= 5
         else { return }
         self.resignedActiveAt = nil
         Task { await store.updateConnectionStatus() }

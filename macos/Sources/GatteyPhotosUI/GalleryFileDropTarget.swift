@@ -43,7 +43,7 @@ final class GalleryFileDropNSView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? {
         switch NSApp.currentEvent?.type {
         case .leftMouseDown, .leftMouseUp, .leftMouseDragged,
-             .rightMouseDown, .rightMouseUp, .rightMouseDragged:
+            .rightMouseDown, .rightMouseUp, .rightMouseDragged:
             return nil
         default:
             return self
@@ -70,7 +70,7 @@ final class GalleryFileDropNSView: NSView {
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         guard let payload = GalleryFilePasteboard.extractDropPayload(from: sender),
-              let onDrop
+            let onDrop
         else { return false }
         onTargetedChange?(false)
         Task { @MainActor in

@@ -29,7 +29,8 @@ public enum AuthVerifier {
             return outcome
         }
         if let alt = alternateLoopbackURL(from: base),
-           let outcome = await probeVerify(base: alt, bearer: token) {
+            let outcome = await probeVerify(base: alt, bearer: token)
+        {
             return outcome
         }
         return .unreachable
@@ -46,7 +47,8 @@ public enum AuthVerifier {
         let trimmedURL = settings.serverBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedPassword = password.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedURL.isEmpty, !trimmedPassword.isEmpty,
-              let base = URL(string: trimmedURL) else {
+            let base = URL(string: trimmedURL)
+        else {
             return .unreachable
         }
         switch await probeCreateSession(base: base, password: trimmedPassword) {
@@ -102,8 +104,9 @@ public enum AuthVerifier {
                 return .unauthorized
             }
             if http.statusCode == 200,
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               json["ok"] as? Bool == true {
+                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                json["ok"] as? Bool == true
+            {
                 return .ok
             }
             if (200...299).contains(http.statusCode) {
@@ -137,10 +140,11 @@ public enum AuthVerifier {
                 return .wrongPassword
             }
             guard http.statusCode == 200,
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  json["ok"] as? Bool == true,
-                  let token = json["sessionToken"] as? String,
-                  !token.isEmpty else {
+                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                json["ok"] as? Bool == true,
+                let token = json["sessionToken"] as? String,
+                !token.isEmpty
+            else {
                 return .unreachable
             }
             return .success(token)

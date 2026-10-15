@@ -2,6 +2,7 @@ import CoreGraphics
 import ImageIO
 import UniformTypeIdentifiers
 import XCTest
+
 @testable import GatteyPhotosCore
 
 final class PhotoCacheJPEGTests: XCTestCase {
@@ -92,15 +93,17 @@ final class PhotoCacheJPEGTests: XCTestCase {
         utType: UTType
     ) throws -> Data {
         let colorSpace = CGColorSpaceCreateDeviceRGB()
-        guard let ctx = CGContext(
-            data: nil,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: 0,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else {
+        guard
+            let ctx = CGContext(
+                data: nil,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            )
+        else {
             throw NSError(domain: "PhotoCacheJPEGTests", code: 1)
         }
         ctx.setFillColor(CGColor(red: 0, green: 0, blue: 1, alpha: 1))
@@ -112,12 +115,14 @@ final class PhotoCacheJPEGTests: XCTestCase {
             throw NSError(domain: "PhotoCacheJPEGTests", code: 2)
         }
         let out = NSMutableData()
-        guard let dest = CGImageDestinationCreateWithData(
-            out,
-            utType.identifier as CFString,
-            1,
-            nil
-        ) else {
+        guard
+            let dest = CGImageDestinationCreateWithData(
+                out,
+                utType.identifier as CFString,
+                1,
+                nil
+            )
+        else {
             throw NSError(domain: "PhotoCacheJPEGTests", code: 3)
         }
         let props: [CFString: Any] = [
@@ -135,9 +140,9 @@ final class PhotoCacheJPEGTests: XCTestCase {
         for data: Data
     ) throws -> (width: Int, height: Int, orientation: Int?) {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-              let w = props[kCGImagePropertyPixelWidth] as? Int,
-              let h = props[kCGImagePropertyPixelHeight] as? Int
+            let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+            let w = props[kCGImagePropertyPixelWidth] as? Int,
+            let h = props[kCGImagePropertyPixelHeight] as? Int
         else {
             throw NSError(domain: "PhotoCacheJPEGTests", code: 5)
         }
@@ -147,7 +152,7 @@ final class PhotoCacheJPEGTests: XCTestCase {
 
     private static func redChannel(in data: Data, x: Int, y: Int) throws -> UInt8 {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil)
+            let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil)
         else {
             throw NSError(domain: "PhotoCacheJPEGTests", code: 6)
         }
@@ -155,15 +160,17 @@ final class PhotoCacheJPEGTests: XCTestCase {
         let height = cgImage.height
         var pixels = [UInt8](repeating: 0, count: width * height * 4)
         let colorSpace = CGColorSpaceCreateDeviceRGB()
-        guard let ctx = CGContext(
-            data: &pixels,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: width * 4,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else {
+        guard
+            let ctx = CGContext(
+                data: &pixels,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: width * 4,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            )
+        else {
             throw NSError(domain: "PhotoCacheJPEGTests", code: 7)
         }
         ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))

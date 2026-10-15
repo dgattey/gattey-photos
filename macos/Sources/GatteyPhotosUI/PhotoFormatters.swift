@@ -84,7 +84,8 @@ enum PhotoFormatters {
 
     static func addedBy(_ photo: PhotoEntry, uploaders: [UploaderID: String]) -> String {
         let raw = uploaders[photo.uploaderId]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let name = (!raw.isEmpty && raw.caseInsensitiveCompare("Unknown") != .orderedSame)
+        let name =
+            (!raw.isEmpty && raw.caseInsensitiveCompare("Unknown") != .orderedSame)
             ? raw
             : defaultUploaderDisplayName
         return "Added by \(name)"
@@ -120,7 +121,7 @@ enum PhotoFormatters {
             return "until today"
         }
         if let tomorrow = calendar.date(byAdding: .day, value: 1, to: today),
-           untilDay == calendar.startOfDay(for: tomorrow)
+            untilDay == calendar.startOfDay(for: tomorrow)
         {
             return "until tomorrow"
         }
