@@ -39,6 +39,27 @@ csign() {
   fi
 }
 
+strip_non_system_rpaths() {
+  local bin="$1"
+  while IFS= read -r rpath; do
+    [[ -n "$rpath" ]] || continue
+    case "$rpath" in
+      @*|/usr/lib/swift|/usr/lib/swift/*) ;;
+      *)
+        install_name_tool -delete_rpath "$rpath" "$bin"
+        ;;
+    esac
+  done < <(otool -l "$bin" | awk '
+    $1 == "cmd" && $2 == "LC_RPATH" { in_rpath = 1; next }
+    in_rpath && $1 == "path" {
+      sub(/^[[:space:]]*path[[:space:]]+/, "")
+      sub(/[[:space:]]+\(offset [0-9]+\)$/, "")
+      print
+      in_rpath = 0
+    }
+  ')
+}
+
 chmod +x "$ROOT/scripts/generate-app-icon.sh"
 CAR_OUT="$MACOS/Assets.car"
 if [[ "$FORCE_RESIGN" == "1" || ! -f "$CAR_OUT" ]] || [[ -n "$(find "$MACOS/AppIcon.icon" -newer "$CAR_OUT" -print -quit 2>/dev/null || true)" ]]; then
@@ -88,6 +109,7 @@ if [[ -f "$UI_RESOURCE_BUNDLE/unlock-welcome.png" ]]; then
   cp "$UI_RESOURCE_BUNDLE/unlock-welcome.png" "$RESOURCES/unlock-welcome.png"
 fi
 chmod +x "$MACOS_BIN/GatteyPhotos"
+strip_non_system_rpaths "$MACOS_BIN/GatteyPhotos"
 
 # Embed Sparkle.framework. ditto preserves the framework symlinks codesign needs.
 FW="$FRAMEWORKS/Sparkle.framework"
