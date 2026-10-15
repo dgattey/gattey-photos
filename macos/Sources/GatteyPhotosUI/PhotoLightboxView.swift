@@ -32,6 +32,15 @@ struct PhotoLightboxView: View {
         }
         #if os(macOS)
         .navigationTitle("")
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button("Back", systemImage: "chevron.backward") {
+                    store.selection.closeLightbox()
+                }
+                .help("Back to gallery")
+            }
+        }
         .toolbarBackground(.hidden, for: .windowToolbar)
         .modifier(LightboxMacOSToolbarTitleRemoval())
         #else
