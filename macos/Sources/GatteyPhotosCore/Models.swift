@@ -97,6 +97,39 @@ public struct GalleryState: Codable, Equatable, Sendable {
         return String(format: "u-%08x", h)
     }
 
+    private static let beccaUploaderDisplayName = "Becca"
+    private static let mergedBeccaWindowStart = "2026-08-30T00:00:00.000Z"
+    private static let mergedBeccaWindowEnd = "2026-09-09T00:00:00.000Z"
+
+    /// Repairs the Aug 30 – Sep 8, 2026 uploader merge where a fresh client install defaulted
+    /// `displayName` to `"Dylan"`, renamed `"Dylan"` → `"Becca"`, and coalesced Becca's uploads into
+    /// `u-49559801` (matches server `repairMergedDefaultUploader`).
+    private static func repairMergedDefaultUploader(
+        photos: inout [PhotoID: PhotoEntry],
+        uploaders: inout [UploaderID: String]
+    ) {
+        let dylanId = Self.uploaderId(forDisplayName: defaultUploaderDisplayName)
+        let beccaId = Self.uploaderId(forDisplayName: beccaUploaderDisplayName)
+        guard uploaders[dylanId] == beccaUploaderDisplayName, uploaders[beccaId] == nil else {
+            return
+        }
+        uploaders[dylanId] = defaultUploaderDisplayName
+        var movedBeccaPhoto = false
+        for (id, var photo) in photos {
+            if photo.uploaderId == dylanId,
+               photo.updatedAt >= mergedBeccaWindowStart,
+               photo.updatedAt < mergedBeccaWindowEnd
+            {
+                photo.uploaderId = beccaId
+                photos[id] = photo
+                movedBeccaPhoto = true
+            }
+        }
+        if movedBeccaPhoto {
+            uploaders[beccaId] = beccaUploaderDisplayName
+        }
+    }
+
     /// Build id-keyed entries and ensure every uploader id has a mapped name (matches server `coalesceUploaders`).
     public static func coalescingUploaders(
         rawPhotos: [PhotoID: RawManifestPhoto],
@@ -120,6 +153,7 @@ public struct GalleryState: Codable, Equatable, Sendable {
                 downloadUrl: raw.downloadUrl
             )
         }
+        repairMergedDefaultUploader(photos: &photos, uploaders: &uploaders)
         return (photos, uploaders)
     }
 
@@ -293,7 +327,9 @@ public struct AppSettings: Codable, Sendable {
 
     public static let debugAdvanceIntervalSecondsDefault: Int = GalleryRotationSchedule.defaultDebugAdvanceIntervalSeconds
 
-    public static let defaultDisplayName = "Dylan"
+    /// Fresh installs leave `displayName` empty so the unlock screen requires the user to enter their own name
+    /// instead of inheriting a hardcoded person's name and renaming that person's existing uploads.
+    public static let defaultDisplayName = ""
 
     public static var defaults: AppSettings {
         AppSettings(
@@ -326,9 +362,7 @@ public struct AppSettings: Codable, Sendable {
         self.debugMode = debugMode
         self.syncSessionToken = syncSessionToken
         self.galleryName = galleryName
-        self.displayName = displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? Self.defaultDisplayName
-            : displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.displayName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         self.previewPaneSplitFraction = Self.clampedPreviewPaneSplitFraction(previewPaneSplitFraction)
         self.galleryGridColumnCount = Self.clampedGalleryGridColumnCount(galleryGridColumnCount)
         self.debugAdvanceIntervalSeconds = Self.clampedDebugAdvanceIntervalSeconds(debugAdvanceIntervalSeconds)
@@ -354,9 +388,7 @@ public struct AppSettings: Codable, Sendable {
         syncSessionToken = try c.decodeIfPresent(String.self, forKey: .syncSessionToken) ?? d.syncSessionToken
         galleryName = try c.decodeIfPresent(String.self, forKey: .galleryName) ?? d.galleryName
         let nameRaw = try c.decodeIfPresent(String.self, forKey: .displayName) ?? Self.defaultDisplayName
-        displayName = nameRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? Self.defaultDisplayName
-            : nameRaw.trimmingCharacters(in: .whitespacesAndNewlines)
+        displayName = nameRaw.trimmingCharacters(in: .whitespacesAndNewlines)
         let splitRaw = try c.decodeIfPresent(Double.self, forKey: .previewPaneSplitFraction)
             ?? Self.previewPaneSplitFractionDefault
         previewPaneSplitFraction = Self.clampedPreviewPaneSplitFraction(splitRaw)

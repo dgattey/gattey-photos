@@ -36,9 +36,19 @@ enum PhotoFormatters {
         return display.string(from: date)
     }
 
-    static func deviceRegisteredAt(_ iso: String) -> String {
+    static func deviceRegisteredAt(_ iso: String, registeredBy: String? = nil) -> String {
         let date = isoWithFraction.date(from: iso) ?? isoPlain.date(from: iso)
-        guard let date else { return "Date unknown" }
+        let by = (registeredBy ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let knownOwner = (!by.isEmpty && by.caseInsensitiveCompare("Unknown") != .orderedSame) ? by : nil
+        guard let date else {
+            if let knownOwner {
+                return "Added by \(knownOwner)"
+            }
+            return "Date unknown"
+        }
+        if let knownOwner {
+            return "Added \(dateOnly.string(from: date)) by \(knownOwner)"
+        }
         return "Added \(dateOnly.string(from: date))"
     }
 

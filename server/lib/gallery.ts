@@ -24,6 +24,42 @@ export function uploaderIdForName(name: string): UploaderId {
   return `u-${(h >>> 0).toString(16).padStart(8, "0")}`;
 }
 
+/**
+ * Repairs the Aug 30 – Sep 8, 2026 uploader merge where a fresh client install defaulted
+ * `displayName` to `"Dylan"`, renamed `"Dylan"` → `"Becca"`, and coalesced Becca's uploads into
+ * `uploaderIdForName("Dylan")` (`u-49559801`). Restores `u-49559801` → `"Dylan"` and moves
+ * Becca's Aug 30 – Sep 8 uploads onto `uploaderIdForName("Becca")` (`u-c5f67375`).
+ */
+const BECCA_UPLOADER_NAME = "Becca";
+const MERGED_BECCA_WINDOW_START = "2026-08-30T00:00:00.000Z";
+const MERGED_BECCA_WINDOW_END = "2026-09-09T00:00:00.000Z";
+
+function repairMergedDefaultUploader(
+  photos: Record<PhotoId, PhotoEntry>,
+  uploaders: Record<UploaderId, string>
+): void {
+  const dylanId = uploaderIdForName(DEFAULT_UPLOADER_NAME);
+  const beccaId = uploaderIdForName(BECCA_UPLOADER_NAME);
+  if (uploaders[dylanId] !== BECCA_UPLOADER_NAME || uploaders[beccaId] !== undefined) {
+    return;
+  }
+  uploaders[dylanId] = DEFAULT_UPLOADER_NAME;
+  let movedBeccaPhoto = false;
+  for (const photo of Object.values(photos)) {
+    if (
+      photo.uploaderId === dylanId &&
+      photo.updatedAt >= MERGED_BECCA_WINDOW_START &&
+      photo.updatedAt < MERGED_BECCA_WINDOW_END
+    ) {
+      photo.uploaderId = beccaId;
+      movedBeccaPhoto = true;
+    }
+  }
+  if (movedBeccaPhoto) {
+    uploaders[beccaId] = BECCA_UPLOADER_NAME;
+  }
+}
+
 /** Parse raw manifest photos into id-keyed entries and ensure every uploader id has a mapped name. */
 export function coalesceUploaders(
   rawPhotos: Record<PhotoId, RawPhotoEntry>,
@@ -44,12 +80,14 @@ export function coalesceUploaders(
       uploaderId,
     };
   }
+  repairMergedDefaultUploader(photos, uploaders);
   return { photos, uploaders };
 }
 
 /**
  * Find the uploader id already mapped to `name`, or register `newId` for it. Keeps one id per
- * display name so a person's uploads share an id and a single rename covers them all.
+ * display name so a person's uploads share an id and a single rename covers them all. Never
+ * overwrites an existing uploader id that is already mapped to a different display name.
  */
 export function ensureUploaderId(
   state: GalleryState,
@@ -57,12 +95,26 @@ export function ensureUploaderId(
   newId: UploaderId
 ): { state: GalleryState; uploaderId: UploaderId } {
   const trimmed = name.trim() || DEFAULT_UPLOADER_NAME;
+  if (state.uploaders[newId] === trimmed) {
+    return { state, uploaderId: newId };
+  }
   for (const [id, mapped] of Object.entries(state.uploaders)) {
     if (mapped === trimmed) return { state, uploaderId: id };
   }
+  let targetId = newId;
+  if (state.uploaders[targetId] !== undefined && state.uploaders[targetId] !== trimmed) {
+    let suffix = 2;
+    while (
+      state.uploaders[`${newId}-${suffix}`] !== undefined &&
+      state.uploaders[`${newId}-${suffix}`] !== trimmed
+    ) {
+      suffix += 1;
+    }
+    targetId = `${newId}-${suffix}`;
+  }
   return {
-    state: { ...state, uploaders: { ...state.uploaders, [newId]: trimmed } },
-    uploaderId: newId,
+    state: { ...state, uploaders: { ...state.uploaders, [targetId]: trimmed } },
+    uploaderId: targetId,
   };
 }
 
@@ -198,7 +250,11 @@ export function resolveCurrentPhoto(state: GalleryState): {
   return { state: { ...state, currentPhotoId: active[0]! }, dirty: true };
 }
 
-/** Point every uploader id named `fromName` at `toName` (settings rename). One map write; photos untouched. */
+/**
+ * Point every uploader id named `fromName` at `toName` (settings rename). One map write; photos
+ * untouched. Refuses to overwrite `fromName` when `toName` already belongs to a distinct uploader
+ * id in the gallery (switching a client's active user to another existing family member).
+ */
 export function renameUploader(
   state: GalleryState,
   fromName: string,
@@ -207,6 +263,15 @@ export function renameUploader(
   const from = fromName.trim();
   const to = toName.trim();
   if (!from || !to || from === to) return state;
+
+  const toLower = to.toLowerCase();
+  const fromLower = from.toLowerCase();
+  if (toLower !== fromLower) {
+    const targetExistsElsewhere = Object.values(state.uploaders).some(
+      (name) => name !== from && name.trim().toLowerCase() === toLower
+    );
+    if (targetExistsElsewhere) return state;
+  }
 
   let dirty = false;
   const uploaders = { ...state.uploaders };

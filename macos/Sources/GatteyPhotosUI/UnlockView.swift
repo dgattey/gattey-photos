@@ -303,7 +303,7 @@ struct UnlockView: View {
             password = ""
             let setupPaste = bloomin8SetupText.trimmingCharacters(in: .whitespacesAndNewlines)
             bloomin8SetupText = ""
-            store.saveSettings()
+            store.saveSettings(propagateDisplayNameChange: false)
             if !setupPaste.isEmpty {
                 do {
                     try await store.registerFrame(setupText: setupPaste)

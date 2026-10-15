@@ -279,7 +279,7 @@ public final class GalleryStore: ObservableObject {
         pullFailureStreak = 0
     }
 
-    func saveSettings() {
+    func saveSettings(propagateDisplayNameChange shouldPropagate: Bool = true) {
         let previousDisplayName = Self.persistedDisplayName()
         let previousServerURL = settings.serverBaseURL
         settings.serverBaseURL = AppSettings.syncServerBaseURL(debugMode: settings.debugMode)
@@ -288,7 +288,8 @@ public final class GalleryStore: ObservableObject {
         try? AppConfig.saveSettings(settings)
         session?.noteSettingsChanged(store: self, previousServerURL: previousServerURL)
         log.log(.system, level: .info, "Settings saved", detail: settings.serverBaseURL)
-        if let previousDisplayName,
+        if shouldPropagate,
+           let previousDisplayName,
            previousDisplayName != newDisplayName,
            !newDisplayName.isEmpty,
            session?.isUnlocked == true
