@@ -1,5 +1,4 @@
 import { listDevicesDecrypted, recordDevicePushResults } from "../devices/registry";
-import { normalizePhotoOrientation } from "../photo-orientation";
 import type { GalleryState } from "../types";
 import * as storage from "../storage";
 import { pushImage } from "./open-api";
@@ -26,8 +25,8 @@ export async function pushCurrentPhotoToAllDevices(
     return summary;
   }
 
-  const rawBytes = await storage.readPhotoBytes(photo.blobPath);
-  if (!rawBytes?.length) {
+  const bytes = await storage.readPhotoBytes(photo.blobPath);
+  if (!bytes?.length) {
     console.error("[device-push] missing JPEG for", photo.blobPath);
     return summary;
   }
@@ -37,8 +36,6 @@ export async function pushCurrentPhotoToAllDevices(
   if (devices.length === 0) {
     return summary;
   }
-
-  const bytes = await normalizePhotoOrientation(rawBytes);
 
   const outcomes = await Promise.all(
     devices.map(async (device) => {

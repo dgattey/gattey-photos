@@ -7,13 +7,15 @@ import sharp from "sharp";
  */
 export async function normalizePhotoOrientation(bytes: Buffer): Promise<Buffer> {
   try {
-    const metadata = await sharp(bytes, { failOn: "none" }).metadata();
+    const image = sharp(bytes, { failOn: "none" });
+    const metadata = await image.metadata();
     const orientation = metadata.orientation;
     if (typeof orientation !== "number" || orientation <= 1) {
       return bytes;
     }
-    return await sharp(bytes, { failOn: "none" })
+    return await image
       .rotate()
+      .keepIccProfile()
       .jpeg({ quality: 92 })
       .toBuffer();
   } catch (err) {

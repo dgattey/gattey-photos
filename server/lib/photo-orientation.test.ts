@@ -29,6 +29,7 @@ async function makeOrientedJpeg(
     }
   }
   return sharp(raw, { raw: { width, height, channels: 3 } })
+    .withIccProfile("p3")
     .withMetadata({ orientation })
     .jpeg({ quality: 95 })
     .toBuffer();
@@ -91,6 +92,7 @@ describe("normalizePhotoOrientation", () => {
     const afterMeta = await sharp(rotated).metadata();
     assert.equal(afterMeta.width, 20);
     assert.equal(afterMeta.height, 40);
+    assert.equal(afterMeta.hasProfile, true);
     assert.ok(
       afterMeta.orientation === undefined || afterMeta.orientation === 1,
       `expected cleared orientation, got ${afterMeta.orientation}`

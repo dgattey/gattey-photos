@@ -15,25 +15,20 @@ final class PhotoCacheJPEGTests: XCTestCase {
         XCTAssertFalse(PhotoCacheJPEG.isJPEG(heicPrefix))
     }
 
+    func testNormalizedJPEGDataRejectsCorruptJPEGHeader() {
+        let corrupt = Data([0xFF, 0xD8, 0xFF, 0x00, 0x01])
+        XCTAssertThrowsError(try PhotoCacheJPEG.normalizedJPEGData(corrupt, name: "corrupt.jpg"))
+    }
+
     func testNormalizedJPEGDataPreservesUprightJPEGBytes() throws {
         let raw = try Self.makeTestJPEG(width: 40, height: 20, exifOrientation: 1)
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("upright-\(UUID().uuidString).jpg")
-        defer { try? FileManager.default.removeItem(at: url) }
-        try raw.write(to: url)
-
-        let normalized = try PhotoCacheJPEG.normalizedJPEGData(fromFileURL: url)
+        let normalized = try PhotoCacheJPEG.normalizedJPEGData(raw)
         XCTAssertEqual(normalized, raw)
     }
 
     func testNormalizedJPEGDataBakesOrientation6IntoPortraitPixels() throws {
         let raw = try Self.makeTestJPEG(width: 40, height: 20, exifOrientation: 6)
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("orient6-\(UUID().uuidString).jpg")
-        defer { try? FileManager.default.removeItem(at: url) }
-        try raw.write(to: url)
-
-        let normalized = try PhotoCacheJPEG.normalizedJPEGData(fromFileURL: url)
+        let normalized = try PhotoCacheJPEG.normalizedJPEGData(raw)
         let props = try Self.imageProperties(for: normalized)
         XCTAssertEqual(props.width, 20)
         XCTAssertEqual(props.height, 40)
@@ -42,12 +37,7 @@ final class PhotoCacheJPEGTests: XCTestCase {
 
     func testNormalizedJPEGDataBakesOrientation3UpsideDownPixels() throws {
         let raw = try Self.makeTestJPEG(width: 40, height: 20, exifOrientation: 3)
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("orient3-\(UUID().uuidString).jpg")
-        defer { try? FileManager.default.removeItem(at: url) }
-        try raw.write(to: url)
-
-        let normalized = try PhotoCacheJPEG.normalizedJPEGData(fromFileURL: url)
+        let normalized = try PhotoCacheJPEG.normalizedJPEGData(raw)
         let props = try Self.imageProperties(for: normalized)
         XCTAssertEqual(props.width, 40)
         XCTAssertEqual(props.height, 20)
@@ -71,8 +61,6 @@ final class PhotoCacheJPEGTests: XCTestCase {
         ) else {
             throw NSError(domain: "PhotoCacheJPEGTests", code: 1)
         }
-        // Fill blue background, then paint top-left quadrant bright red in raw bitmap coordinates.
-        // Note: CoreGraphics bitmap origin is bottom-left, so top-left in image coordinates is y: height/2 ..< height.
         ctx.setFillColor(CGColor(red: 0, green: 0, blue: 1, alpha: 1))
         ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
         ctx.setFillColor(CGColor(red: 1, green: 0, blue: 0, alpha: 1))
@@ -115,7 +103,6 @@ final class PhotoCacheJPEGTests: XCTestCase {
         return (w, h, orient)
     }
 
-    /// Reads the raw decoded pixel (without applying EXIF transform) at image top-left coordinates `(x, y)`.
     private static func redChannel(in data: Data, x: Int, y: Int) throws -> UInt8 {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil)
