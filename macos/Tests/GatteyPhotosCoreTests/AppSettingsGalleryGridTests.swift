@@ -26,42 +26,42 @@ final class AppSettingsGalleryGridTests: XCTestCase {
     }
 
     func testCoalescingUploadersPreservesServerUploadersAndPhotoUploaderIds() throws {
-        let dylanId = GalleryState.uploaderId(forDisplayName: "Dylan")
-        let beccaId = GalleryState.uploaderId(forDisplayName: "Becca")
+        let alexId = GalleryState.uploaderId(forDisplayName: "Alex")
+        let samId = GalleryState.uploaderId(forDisplayName: "Sam")
         let json = """
         {
           "updatedAt": "2026-10-15T09:00:00.000Z",
-          "order": ["dylanPhoto", "beccaPhoto"],
+          "order": ["photoA", "photoB"],
           "uploaders": {
-            "\(dylanId)": "Dylan",
-            "\(beccaId)": "Becca"
+            "\(alexId)": "Alex",
+            "\(samId)": "Sam"
           },
           "photos": {
-            "dylanPhoto": {
-              "id": "dylanPhoto",
-              "filename": "IMG_4722.jpeg",
-              "blobPath": "photos/dylanPhoto.jpg",
-              "sizeBytes": 4424947,
+            "photoA": {
+              "id": "photoA",
+              "filename": "photoA.jpg",
+              "blobPath": "photos/photoA.jpg",
+              "sizeBytes": 1024,
               "updatedAt": "2026-06-01T23:51:21.408Z",
               "deletedAt": null,
-              "uploaderId": "\(dylanId)"
+              "uploaderId": "\(alexId)"
             },
-            "beccaPhoto": {
-              "id": "beccaPhoto",
-              "filename": "IMG_0873.jpeg",
-              "blobPath": "photos/beccaPhoto.jpg",
-              "sizeBytes": 372512,
+            "photoB": {
+              "id": "photoB",
+              "filename": "photoB.jpg",
+              "blobPath": "photos/photoB.jpg",
+              "sizeBytes": 2048,
               "updatedAt": "2026-09-08T21:27:13.914Z",
               "deletedAt": null,
-              "uploaderId": "\(beccaId)"
+              "uploaderId": "\(samId)"
             }
           }
         }
         """
         let decoded = try JSONDecoder().decode(GalleryState.self, from: json.data(using: .utf8)!)
-        XCTAssertEqual(decoded.uploaders[dylanId], "Dylan")
-        XCTAssertEqual(decoded.uploaders[beccaId], "Becca")
-        XCTAssertEqual(decoded.photos["dylanPhoto"]?.uploaderId, dylanId)
-        XCTAssertEqual(decoded.photos["beccaPhoto"]?.uploaderId, beccaId)
+        XCTAssertEqual(decoded.uploaders[alexId], "Alex")
+        XCTAssertEqual(decoded.uploaders[samId], "Sam")
+        XCTAssertEqual(decoded.photos["photoA"]?.uploaderId, alexId)
+        XCTAssertEqual(decoded.photos["photoB"]?.uploaderId, samId)
     }
 }

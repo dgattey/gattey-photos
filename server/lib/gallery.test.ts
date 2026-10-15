@@ -61,22 +61,22 @@ describe("renameUploader", () => {
 
 describe("ensureUploaderId", () => {
   it("does not overwrite an existing uploader id mapped to a different display name", () => {
-    const dylanId = uploaderIdForName("Dylan");
+    const alexId = uploaderIdForName("Alex");
     const state: GalleryState = {
       updatedAt: "2026-08-30T18:30:00.000Z",
       order: ["p1"],
       photos: {
-        p1: photo("p1", dylanId),
+        p1: photo("p1", alexId),
       },
       uploaders: {
-        [dylanId]: "Becca",
+        [alexId]: "Sam",
       },
       currentPhotoId: "p1",
     };
-    const { state: next, uploaderId } = ensureUploaderId(state, "Dylan", dylanId);
-    assert.notEqual(uploaderId, dylanId);
-    assert.equal(next.uploaders[dylanId], "Becca");
-    assert.equal(next.uploaders[uploaderId], "Dylan");
+    const { state: next, uploaderId } = ensureUploaderId(state, "Alex", alexId);
+    assert.notEqual(uploaderId, alexId);
+    assert.equal(next.uploaders[alexId], "Sam");
+    assert.equal(next.uploaders[uploaderId], "Alex");
   });
 });
 
