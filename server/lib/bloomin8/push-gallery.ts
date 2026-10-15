@@ -25,13 +25,15 @@ export async function pushCurrentPhotoToAllDevices(
     return summary;
   }
 
-  const bytes = await storage.readPhotoBytes(photo.blobPath);
+  const [bytes, devices] = await Promise.all([
+    storage.readPhotoBytes(photo.blobPath),
+    listDevicesDecrypted(),
+  ]);
   if (!bytes?.length) {
     console.error("[device-push] missing JPEG for", photo.blobPath);
     return summary;
   }
 
-  const devices = await listDevicesDecrypted();
   summary.registered = devices.length;
   if (devices.length === 0) {
     return summary;

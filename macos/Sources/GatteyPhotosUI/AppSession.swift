@@ -35,7 +35,8 @@ public final class AppSession: ObservableObject {
 
     func tryAutoUnlock(store: GalleryStore) async {
         guard sessionPhase == .checking else { return }
-        store.reloadSettings()
+        await store.bootstrapFromDiskIfNeeded()
+        await store.reloadSettingsAsync()
         let url = Self.canonicalServerBaseURL(store.settings.serverBaseURL)
         let hasDisplayName = !store.settings.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         guard !url.isEmpty, hasDisplayName, store.settings.syncBearer != nil else {
@@ -81,7 +82,7 @@ public final class AppSession: ObservableObject {
             return false
         }
         store.settings.syncSessionToken = sessionToken
-        try? AppConfig.saveSettings(store.settings)
+        AppConfig.saveSettingsAsync(store.settings)
         unlockedServerBaseURL = Self.canonicalServerBaseURL(store.settings.serverBaseURL)
         isUnlocked = true
         sessionPhase = .unlocked
@@ -116,7 +117,7 @@ public final class AppSession: ObservableObject {
     private func clearSessionToken(store: GalleryStore) {
         guard !store.settings.syncSessionToken.isEmpty else { return }
         store.settings.syncSessionToken = ""
-        try? AppConfig.saveSettings(store.settings)
+        AppConfig.saveSettingsAsync(store.settings)
     }
 
     func noteSettingsChanged(store: GalleryStore, previousServerURL: String) {

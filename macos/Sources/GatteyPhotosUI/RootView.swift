@@ -88,8 +88,7 @@ struct RootView: View {
             }
             async let gallery: Void = store.refresh()
             async let status: Void = store.updateConnectionStatus()
-            async let frames: Void = store.reloadRegisteredFrames()
-            _ = await (gallery, status, frames)
+            _ = await (gallery, status)
         }
         #if os(macOS)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willResignActiveNotification)) { _ in

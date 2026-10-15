@@ -48,6 +48,23 @@ export async function readManifest(): Promise<GalleryState> {
   return assemble(lib, current);
 }
 
+export async function readManifestIfModified(
+  ifNoneMatch: string | null
+): Promise<
+  | { modified: false; etag: string }
+  | { modified: true; etag: string; state: GalleryState }
+> {
+  const lib = await readLibraryRaw();
+  const version = lib.updatedAt?.trim() || emptyGalleryUpdatedAt();
+  const etag = `"${version}"`;
+  if (ifNoneMatch === etag) {
+    return { modified: false, etag };
+  }
+  const current = await readCurrentRaw();
+  const state = assemble(lib, current);
+  return { modified: true, etag: `"${state.updatedAt}"`, state };
+}
+
 /** Catalog version only (one blob read) for the conditional-GET ETag, so a 304 is a single op. */
 export async function readGalleryVersion(): Promise<string> {
   const lib = await readLibraryRaw();

@@ -16,6 +16,8 @@ struct UnlockWelcomePhotoPanel: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
 
+    @State private var loadedWelcomeImage: PlatformWelcomeImage? = Self.cachedWelcomeImage
+
     private let screenAspectRatio = Bloomin8Screen.defaultAspectRatio
     private let maxPaneWidth: CGFloat = 420
 
@@ -50,6 +52,11 @@ struct UnlockWelcomePhotoPanel: View {
         }
         .frame(maxWidth: panelOuterMaxWidth)
         .frame(height: panelFrameHeight)
+        .task {
+            if loadedWelcomeImage == nil {
+                loadedWelcomeImage = await Self.loadBundledWelcomeImage()
+            }
+        }
     }
 
     private var panelContentAlignment: Alignment {
@@ -89,7 +96,7 @@ struct UnlockWelcomePhotoPanel: View {
     @ViewBuilder
     private func welcomePhoto(screenWidth: CGFloat) -> some View {
         let screenHeight = screenWidth / screenAspectRatio
-        if let image = Self.bundledWelcomeImage {
+        if let image = loadedWelcomeImage {
             welcomeImageView(image, screenWidth: screenWidth, screenHeight: screenHeight)
                 .devicePreviewScreenInnerVignette()
         } else {
@@ -115,23 +122,27 @@ struct UnlockWelcomePhotoPanel: View {
         #endif
     }
 
-    #if os(macOS)
-    private typealias PlatformWelcomeImage = NSImage
-    #elseif os(iOS)
-    private typealias PlatformWelcomeImage = UIImage
-    #endif
+    private typealias PlatformWelcomeImage = PlatformThumbnailImage
 
-    private static let bundledWelcomeImage: PlatformWelcomeImage? = {
-        guard let url = GatteyPhotosUIResources.bundle.url(
+    private static var welcomeImageURL: URL? {
+        GatteyPhotosUIResources.bundle.url(
             forResource: "unlock-welcome",
             withExtension: "png"
-        ) else {
-            return nil
+        )
+    }
+
+    private static var cachedWelcomeImage: PlatformWelcomeImage? {
+        guard let url = welcomeImageURL else { return nil }
+        return ImageDownsampler.cachedThumbnail(from: url, maxPixelSize: 1200)
+    }
+
+    private static func loadBundledWelcomeImage() async -> PlatformWelcomeImage? {
+        guard let url = welcomeImageURL else { return nil }
+        if let cached = ImageDownsampler.cachedThumbnail(from: url, maxPixelSize: 1200) {
+            return cached
         }
-        #if os(macOS)
-        return NSImage(contentsOf: url)
-        #elseif os(iOS)
-        return UIImage(contentsOfFile: url.path)
-        #endif
-    }()
+        return await Task.detached(priority: .userInitiated) {
+            ImageDownsampler.loadThumbnail(from: url, maxPixelSize: 1200)
+        }.value
+    }
 }

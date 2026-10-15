@@ -24,7 +24,7 @@ let package = Package(
         ),
         .testTarget(
             name: "GatteyPhotosCoreTests",
-            dependencies: ["GatteyPhotosCore"],
+            dependencies: ["GatteyPhotosCore", "GatteyPhotosUI"],
             path: "Tests/GatteyPhotosCoreTests"
         ),
         .target(

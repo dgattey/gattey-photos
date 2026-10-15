@@ -43,6 +43,70 @@ private struct StaleGalleryPayload: Codable {
     var state: GalleryState
 }
 
+private actor ImageDownloadDeduplicator {
+    static let shared = ImageDownloadDeduplicator()
+    private var inFlight: [String: Task<Void, Error>] = [:]
+
+    func run(key: String, operation: @escaping @Sendable () async throws -> Void) async throws {
+        if let existing = inFlight[key] {
+            try await existing.value
+            return
+        }
+        let task = Task {
+            try await operation()
+        }
+        inFlight[key] = task
+        defer { inFlight[key] = nil }
+        try await task.value
+    }
+}
+
+private enum BackgroundJSONCodec {
+    static func decode<T: Decodable & Sendable>(_ type: T.Type, from data: Data) async throws -> T {
+        try await Task.detached(priority: .userInitiated) {
+            guard let value = try? JSONDecoder().decode(T.self, from: data) else {
+                throw SyncError.decode
+            }
+            return value
+        }.value
+    }
+
+    static func encode<T: Encodable & Sendable>(_ value: T) async throws -> Data {
+        try await Task.detached(priority: .userInitiated) {
+            try JSONEncoder().encode(value)
+        }.value
+    }
+
+    static func buildMultipartUploadBody(
+        boundary: String,
+        uploadedBy: String,
+        baseUpdatedAt: String,
+        filename: String,
+        jpegData: Data
+    ) async -> Data {
+        await Task.detached(priority: .userInitiated) {
+            var body = Data()
+            body.reserveCapacity(jpegData.count + 512)
+            func append(_ s: String) { body.append(Data(s.utf8)) }
+            append("--\(boundary)\r\n")
+            append("Content-Disposition: form-data; name=\"uploadedBy\"\r\n\r\n")
+            append("\(uploadedBy)\r\n")
+            append("--\(boundary)\r\n")
+            append("Content-Disposition: form-data; name=\"baseUpdatedAt\"\r\n\r\n")
+            append("\(baseUpdatedAt)\r\n")
+            append("--\(boundary)\r\n")
+            append("Content-Disposition: form-data; name=\"filename\"\r\n\r\n")
+            append("\(filename)\r\n")
+            append("--\(boundary)\r\n")
+            append("Content-Disposition: form-data; name=\"image\"; filename=\"\(filename)\"\r\n")
+            append("Content-Type: image/jpeg\r\n\r\n")
+            body.append(jpegData)
+            append("\r\n--\(boundary)--\r\n")
+            return body
+        }.value
+    }
+}
+
 public struct SyncClient: Sendable {
     public var baseURL: URL
     public var bearer: String
@@ -83,7 +147,7 @@ public struct SyncClient: Sendable {
             ))
         }
         if http.statusCode == 409,
-           let payload = try? JSONDecoder().decode(StaleGalleryPayload.self, from: data)
+           let payload = try? await BackgroundJSONCodec.decode(StaleGalleryPayload.self, from: data)
         {
             throw SyncError.stale(GalleryResponse(state: payload.state))
         }
@@ -141,19 +205,14 @@ public struct SyncClient: Sendable {
                 context: "fetch gallery"
             ))
         }
-        guard let decoded = try? JSONDecoder().decode(GalleryResponse.self, from: data) else {
-            throw SyncError.decode
-        }
+        let decoded = try await BackgroundJSONCodec.decode(GalleryResponse.self, from: data)
         return .modified(decoded)
     }
 
     /// Cheap poll for the currently shown photo (catches cron rotations without a full catalog pull).
     public func fetchCurrentPhoto() async throws -> CurrentPhotoResponse {
         let data = try await request(path: "/api/gallery/current", method: "GET")
-        guard let decoded = try? JSONDecoder().decode(CurrentPhotoResponse.self, from: data) else {
-            throw SyncError.decode
-        }
-        return decoded
+        return try await BackgroundJSONCodec.decode(CurrentPhotoResponse.self, from: data)
     }
 
     public func uploadPhoto(
@@ -163,22 +222,13 @@ public struct SyncClient: Sendable {
         baseUpdatedAt: String
     ) async throws -> GalleryResponse {
         let boundary = "gattey-\(UUID().uuidString)"
-        var body = Data()
-        func append(_ s: String) { body.append(Data(s.utf8)) }
-        append("--\(boundary)\r\n")
-        append("Content-Disposition: form-data; name=\"uploadedBy\"\r\n\r\n")
-        append("\(uploadedBy)\r\n")
-        append("--\(boundary)\r\n")
-        append("Content-Disposition: form-data; name=\"baseUpdatedAt\"\r\n\r\n")
-        append("\(baseUpdatedAt)\r\n")
-        append("--\(boundary)\r\n")
-        append("Content-Disposition: form-data; name=\"filename\"\r\n\r\n")
-        append("\(filename)\r\n")
-        append("--\(boundary)\r\n")
-        append("Content-Disposition: form-data; name=\"image\"; filename=\"\(filename)\"\r\n")
-        append("Content-Type: image/jpeg\r\n\r\n")
-        body.append(jpegData)
-        append("\r\n--\(boundary)--\r\n")
+        let body = await BackgroundJSONCodec.buildMultipartUploadBody(
+            boundary: boundary,
+            uploadedBy: uploadedBy,
+            baseUpdatedAt: baseUpdatedAt,
+            filename: filename,
+            jpegData: jpegData
+        )
         let data = try await request(
             path: "/api/gallery/photos",
             method: "POST",
@@ -186,33 +236,27 @@ public struct SyncClient: Sendable {
             contentType: "multipart/form-data; boundary=\(boundary)",
             context: "upload: \(filename) (JPEG \(body.count) bytes)"
         )
-        guard let decoded = try? JSONDecoder().decode(GalleryResponse.self, from: data) else {
-            throw SyncError.decode
-        }
-        return decoded
+        return try await BackgroundJSONCodec.decode(GalleryResponse.self, from: data)
     }
 
     public func deletePhoto(id: PhotoID, baseUpdatedAt: String) async throws -> GalleryResponse {
-        struct Body: Encodable { var baseUpdatedAt: String }
-        let encoded = try JSONEncoder().encode(Body(baseUpdatedAt: baseUpdatedAt))
+        struct Body: Encodable, Sendable { var baseUpdatedAt: String }
+        let encoded = try await BackgroundJSONCodec.encode(Body(baseUpdatedAt: baseUpdatedAt))
         let data = try await request(
             path: "/api/gallery/photos/\(id)",
             method: "DELETE",
             body: encoded,
             contentType: "application/json"
         )
-        guard let decoded = try? JSONDecoder().decode(GalleryResponse.self, from: data) else {
-            throw SyncError.decode
-        }
-        return decoded
+        return try await BackgroundJSONCodec.decode(GalleryResponse.self, from: data)
     }
 
     public func reorder(_ order: [PhotoID], baseUpdatedAt: String) async throws -> GalleryResponse {
-        struct Body: Encodable {
+        struct Body: Encodable, Sendable {
             var order: [PhotoID]
             var baseUpdatedAt: String
         }
-        let encoded = try JSONEncoder().encode(Body(order: order, baseUpdatedAt: baseUpdatedAt))
+        let encoded = try await BackgroundJSONCodec.encode(Body(order: order, baseUpdatedAt: baseUpdatedAt))
         let data = try await request(
             path: "/api/gallery/order",
             method: "PUT",
@@ -220,10 +264,7 @@ public struct SyncClient: Sendable {
             contentType: "application/json",
             context: "reorder \(order.count) photos"
         )
-        guard let decoded = try? JSONDecoder().decode(GalleryResponse.self, from: data) else {
-            throw SyncError.decode
-        }
-        return decoded
+        return try await BackgroundJSONCodec.decode(GalleryResponse.self, from: data)
     }
 
     public func renameUploader(
@@ -231,12 +272,12 @@ public struct SyncClient: Sendable {
         toName: String,
         baseUpdatedAt: String
     ) async throws -> GalleryResponse {
-        struct Body: Encodable {
+        struct Body: Encodable, Sendable {
             var fromName: String
             var toName: String
             var baseUpdatedAt: String
         }
-        let encoded = try JSONEncoder().encode(
+        let encoded = try await BackgroundJSONCodec.encode(
             Body(fromName: fromName, toName: toName, baseUpdatedAt: baseUpdatedAt)
         )
         let data = try await request(
@@ -246,28 +287,22 @@ public struct SyncClient: Sendable {
             contentType: "application/json",
             context: "rename uploader \(fromName) → \(toName)"
         )
-        guard let decoded = try? JSONDecoder().decode(GalleryResponse.self, from: data) else {
-            throw SyncError.decode
-        }
-        return decoded
+        return try await BackgroundJSONCodec.decode(GalleryResponse.self, from: data)
     }
 
     public func setCurrentPhoto(id: PhotoID, baseUpdatedAt: String) async throws -> GalleryResponse {
-        struct Body: Encodable {
+        struct Body: Encodable, Sendable {
             var photoId: PhotoID
             var baseUpdatedAt: String
         }
-        let encoded = try JSONEncoder().encode(Body(photoId: id, baseUpdatedAt: baseUpdatedAt))
+        let encoded = try await BackgroundJSONCodec.encode(Body(photoId: id, baseUpdatedAt: baseUpdatedAt))
         let data = try await request(
             path: "/api/gallery/current",
             method: "PUT",
             body: encoded,
             contentType: "application/json"
         )
-        guard let decoded = try? JSONDecoder().decode(GalleryResponse.self, from: data) else {
-            throw SyncError.decode
-        }
-        return decoded
+        return try await BackgroundJSONCodec.decode(GalleryResponse.self, from: data)
     }
 
     public func imageURL(for photo: PhotoEntry, width: Int? = nil) -> URL {
@@ -280,28 +315,26 @@ public struct SyncClient: Sendable {
 
     public func listDevices() async throws -> [RegisteredDevicePublic] {
         let data = try await request(path: "/api/devices", method: "GET")
-        guard let decoded = try? JSONDecoder().decode(DeviceListResponse.self, from: data) else {
-            throw SyncError.decode
-        }
+        let decoded = try await BackgroundJSONCodec.decode(DeviceListResponse.self, from: data)
         return decoded.devices
     }
 
     public func registerDevice(setupText: String, displayName: String?, registeredBy: String) async throws -> RegisteredDevicePublic {
-        struct Body: Encodable {
+        struct Body: Encodable, Sendable {
             var setupText: String
             var displayName: String?
             var registeredBy: String
         }
-        let encoded = try JSONEncoder().encode(Body(setupText: setupText, displayName: displayName, registeredBy: registeredBy))
+        let encoded = try await BackgroundJSONCodec.encode(
+            Body(setupText: setupText, displayName: displayName, registeredBy: registeredBy)
+        )
         let data = try await request(
             path: "/api/devices",
             method: "POST",
             body: encoded,
             contentType: "application/json"
         )
-        guard let decoded = try? JSONDecoder().decode(DeviceRegisterResponse.self, from: data) else {
-            throw SyncError.decode
-        }
+        let decoded = try await BackgroundJSONCodec.decode(DeviceRegisterResponse.self, from: data)
         return decoded.device
     }
 
@@ -311,9 +344,7 @@ public struct SyncClient: Sendable {
 
     public func fetchDeviceStatus() async throws -> [DeviceLiveStatus] {
         let data = try await request(path: "/api/devices/status", method: "GET")
-        guard let decoded = try? JSONDecoder().decode(DeviceStatusResponse.self, from: data) else {
-            throw SyncError.decode
-        }
+        let decoded = try await BackgroundJSONCodec.decode(DeviceStatusResponse.self, from: data)
         return decoded.devices
     }
 
@@ -339,35 +370,73 @@ public struct SyncClient: Sendable {
         width: Int?,
         to dest: URL
     ) async throws {
-        if FileManager.default.fileExists(atPath: dest.path) { return }
-        var req = URLRequest(url: imageURL(for: photo, width: width))
-        req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
-        let (data, res) = try await session.data(for: req)
-        guard let http = res as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            let code = (res as? HTTPURLResponse)?.statusCode ?? -1
-            throw SyncError.http(SyncHTTPFailure(
-                statusCode: code,
-                method: "GET",
-                url: req.url?.absoluteString ?? baseURL.absoluteString,
-                responseBody: "image download failed",
-                context: "cache photo \(photo.id)\(width.map { " w=\($0)" } ?? "")"
-            ))
+        let reqURL = imageURL(for: photo, width: width)
+        let authBearer = bearer
+        let urlSession = session
+        let photoID = photo.id
+        let baseStr = baseURL.absoluteString
+        try await ImageDownloadDeduplicator.shared.run(key: dest.path) {
+            if FileManager.default.fileExists(atPath: dest.path) { return }
+            var req = URLRequest(url: reqURL)
+            req.setValue("Bearer \(authBearer)", forHTTPHeaderField: "Authorization")
+            let (data, res) = try await urlSession.data(for: req)
+            guard let http = res as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                let code = (res as? HTTPURLResponse)?.statusCode ?? -1
+                throw SyncError.http(SyncHTTPFailure(
+                    statusCode: code,
+                    method: "GET",
+                    url: req.url?.absoluteString ?? baseStr,
+                    responseBody: "image download failed",
+                    context: "cache photo \(photoID)\(width.map { " w=\($0)" } ?? "")"
+                ))
+            }
+            try await Task.detached(priority: .utility) {
+                try data.write(to: dest, options: .atomic)
+            }.value
         }
-        try data.write(to: dest, options: .atomic)
     }
 
-    public func downloadMissing(for state: GalleryState) async throws {
-        for photo in state.activePhotos() {
-            do {
-                try await cachePhotoIfMissing(photo)
-            } catch {
-                await MainActor.run {
-                    ActivityLogStore.shared.log(
-                        .gallery,
-                        level: .warning,
-                        "Could not cache photo from server",
-                        detail: "\(photo.id): \(error.localizedDescription)"
-                    )
+    public func downloadMissing(for state: GalleryState, maxConcurrency: Int = 6) async throws {
+        let missing = await Task.detached(priority: .utility) {
+            state.activePhotos().filter { photo in
+                !FileManager.default.fileExists(atPath: AppConfig.cacheURL(for: photo.id).path)
+            }
+        }.value
+        guard !missing.isEmpty else { return }
+        let limit = max(1, maxConcurrency)
+        await withTaskGroup(of: (PhotoID, String?).self) { group in
+            var iterator = missing.makeIterator()
+            for _ in 0..<min(limit, missing.count) {
+                guard let photo = iterator.next() else { break }
+                group.addTask {
+                    do {
+                        try await self.cachePhotoIfMissing(photo)
+                        return (photo.id, nil)
+                    } catch {
+                        return (photo.id, error.localizedDescription)
+                    }
+                }
+            }
+            for await (photoID, errorDescription) in group {
+                if let errorDescription {
+                    await MainActor.run {
+                        ActivityLogStore.shared.log(
+                            .gallery,
+                            level: .warning,
+                            "Could not cache photo from server",
+                            detail: "\(photoID): \(errorDescription)"
+                        )
+                    }
+                }
+                if let next = iterator.next() {
+                    group.addTask {
+                        do {
+                            try await self.cachePhotoIfMissing(next)
+                            return (next.id, nil)
+                        } catch {
+                            return (next.id, error.localizedDescription)
+                        }
+                    }
                 }
             }
         }

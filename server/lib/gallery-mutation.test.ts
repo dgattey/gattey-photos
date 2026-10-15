@@ -98,6 +98,25 @@ describe("local-storage manifest round trips", () => {
       StaleGalleryError
     );
   });
+  it("readManifestIfModified returns modified=false on matching ETag and state on mismatch", async () => {
+    const base = "2024-06-01T12:00:00.000Z";
+    await fs.writeFile(
+      manifestFile,
+      JSON.stringify(manifestBody({ a: photo("a"), b: photo("b") }, { updatedAt: base })),
+      "utf8"
+    );
+
+    const storage = await import("./storage");
+    const hit = await storage.readManifestIfModified(`"${base}"`);
+    assert.equal(hit.modified, false);
+    assert.equal(hit.etag, `"${base}"`);
+
+    const miss = await storage.readManifestIfModified(`"2020-01-01T00:00:00.000Z"`);
+    assert.equal(miss.modified, true);
+    if (miss.modified) {
+      assert.equal(miss.state.updatedAt, base);
+    }
+  });
 });
 
 describe("emptyGalleryUpdatedAt", () => {
