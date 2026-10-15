@@ -61,7 +61,9 @@ final class PhotoImageModel: ObservableObject {
             if loaded == nil {
                 self.loadFailed = true
                 let path = url.path
-                let exists = FileManager.default.fileExists(atPath: path)
+                let exists = await Task.detached(priority: .utility) {
+                    FileManager.default.fileExists(atPath: path)
+                }.value
                 ActivityLogStore.shared.log(
                     .gallery,
                     level: .warning,

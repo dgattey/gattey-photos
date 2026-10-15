@@ -46,6 +46,19 @@ public enum PhotoCacheJPEG: Sendable {
         return encoded
     }
 
+    /// Reads and normalizes `url` to JPEG on a background worker (leaving the main actor free).
+    public static func normalizedJPEGDataAsync(fromFileURL url: URL) async throws -> Data {
+        try await Task.detached(priority: .userInitiated) {
+            let accessed = url.startAccessingSecurityScopedResource()
+            defer {
+                if accessed {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+            return try normalizedJPEGData(fromFileURL: url)
+        }.value
+    }
+
     private static func encodeAsJPEG(from url: URL, maxPixelSize: Int = 4096) -> Data? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
         let options: [CFString: Any] = [

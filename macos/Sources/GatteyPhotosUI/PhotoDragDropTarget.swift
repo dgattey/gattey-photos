@@ -87,7 +87,7 @@ final class PhotoDragDropNSView: NSView {
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        if !GalleryFilePasteboard.uploadURLs(from: sender).isEmpty, onFileDrop != nil {
+        if GalleryFilePasteboard.hasCandidateUploadItems(in: sender), onFileDrop != nil {
             onTargetedChange?(true)
             return .copy
         }
@@ -97,7 +97,7 @@ final class PhotoDragDropNSView: NSView {
     }
 
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
-        if !GalleryFilePasteboard.uploadURLs(from: sender).isEmpty, onFileDrop != nil { return .copy }
+        if GalleryFilePasteboard.hasCandidateUploadItems(in: sender), onFileDrop != nil { return .copy }
         return PhotoDragPasteboard.photoID(from: sender) != nil ? .move : []
     }
 
@@ -106,15 +106,19 @@ final class PhotoDragDropNSView: NSView {
     }
 
     override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        !GalleryFilePasteboard.uploadURLs(from: sender).isEmpty && onFileDrop != nil
+        GalleryFilePasteboard.hasCandidateUploadItems(in: sender) && onFileDrop != nil
             || PhotoDragPasteboard.photoID(from: sender) != nil
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        let fileURLs = GalleryFilePasteboard.uploadURLs(from: sender)
-        if !fileURLs.isEmpty, let onFileDrop {
+        if let onFileDrop, let payload = GalleryFilePasteboard.extractDropPayload(from: sender) {
             onTargetedChange?(false)
-            return onFileDrop(fileURLs)
+            Task { @MainActor in
+                let urls = await payload.materializeURLs()
+                guard !urls.isEmpty else { return }
+                _ = onFileDrop(urls)
+            }
+            return true
         }
         guard let id = PhotoDragPasteboard.photoID(from: sender) else { return false }
         onTargetedChange?(false)

@@ -87,7 +87,7 @@ struct PreviewGallerySplit<Right: View>: View {
         let clamped = Double(clampedFraction(fraction))
         guard store.settings.previewPaneSplitFraction != clamped else { return }
         store.settings.previewPaneSplitFraction = clamped
-        try? AppConfig.saveSettings(store.settings)
+        AppConfig.saveSettingsAsync(store.settings)
     }
 }
 #endif

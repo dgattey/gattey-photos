@@ -30,22 +30,42 @@ enum PhotoFormatters {
         return f
     }()
 
+    private static let cacheLock = NSLock()
+    private static var updatedAtCache: [String: String] = [:]
+    private static var deviceRegisteredAtCache: [String: String] = [:]
+    private static var deviceLastPushAtCache: [String: String] = [:]
+
     static func updatedAt(_ iso: String) -> String {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        if let hit = updatedAtCache[iso] { return hit }
         let date = isoWithFraction.date(from: iso) ?? isoPlain.date(from: iso)
-        guard let date else { return iso }
-        return display.string(from: date)
+        let formatted = date.map { display.string(from: $0) } ?? iso
+        if updatedAtCache.count > 512 { updatedAtCache.removeAll(keepingCapacity: true) }
+        updatedAtCache[iso] = formatted
+        return formatted
     }
 
     static func deviceRegisteredAt(_ iso: String) -> String {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        if let hit = deviceRegisteredAtCache[iso] { return hit }
         let date = isoWithFraction.date(from: iso) ?? isoPlain.date(from: iso)
-        guard let date else { return "Date unknown" }
-        return "Added \(dateOnly.string(from: date))"
+        let formatted = date.map { "Added \(dateOnly.string(from: $0))" } ?? "Date unknown"
+        if deviceRegisteredAtCache.count > 128 { deviceRegisteredAtCache.removeAll(keepingCapacity: true) }
+        deviceRegisteredAtCache[iso] = formatted
+        return formatted
     }
 
     static func deviceLastPushAt(_ iso: String) -> String {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        if let hit = deviceLastPushAtCache[iso] { return hit }
         let date = isoWithFraction.date(from: iso) ?? isoPlain.date(from: iso)
-        guard let date else { return "Last push unknown" }
-        return "Last push \(display.string(from: date))"
+        let formatted = date.map { "Last push \(display.string(from: $0))" } ?? "Last push unknown"
+        if deviceLastPushAtCache.count > 128 { deviceLastPushAtCache.removeAll(keepingCapacity: true) }
+        deviceLastPushAtCache[iso] = formatted
+        return formatted
     }
 
     static func addedBy(_ photo: PhotoEntry, uploaders: [UploaderID: String]) -> String {

@@ -48,6 +48,118 @@ final class PerformanceOptimizationTests: XCTestCase {
         XCTAssertNotEqual(store.showingTag(for: "photo-0"), "Showing for today")
     }
 
+    @MainActor
+    func testGalleryStoreBootstrapRespectsInMemoryEditsBeforeDiskLoadCompletes() async throws {
+        let savedLocalState = try? Data(contentsOf: AppConfig.localStateURL)
+        defer {
+            AppConfig.flushPersistence()
+            if let savedLocalState {
+                try? savedLocalState.write(to: AppConfig.localStateURL, options: .atomic)
+            } else {
+                try? FileManager.default.removeItem(at: AppConfig.localStateURL)
+            }
+        }
+
+        let diskState = GalleryState(
+            updatedAt: "2026-01-01T00:00:00.000Z",
+            order: ["disk-photo"],
+            photos: [
+                "disk-photo": PhotoEntry(
+                    id: "disk-photo",
+                    filename: "disk.jpg",
+                    blobPath: "photos/disk.jpg",
+                    sizeBytes: 100,
+                    updatedAt: "2026-01-01T00:00:00.000Z",
+                    deletedAt: nil,
+                    uploaderId: "u1"
+                ),
+            ],
+            uploaders: ["u1": "Dylan"],
+            currentPhotoId: "disk-photo"
+        )
+        try AppConfig.saveLocalState(diskState)
+
+        // Normal async bootstrap applies disk state when no in-memory edits occurred.
+        let storeA = GalleryStore()
+        await storeA.bootstrapFromDiskIfNeeded()
+        XCTAssertEqual(storeA.activePhotoIDs, ["disk-photo"])
+
+        // Immediate in-memory state assignment bumps stateRevision, preventing stale disk overwrite.
+        let storeB = GalleryStore()
+        storeB.state = GalleryState(
+            updatedAt: "2026-02-01T00:00:00.000Z",
+            order: ["live-photo"],
+            photos: [
+                "live-photo": PhotoEntry(
+                    id: "live-photo",
+                    filename: "live.jpg",
+                    blobPath: "photos/live.jpg",
+                    sizeBytes: 200,
+                    updatedAt: "2026-02-01T00:00:00.000Z",
+                    deletedAt: nil,
+                    uploaderId: "u1"
+                ),
+            ],
+            uploaders: ["u1": "Dylan"],
+            currentPhotoId: "live-photo"
+        )
+        await storeB.bootstrapFromDiskIfNeeded()
+        XCTAssertEqual(storeB.activePhotoIDs, ["live-photo"])
+    }
+
+    @MainActor
+    func testActivityLogAsyncAppendAndClearGenerationGuard() async throws {
+        let savedLogData = try? Data(contentsOf: ActivityLogFile.url)
+        defer {
+            ActivityLogFile.flush()
+            if let savedLogData {
+                try? savedLogData.write(to: ActivityLogFile.url, options: .atomic)
+            } else {
+                try? FileManager.default.removeItem(at: ActivityLogFile.url)
+            }
+        }
+
+        ActivityLogStore.shared.clear()
+        ActivityLogFile.flush()
+
+        ActivityLogStore.shared.log(.gallery, level: .info, "Async test entry", detail: "detail-1")
+        XCTAssertEqual(ActivityLogStore.shared.entries.first?.message, "Async test entry")
+
+        ActivityLogFile.flush()
+        let onDisk = ActivityLogFile.loadRecent(limit: 10)
+        XCTAssertTrue(onDisk.contains(where: { $0.message == "Async test entry" }))
+
+        ActivityLogStore.shared.clear()
+        XCTAssertTrue(ActivityLogStore.shared.entries.isEmpty)
+        ActivityLogFile.flush()
+        XCTAssertTrue(ActivityLogFile.loadRecent(limit: 10).isEmpty)
+    }
+
+    func testPhotoCacheJPEGAsyncNormalization() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gp-async-norm-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let pngURL = tempDir.appendingPathComponent("sample.png")
+        let ctx = CGContext(
+            data: nil,
+            width: 120,
+            height: 80,
+            bitsPerComponent: 8,
+            bytesPerRow: 120 * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )!
+        let cg = ctx.makeImage()!
+        let dest = CGImageDestinationCreateWithURL(pngURL as CFURL, UTType.png.identifier as CFString, 1, nil)!
+        CGImageDestinationAddImage(dest, cg, nil)
+        CGImageDestinationFinalize(dest)
+
+        let jpegData = try await PhotoCacheJPEG.normalizedJPEGDataAsync(fromFileURL: pngURL)
+        XCTAssertTrue(PhotoCacheJPEG.isJPEG(jpegData))
+    }
+
     func testImageDownsamplerCachesDecodedThumbnailsInMemory() throws {
         ImageDownsampler.clearMemoryCache()
         let tempDir = FileManager.default.temporaryDirectory

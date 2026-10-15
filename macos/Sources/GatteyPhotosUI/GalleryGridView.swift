@@ -262,7 +262,10 @@ struct GalleryGridView: View {
             guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("upload-\(index)-\(UUID().uuidString).jpg")
-            guard (try? data.write(to: url, options: .atomic)) != nil else { continue }
+            let wrote = await Task.detached(priority: .userInitiated) {
+                (try? data.write(to: url, options: .atomic)) != nil
+            }.value
+            guard wrote else { continue }
             urls.append(url)
         }
         guard !urls.isEmpty else { return }
@@ -704,8 +707,7 @@ private final class PhotoGridClickNSView: NSView, NSDraggingSource {
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        let fileURLs = GalleryFilePasteboard.uploadURLs(from: sender)
-        if !fileURLs.isEmpty {
+        if GalleryFilePasteboard.hasCandidateUploadItems(in: sender) {
             onFileDropTargeted?(true)
             return .copy
         }
@@ -715,8 +717,7 @@ private final class PhotoGridClickNSView: NSView, NSDraggingSource {
     }
 
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
-        let fileURLs = GalleryFilePasteboard.uploadURLs(from: sender)
-        if !fileURLs.isEmpty {
+        if GalleryFilePasteboard.hasCandidateUploadItems(in: sender) {
             onFileDropTargeted?(true)
             return .copy
         }
@@ -732,15 +733,20 @@ private final class PhotoGridClickNSView: NSView, NSDraggingSource {
     }
 
     override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        !GalleryFilePasteboard.uploadURLs(from: sender).isEmpty
+        GalleryFilePasteboard.hasCandidateUploadItems(in: sender)
             || PhotoDragPasteboard.photoID(from: sender) != nil
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        let fileURLs = GalleryFilePasteboard.uploadURLs(from: sender)
-        if !fileURLs.isEmpty {
+        if let payload = GalleryFilePasteboard.extractDropPayload(from: sender),
+           let onFileDrop {
             onFileDropTargeted?(false)
-            return onFileDrop?(fileURLs) ?? false
+            Task { @MainActor in
+                let fileURLs = await payload.materializeURLs()
+                guard !fileURLs.isEmpty else { return }
+                _ = onFileDrop(fileURLs)
+            }
+            return true
         }
         guard let dragged = PhotoDragPasteboard.photoID(from: sender) else { return false }
         updateInsertionIndex(from: sender)
@@ -927,7 +933,7 @@ private struct GalleryThumbnailSizeToolbarControl: View {
         let clamped = AppSettings.clampedGalleryGridColumnCount(count)
         guard store.settings.galleryGridColumnCount != clamped else { return }
         store.settings.galleryGridColumnCount = clamped
-        try? AppConfig.saveSettings(store.settings)
+        AppConfig.saveSettingsAsync(store.settings)
     }
 }
 #endif
