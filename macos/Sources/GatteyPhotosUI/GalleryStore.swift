@@ -28,7 +28,12 @@ public final class GalleryStore: ObservableObject {
     public let selection = GallerySelectionStore()
 
     @Published public var settings: AppSettings = AppConfig.loadSettings()
-    @Published var state: GalleryState
+    @Published var state: GalleryState {
+        didSet {
+            stateRevision &+= 1
+        }
+    }
+    private var stateRevision: UInt64 = 1
     @Published var serverLinkStatus: LinkStatus = .down
     @Published var deviceLinkStatus: LinkStatus = .down
     @Published private(set) var isCheckingConnection = false
@@ -71,15 +76,14 @@ public final class GalleryStore: ObservableObject {
     }
 
     private struct DerivedStateCache {
-        var updatedAt: String = ""
-        var order: [PhotoID] = []
-        var photoCount: Int = -1
+        var stateRevision: UInt64 = 0
+        var activeOrderRevision: UInt64 = 0
         var activePhotos: [PhotoEntry] = []
         var activePhotoIDs: [PhotoID] = []
     }
 
     private struct RotationPlanCache {
-        var activePhotoIDs: [PhotoID] = []
+        var activeOrderRevision: UInt64 = 0
         var currentPhotoID: PhotoID?
         var debugMode: Bool = false
         var debugAdvanceIntervalSeconds: Int = -1
@@ -92,18 +96,19 @@ public final class GalleryStore: ObservableObject {
     private var rotationCache = RotationPlanCache()
 
     private func ensureDerivedCache() {
-        if derivedCache.updatedAt == state.updatedAt,
-           derivedCache.photoCount == state.photos.count,
-           derivedCache.order == state.order {
+        if derivedCache.stateRevision == stateRevision {
             return
         }
         let active = state.activePhotos()
+        let activeIDs = active.map(\.id)
+        let orderRevision = activeIDs == derivedCache.activePhotoIDs
+            ? max(derivedCache.activeOrderRevision, 1)
+            : derivedCache.activeOrderRevision &+ 1
         derivedCache = DerivedStateCache(
-            updatedAt: state.updatedAt,
-            order: state.order,
-            photoCount: state.photos.count,
+            stateRevision: stateRevision,
+            activeOrderRevision: orderRevision,
             activePhotos: active,
-            activePhotoIDs: active.map(\.id)
+            activePhotoIDs: activeIDs
         )
     }
 
@@ -130,17 +135,19 @@ public final class GalleryStore: ObservableObject {
     }
 
     private func ensureRotationPlanCache(now: Date = Date()) {
-        let order = activePhotoIDs
+        ensureDerivedCache()
+        let orderRevision = derivedCache.activeOrderRevision
         let currentID = state.currentPhotoId
         let debug = settings.debugMode
         let interval = settings.debugAdvanceIntervalSeconds
-        if rotationCache.activePhotoIDs == order,
+        if rotationCache.activeOrderRevision == orderRevision,
            rotationCache.currentPhotoID == currentID,
            rotationCache.debugMode == debug,
            rotationCache.debugAdvanceIntervalSeconds == interval,
            now < rotationCache.nextCronBoundary {
             return
         }
+        let order = derivedCache.activePhotoIDs
         let plan = GalleryRotationSchedule.plan(
             activeOrder: order,
             currentPhotoID: currentID,
@@ -158,7 +165,7 @@ public final class GalleryStore: ObservableObject {
             }
         }
         rotationCache = RotationPlanCache(
-            activePhotoIDs: order,
+            activeOrderRevision: orderRevision,
             currentPhotoID: currentID,
             debugMode: debug,
             debugAdvanceIntervalSeconds: interval,
