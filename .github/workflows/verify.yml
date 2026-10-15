@@ -13,24 +13,34 @@ jobs:
       macos: ${{ steps.filter.outputs.macos }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
         with:
-          filters: |
-            server:
-              - 'server/**'
-            macos:
-              - 'macos/**'
-              - 'scripts/verify.sh'
-              - 'scripts/package-macos.sh'
-              - 'scripts/package-release.sh'
-              - 'scripts/ci-build-macos-release.sh'
-              - 'scripts/launch.sh'
-              - 'scripts/generate-app-icon.sh'
-              - 'scripts/macos-release-inputs-changed.sh'
-              - '.github/workflows/verify.yml'
-              - '.github/workflows/release-macos.yml'
-              - 'skills/macos/**'
+          fetch-depth: 0
+      - name: Detect changed paths
+        id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          if [[ "$EVENT_NAME" == "pull_request" && -n "$BASE_REF" ]]; then
+            CHANGED="$(git diff --name-only "origin/${BASE_REF}...HEAD")"
+          elif [[ -n "$BEFORE_SHA" && "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]] && git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
+            CHANGED="$(git diff --name-only "$BEFORE_SHA" HEAD)"
+          else
+            CHANGED="$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git ls-files)"
+          fi
+          echo "Changed files:"
+          echo "$CHANGED"
+          if echo "$CHANGED" | grep -qE '^server/'; then
+            echo "server=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "server=false" >> "$GITHUB_OUTPUT"
+          fi
+          if echo "$CHANGED" | grep -qE '^(macos/|scripts/(verify|package-macos|package-release|ci-build-macos-release|launch|generate-app-icon|macos-release-inputs-changed)\.sh$|\.github/workflows/(verify|release-macos)\.yml$|skills/macos/)'; then
+            echo "macos=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "macos=false" >> "$GITHUB_OUTPUT"
+          fi
 
   verify-server:
     needs: changes
