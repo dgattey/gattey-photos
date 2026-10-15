@@ -114,36 +114,6 @@ describe("coalesceUploaders", () => {
     const { uploaders } = coalesceUploaders(raw, {});
     assert.equal(uploaders[uid], DEFAULT_UPLOADER_NAME);
   });
-
-  it("repairs the Aug 30 Dylan->Becca default-name overwrite without affecting pre-Aug-30 photos", () => {
-    const dylanId = uploaderIdForName("Dylan");
-    const beccaId = uploaderIdForName("Becca");
-    const raw: Record<string, RawPhotoEntry> = {
-      dylanPhoto: {
-        id: "dylanPhoto",
-        filename: "IMG_4722.jpeg",
-        blobPath: "photos/dylanPhoto.jpg",
-        sizeBytes: 4424947,
-        updatedAt: "2026-06-01T23:51:21.408Z",
-        deletedAt: null,
-        uploaderId: dylanId,
-      },
-      beccaPhoto: {
-        id: "beccaPhoto",
-        filename: "IMG_0873.jpeg",
-        blobPath: "photos/beccaPhoto.jpg",
-        sizeBytes: 372512,
-        updatedAt: "2026-09-08T21:27:13.914Z",
-        deletedAt: null,
-        uploaderId: dylanId,
-      },
-    };
-    const { photos, uploaders } = coalesceUploaders(raw, { [dylanId]: "Becca" });
-    assert.equal(uploaders[dylanId], "Dylan");
-    assert.equal(uploaders[beccaId], "Becca");
-    assert.equal(photos.dylanPhoto!.uploaderId, dylanId);
-    assert.equal(photos.beccaPhoto!.uploaderId, beccaId);
-  });
 });
 
 describe("gallery mutation", () => {

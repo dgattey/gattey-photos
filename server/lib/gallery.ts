@@ -24,37 +24,6 @@ export function uploaderIdForName(name: string): UploaderId {
   return `u-${(h >>> 0).toString(16).padStart(8, "0")}`;
 }
 
-const BECCA_UPLOADER_NAME = "Becca";
-const MERGED_BECCA_WINDOW_START = "2026-08-30T00:00:00.000Z";
-const MERGED_BECCA_WINDOW_END = "2026-09-09T00:00:00.000Z";
-
-/** One-time migration for the Aug 30 – Sep 8, 2026 default-uploader ("Dylan" → "Becca") manifest collision. */
-function repairMergedDefaultUploader(
-  photos: Record<PhotoId, PhotoEntry>,
-  uploaders: Record<UploaderId, string>
-): void {
-  const dylanId = uploaderIdForName(DEFAULT_UPLOADER_NAME);
-  const beccaId = uploaderIdForName(BECCA_UPLOADER_NAME);
-  if (uploaders[dylanId] === BECCA_UPLOADER_NAME) {
-    uploaders[dylanId] = DEFAULT_UPLOADER_NAME;
-  }
-  let movedBeccaPhoto = false;
-  for (const photo of Object.values(photos)) {
-    if (
-      photo.deletedAt === null &&
-      photo.uploaderId === dylanId &&
-      photo.updatedAt >= MERGED_BECCA_WINDOW_START &&
-      photo.updatedAt < MERGED_BECCA_WINDOW_END
-    ) {
-      photo.uploaderId = beccaId;
-      movedBeccaPhoto = true;
-    }
-  }
-  if (movedBeccaPhoto && !uploaders[beccaId]) {
-    uploaders[beccaId] = BECCA_UPLOADER_NAME;
-  }
-}
-
 /** Parse raw manifest photos into id-keyed entries and ensure every uploader id has a mapped name. */
 export function coalesceUploaders(
   rawPhotos: Record<PhotoId, RawPhotoEntry>,
@@ -75,7 +44,6 @@ export function coalesceUploaders(
       uploaderId,
     };
   }
-  repairMergedDefaultUploader(photos, uploaders);
   return { photos, uploaders };
 }
 

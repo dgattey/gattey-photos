@@ -97,37 +97,6 @@ public struct GalleryState: Codable, Equatable, Sendable {
         return String(format: "u-%08x", h)
     }
 
-    private static let beccaUploaderDisplayName = "Becca"
-    private static let mergedBeccaWindowStart = "2026-08-30T00:00:00.000Z"
-    private static let mergedBeccaWindowEnd = "2026-09-09T00:00:00.000Z"
-
-    /// Repairs the Aug 30 – Sep 8, 2026 "Dylan" → "Becca" manifest collision (matches server `repairMergedDefaultUploader`).
-    private static func repairMergedDefaultUploader(
-        photos: inout [PhotoID: PhotoEntry],
-        uploaders: inout [UploaderID: String]
-    ) {
-        let dylanId = Self.uploaderId(forDisplayName: defaultUploaderDisplayName)
-        let beccaId = Self.uploaderId(forDisplayName: beccaUploaderDisplayName)
-        if uploaders[dylanId] == beccaUploaderDisplayName {
-            uploaders[dylanId] = defaultUploaderDisplayName
-        }
-        var movedBeccaPhoto = false
-        for (id, var photo) in photos {
-            if !photo.isDeleted,
-               photo.uploaderId == dylanId,
-               photo.updatedAt >= mergedBeccaWindowStart,
-               photo.updatedAt < mergedBeccaWindowEnd
-            {
-                photo.uploaderId = beccaId
-                photos[id] = photo
-                movedBeccaPhoto = true
-            }
-        }
-        if movedBeccaPhoto, uploaders[beccaId] == nil {
-            uploaders[beccaId] = beccaUploaderDisplayName
-        }
-    }
-
     /// Build id-keyed entries and ensure every uploader id has a mapped name (matches server `coalesceUploaders`).
     public static func coalescingUploaders(
         rawPhotos: [PhotoID: RawManifestPhoto],
@@ -151,7 +120,6 @@ public struct GalleryState: Codable, Equatable, Sendable {
                 downloadUrl: raw.downloadUrl
             )
         }
-        repairMergedDefaultUploader(photos: &photos, uploaders: &uploaders)
         return (photos, uploaders)
     }
 
