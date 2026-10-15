@@ -105,31 +105,106 @@ public enum ActivityLogFile {
         AppConfig.supportFolder.appendingPathComponent("activity.log")
     }
 
-    private static let queue = DispatchQueue(label: "com.gattey.photos.activity-log")
+    private static let queue = DispatchQueue(label: "com.gattey.photos.activity-log", qos: .utility)
+
+    private static let fractionalISOFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let standardISOFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    public struct FileSignature: Equatable, Sendable {
+        public let modificationDate: Date
+        public let size: Int
+    }
+
+    public static func currentSignature() -> FileSignature? {
+        queue.sync {
+            readCurrentSignatureOnQueue()
+        }
+    }
+
+    private static func readCurrentSignatureOnQueue() -> FileSignature? {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let mod = attrs[.modificationDate] as? Date,
+              let size = attrs[.size] as? Int
+        else { return nil }
+        return FileSignature(modificationDate: mod, size: size)
+    }
 
     public static func append(_ entry: LogEntry) {
         queue.sync {
-            guard let line = encode(entry) else { return }
-            let data = Data(line.utf8)
-            if !FileManager.default.fileExists(atPath: url.path) {
-                FileManager.default.createFile(atPath: url.path, contents: data)
-                return
-            }
-            guard let handle = try? FileHandle(forWritingTo: url) else { return }
-            defer { try? handle.close() }
-            _ = try? handle.seekToEnd()
-            try? handle.write(contentsOf: data)
-            trimIfNeeded()
+            appendOnQueue(entry)
         }
+    }
+
+    public static func appendAsync(
+        _ entry: LogEntry,
+        echoToStderr: Bool = false,
+        completion: (@Sendable (FileSignature?) -> Void)? = nil
+    ) {
+        queue.async {
+            appendOnQueue(entry)
+            if echoToStderr {
+                fputs("[\(entry.category.rawValue)] \(entry.message)\n", stderr)
+                if let detail = entry.detail, !detail.isEmpty {
+                    fputs("\(detail)\n", stderr)
+                }
+            }
+            let sig = readCurrentSignatureOnQueue()
+            completion?(sig)
+        }
+    }
+
+    private static func appendOnQueue(_ entry: LogEntry) {
+        guard let line = encode(entry) else { return }
+        let data = Data((line + "\n").utf8)
+        if !FileManager.default.fileExists(atPath: url.path) {
+            FileManager.default.createFile(atPath: url.path, contents: data)
+            return
+        }
+        guard let handle = try? FileHandle(forWritingTo: url) else { return }
+        defer { try? handle.close() }
+        _ = try? handle.seekToEnd()
+        try? handle.write(contentsOf: data)
+        trimIfNeeded()
     }
 
     public static func loadRecent(limit: Int = 2000) -> [LogEntry] {
         queue.sync {
-            guard let data = try? Data(contentsOf: url),
-                  let text = String(data: data, encoding: .utf8)
-            else { return [] }
-            let lines = text.split(separator: "\n", omittingEmptySubsequences: true)
-            return lines.suffix(limit).compactMap { decode(String($0)) }
+            loadRecentOnQueue(limit: limit)
+        }
+    }
+
+    private static func loadRecentOnQueue(limit: Int = 2000) -> [LogEntry] {
+        guard let data = try? Data(contentsOf: url),
+              let text = String(data: data, encoding: .utf8)
+        else { return [] }
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: true)
+        return lines.suffix(limit).compactMap { decode(String($0)) }
+    }
+
+    public static func loadIfChangedAsync(
+        lastSignature: FileSignature?,
+        onlyIfChanged: Bool,
+        limit: Int = 2000
+    ) async -> (entries: [LogEntry]?, signature: FileSignature?) {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                let sig = readCurrentSignatureOnQueue()
+                if onlyIfChanged, let sig, sig == lastSignature {
+                    continuation.resume(returning: (nil, sig))
+                    return
+                }
+                let loaded = loadRecentOnQueue(limit: limit)
+                continuation.resume(returning: (loaded, sig))
+            }
         }
     }
 
@@ -139,10 +214,21 @@ public enum ActivityLogFile {
         }
     }
 
+    public static func clearAsync(completion: (@Sendable (FileSignature?) -> Void)? = nil) {
+        queue.async {
+            try? Data().write(to: url)
+            completion?(readCurrentSignatureOnQueue())
+        }
+    }
+
+    public static func flush() {
+        queue.sync {}
+    }
+
     private static func encode(_ entry: LogEntry) -> String? {
         let payload: [String: String] = [
             "id": entry.id.uuidString,
-            "t": ISO8601DateFormatter().string(from: entry.timestamp),
+            "t": fractionalISOFormatter.string(from: entry.timestamp),
             "c": entry.category.rawValue,
             "l": entry.level.rawValue,
             "m": entry.message,
@@ -155,10 +241,8 @@ public enum ActivityLogFile {
     }
 
     private static func parseTimestamp(_ t: String) -> Date? {
-        let withFraction = ISO8601DateFormatter()
-        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = withFraction.date(from: t) { return d }
-        return ISO8601DateFormatter().date(from: t)
+        if let d = fractionalISOFormatter.date(from: t) { return d }
+        return standardISOFormatter.date(from: t)
     }
 
     private static func decode(_ line: String) -> LogEntry? {
@@ -197,7 +281,11 @@ public final class ActivityLogStore: ObservableObject {
 
     @Published public private(set) var entries: [LogEntry] = []
 
+    private static let maxInMemoryEntries = 1000
     private var liveReloadTask: Task<Void, Never>?
+    private var reloadTask: Task<Void, Never>?
+    private var lastMergedSignature: ActivityLogFile.FileSignature?
+    private var mergeGeneration: UInt64 = 0
 
     private init() {}
 
@@ -209,7 +297,7 @@ public final class ActivityLogStore: ObservableObject {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: UInt64(intervalSeconds * 1_000_000_000))
                 guard !Task.isCancelled else { break }
-                mergeFromDisk()
+                await mergeFromDiskAsync(onlyIfChanged: true)
             }
         }
     }
@@ -217,30 +305,62 @@ public final class ActivityLogStore: ObservableObject {
     public func stopLiveReload() {
         liveReloadTask?.cancel()
         liveReloadTask = nil
+        reloadTask?.cancel()
+        reloadTask = nil
     }
 
-    /// Merges new lines from disk without removing in-memory entries.
+    /// Schedules an asynchronous merge of recent disk log lines off the main thread.
     public func reload() {
-        mergeFromDisk()
+        reloadTask?.cancel()
+        reloadTask = Task { @MainActor in
+            await mergeFromDiskAsync(onlyIfChanged: false)
+        }
+    }
+
+    public func reloadAsync() async {
+        await mergeFromDiskAsync(onlyIfChanged: false)
     }
 
     public func clear() {
-        ActivityLogFile.clear()
+        mergeGeneration &+= 1
+        reloadTask?.cancel()
         entries = []
+        let expectedGen = mergeGeneration
+        ActivityLogFile.clearAsync { sig in
+            Task { @MainActor in
+                guard ActivityLogStore.shared.mergeGeneration == expectedGen else { return }
+                ActivityLogStore.shared.lastMergedSignature = sig
+            }
+        }
     }
 
     private func bootstrapFromDiskIfNeeded() {
         guard entries.isEmpty else { return }
-        mergeFromDisk()
+        reload()
     }
 
-    private func mergeFromDisk() {
-        let fromFile = ActivityLogFile.loadRecent()
+    private func mergeFromDiskAsync(onlyIfChanged: Bool) async {
+        let startGeneration = mergeGeneration
+        let result = await ActivityLogFile.loadIfChangedAsync(
+            lastSignature: lastMergedSignature,
+            onlyIfChanged: onlyIfChanged
+        )
+        guard !Task.isCancelled, mergeGeneration == startGeneration else { return }
+        lastMergedSignature = result.signature
+        guard let fromFile = result.entries else { return }
         var byID = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
+        var addedOrUpdated = false
         for entry in fromFile {
-            byID[entry.id] = entry
+            if byID[entry.id] != entry {
+                byID[entry.id] = entry
+                addedOrUpdated = true
+            }
         }
-        entries = byID.values.sorted { $0.timestamp > $1.timestamp }
+        guard addedOrUpdated || entries.count != byID.count else { return }
+        let sorted = byID.values.sorted { $0.timestamp > $1.timestamp }
+        entries = sorted.count > Self.maxInMemoryEntries
+            ? Array(sorted.prefix(Self.maxInMemoryEntries))
+            : sorted
     }
 
     public func log(
@@ -250,13 +370,18 @@ public final class ActivityLogStore: ObservableObject {
         detail: String? = nil
     ) {
         let entry = LogEntry(category: category, level: level, message: message, detail: detail)
-        ActivityLogFile.append(entry)
-        if !entries.contains(where: { $0.id == entry.id }) {
+        if entries.first?.id != entry.id {
             entries.insert(entry, at: 0)
+            if entries.count > Self.maxInMemoryEntries {
+                entries.removeLast(entries.count - Self.maxInMemoryEntries)
+            }
         }
-        fputs("[\(category.rawValue)] \(message)\n", stderr)
-        if let detail, !detail.isEmpty {
-            fputs("\(detail)\n", stderr)
+        let expectedGen = mergeGeneration
+        ActivityLogFile.appendAsync(entry, echoToStderr: true) { sig in
+            Task { @MainActor in
+                guard ActivityLogStore.shared.mergeGeneration == expectedGen else { return }
+                ActivityLogStore.shared.lastMergedSignature = sig
+            }
         }
     }
 

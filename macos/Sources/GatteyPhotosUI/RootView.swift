@@ -95,8 +95,7 @@ struct RootView: View {
                 _ = await status
             } else {
                 async let gallery: Void = store.refresh()
-                async let frames: Void = store.reloadRegisteredFrames()
-                _ = await (gallery, status, frames)
+                _ = await (gallery, status)
             }
         }
         #if os(macOS)

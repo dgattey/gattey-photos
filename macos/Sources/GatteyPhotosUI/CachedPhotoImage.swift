@@ -30,13 +30,20 @@ final class PhotoImageModel: ObservableObject {
         loadedPhotoID = photoID
         loadedMaxPixelSize = maxPixelSize
         loadTask?.cancel()
+        let url = thumbnailWidth.map { AppConfig.thumbnailCacheURL(for: photoID, width: $0) }
+            ?? AppConfig.cacheURL(for: photoID)
+        if let memoryHit = ImageDownsampler.cachedThumbnail(from: url, maxPixelSize: maxPixelSize) {
+            image = memoryHit
+            isLoading = false
+            loadFailed = false
+            loadTask = nil
+            return
+        }
         if photoChanged {
             image = nil
             loadFailed = false
         }
         isLoading = image == nil
-        let url = thumbnailWidth.map { AppConfig.thumbnailCacheURL(for: photoID, width: $0) }
-            ?? AppConfig.cacheURL(for: photoID)
         let requestedID = photoID
         let requestedSize = maxPixelSize
         loadTask = Task {
@@ -54,7 +61,9 @@ final class PhotoImageModel: ObservableObject {
             if loaded == nil {
                 self.loadFailed = true
                 let path = url.path
-                let exists = FileManager.default.fileExists(atPath: path)
+                let exists = await Task.detached(priority: .utility) {
+                    FileManager.default.fileExists(atPath: path)
+                }.value
                 ActivityLogStore.shared.log(
                     .gallery,
                     level: .warning,

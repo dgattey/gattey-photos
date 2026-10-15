@@ -30,32 +30,56 @@ enum PhotoFormatters {
         return f
     }()
 
+    private static let cacheLock = NSLock()
+    private static var updatedAtCache: [String: String] = [:]
+    private static var deviceRegisteredAtCache: [String: String] = [:]
+    private static var deviceLastPushAtCache: [String: String] = [:]
+
     static func updatedAt(_ iso: String) -> String {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        if let hit = updatedAtCache[iso] { return hit }
         let date = isoWithFraction.date(from: iso) ?? isoPlain.date(from: iso)
-        guard let date else { return iso }
-        return display.string(from: date)
+        let formatted = date.map { display.string(from: $0) } ?? iso
+        if updatedAtCache.count > 512 { updatedAtCache.removeAll(keepingCapacity: true) }
+        updatedAtCache[iso] = formatted
+        return formatted
     }
 
     static func deviceRegisteredAt(_ iso: String, registeredBy: String? = nil) -> String {
-        let date = isoWithFraction.date(from: iso) ?? isoPlain.date(from: iso)
         let by = (registeredBy ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let cacheKey = "\(iso)|\(by)"
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        if let hit = deviceRegisteredAtCache[cacheKey] { return hit }
+        let date = isoWithFraction.date(from: iso) ?? isoPlain.date(from: iso)
         let knownOwner = (!by.isEmpty && by.caseInsensitiveCompare("Unknown") != .orderedSame) ? by : nil
-        guard let date else {
+        let formatted: String
+        if let date {
             if let knownOwner {
-                return "Added by \(knownOwner)"
+                formatted = "Added \(dateOnly.string(from: date)) by \(knownOwner)"
+            } else {
+                formatted = "Added \(dateOnly.string(from: date))"
             }
-            return "Date unknown"
+        } else if let knownOwner {
+            formatted = "Added by \(knownOwner)"
+        } else {
+            formatted = "Date unknown"
         }
-        if let knownOwner {
-            return "Added \(dateOnly.string(from: date)) by \(knownOwner)"
-        }
-        return "Added \(dateOnly.string(from: date))"
+        if deviceRegisteredAtCache.count > 128 { deviceRegisteredAtCache.removeAll(keepingCapacity: true) }
+        deviceRegisteredAtCache[cacheKey] = formatted
+        return formatted
     }
 
     static func deviceLastPushAt(_ iso: String) -> String {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        if let hit = deviceLastPushAtCache[iso] { return hit }
         let date = isoWithFraction.date(from: iso) ?? isoPlain.date(from: iso)
-        guard let date else { return "Last push unknown" }
-        return "Last push \(display.string(from: date))"
+        let formatted = date.map { "Last push \(display.string(from: $0))" } ?? "Last push unknown"
+        if deviceLastPushAtCache.count > 128 { deviceLastPushAtCache.removeAll(keepingCapacity: true) }
+        deviceLastPushAtCache[iso] = formatted
+        return formatted
     }
 
     static func addedBy(_ photo: PhotoEntry, uploaders: [UploaderID: String]) -> String {

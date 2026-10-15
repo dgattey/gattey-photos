@@ -23,7 +23,17 @@ public enum PhotoCacheJPEG: Sendable {
 
     public static func isJPEG(_ data: Data) -> Bool {
         guard data.count >= 3 else { return false }
-        return data[0] == jpegMagic[0] && data[1] == jpegMagic[1] && data[2] == jpegMagic[2]
+        let start = data.startIndex
+        return data[start] == jpegMagic[0]
+            && data[data.index(after: start)] == jpegMagic[1]
+            && data[data.index(start, offsetBy: 2)] == jpegMagic[2]
+    }
+
+    public static func isJPEGFile(at url: URL) -> Bool {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? handle.close() }
+        guard let prefix = try? handle.read(upToCount: 3) else { return false }
+        return isJPEG(prefix)
     }
 
     /// Normalizes raw image bytes to an upright JPEG capped at `maxPixelSize` on the long edge
@@ -63,13 +73,34 @@ public enum PhotoCacheJPEG: Sendable {
         compressionQuality: Double = 0.88,
         maxPixelSize: Int = defaultMaxPixelSize
     ) throws -> Data {
-        let raw = try Data(contentsOf: url)
+        let raw = try Data(contentsOf: url, options: .mappedIfSafe)
         return try normalizedJPEGData(
             raw,
             name: url.lastPathComponent,
             compressionQuality: compressionQuality,
             maxPixelSize: maxPixelSize
         )
+    }
+
+    /// Reads and normalizes `url` to JPEG on a background worker (leaving the main actor free).
+    public static func normalizedJPEGDataAsync(
+        fromFileURL url: URL,
+        compressionQuality: Double = 0.88,
+        maxPixelSize: Int = defaultMaxPixelSize
+    ) async throws -> Data {
+        try await Task.detached(priority: .userInitiated) {
+            let accessed = url.startAccessingSecurityScopedResource()
+            defer {
+                if accessed {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+            return try normalizedJPEGData(
+                fromFileURL: url,
+                compressionQuality: compressionQuality,
+                maxPixelSize: maxPixelSize
+            )
+        }.value
     }
 
     private static func needsOrientationBake(_ props: [CFString: Any]) -> Bool {

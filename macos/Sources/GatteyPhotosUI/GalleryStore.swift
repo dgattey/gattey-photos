@@ -16,10 +16,16 @@ private actor GalleryMutationSerial {
 @MainActor
 public final class GalleryStore: ObservableObject {
     public init() {
-        let local = AppConfig.loadLocalState()
-        state = local.state.withResolvedCurrentPhoto()
-        if local.needsServerPull {
-            isAwaitingInitialGalleryPull = true
+        let initialSettings = AppSettings.defaults
+        settings = initialSettings
+        lastPersistedDisplayName = initialSettings.displayName
+        state = .empty
+        bootstrapDiskTask = Task { [weak self] in
+            async let loadedSettings = AppConfig.loadSettingsAsync()
+            async let loadedLocal = AppConfig.loadLocalStateAsync()
+            let (diskSettings, diskLocal) = await (loadedSettings, loadedLocal)
+            guard let self else { return }
+            self.applyInitialDiskBootstrap(settings: diskSettings, local: diskLocal)
         }
     }
 
@@ -27,8 +33,20 @@ public final class GalleryStore: ObservableObject {
 
     public let selection = GallerySelectionStore()
 
-    @Published public var settings: AppSettings = AppConfig.loadSettings()
-    @Published var state: GalleryState
+    @Published public var settings: AppSettings {
+        didSet {
+            settingsRevision &+= 1
+        }
+    }
+    @Published var state: GalleryState {
+        didSet {
+            stateRevision &+= 1
+        }
+    }
+    private var stateRevision: UInt64 = 1
+    private var settingsRevision: UInt64 = 1
+    private var lastPersistedDisplayName: String
+    private var bootstrapDiskTask: Task<Void, Never>?
     @Published var serverLinkStatus: LinkStatus = .down
     @Published var deviceLinkStatus: LinkStatus = .down
     @Published private(set) var isCheckingConnection = false
@@ -70,8 +88,51 @@ public final class GalleryStore: ObservableObject {
         case periodic
     }
 
+    private struct DerivedStateCache {
+        var stateRevision: UInt64 = 0
+        var activeOrderRevision: UInt64 = 0
+        var activePhotos: [PhotoEntry] = []
+        var activePhotoIDs: [PhotoID] = []
+    }
+
+    private struct RotationPlanCache {
+        var activeOrderRevision: UInt64 = 0
+        var currentPhotoID: PhotoID?
+        var debugMode: Bool = false
+        var debugAdvanceIntervalSeconds: Int = -1
+        var nextCronBoundary: Date = .distantPast
+        var plan: GalleryRotationPlan?
+        var formattedTagByPhotoID: [PhotoID: String] = [:]
+    }
+
+    private var derivedCache = DerivedStateCache()
+    private var rotationCache = RotationPlanCache()
+
+    private func ensureDerivedCache() {
+        if derivedCache.stateRevision == stateRevision {
+            return
+        }
+        let active = state.activePhotos()
+        let activeIDs = active.map(\.id)
+        let orderRevision = activeIDs == derivedCache.activePhotoIDs
+            ? max(derivedCache.activeOrderRevision, 1)
+            : derivedCache.activeOrderRevision &+ 1
+        derivedCache = DerivedStateCache(
+            stateRevision: stateRevision,
+            activeOrderRevision: orderRevision,
+            activePhotos: active,
+            activePhotoIDs: activeIDs
+        )
+    }
+
     var activePhotos: [PhotoEntry] {
-        state.activePhotos()
+        ensureDerivedCache()
+        return derivedCache.activePhotos
+    }
+
+    var activePhotoIDs: [PhotoID] {
+        ensureDerivedCache()
+        return derivedCache.activePhotoIDs
     }
 
     var currentPhoto: PhotoEntry? {
@@ -86,17 +147,51 @@ public final class GalleryStore: ObservableObject {
         state.canSetAsCurrent(photoID: photoID)
     }
 
-    /// Next cron boundary and per-photo slot starts for the active gallery order.
-    var rotationPlan: GalleryRotationPlan? {
-        let order = activePhotos.map(\.id)
-        return GalleryRotationSchedule.plan(
+    private func ensureRotationPlanCache(now: Date = Date()) {
+        ensureDerivedCache()
+        let orderRevision = derivedCache.activeOrderRevision
+        let currentID = state.currentPhotoId
+        let debug = settings.debugMode
+        let interval = settings.debugAdvanceIntervalSeconds
+        if rotationCache.activeOrderRevision == orderRevision,
+           rotationCache.currentPhotoID == currentID,
+           rotationCache.debugMode == debug,
+           rotationCache.debugAdvanceIntervalSeconds == interval,
+           now < rotationCache.nextCronBoundary {
+            return
+        }
+        let order = derivedCache.activePhotoIDs
+        let plan = GalleryRotationSchedule.plan(
             activeOrder: order,
-            currentPhotoID: state.currentPhotoId,
+            currentPhotoID: currentID,
+            now: now,
             kind: GalleryRotationSchedule.kind(
-                debugMode: settings.debugMode,
-                debugAdvanceIntervalSeconds: settings.debugAdvanceIntervalSeconds
+                debugMode: debug,
+                debugAdvanceIntervalSeconds: interval
             )
         )
+        var tags: [PhotoID: String] = [:]
+        if let plan {
+            tags.reserveCapacity(plan.showingStartByPhotoID.count)
+            for (id, date) in plan.showingStartByPhotoID {
+                tags[id] = PhotoFormatters.showingStartDate(date)
+            }
+        }
+        rotationCache = RotationPlanCache(
+            activeOrderRevision: orderRevision,
+            currentPhotoID: currentID,
+            debugMode: debug,
+            debugAdvanceIntervalSeconds: interval,
+            nextCronBoundary: plan?.nextCron ?? now.addingTimeInterval(60),
+            plan: plan,
+            formattedTagByPhotoID: tags
+        )
+    }
+
+    /// Next cron boundary and per-photo slot starts for the active gallery order.
+    var rotationPlan: GalleryRotationPlan? {
+        ensureRotationPlanCache()
+        return rotationCache.plan
     }
 
     func showingTag(for photoID: PhotoID) -> String? {
@@ -105,8 +200,8 @@ public final class GalleryStore: ObservableObject {
         if state.currentPhotoId == photoID {
             return PhotoFormatters.showingTodayTag
         }
-        guard let date = rotationPlan?.showingStartByPhotoID[photoID] else { return nil }
-        return PhotoFormatters.showingStartDate(date)
+        ensureRotationPlanCache()
+        return rotationCache.formattedTagByPhotoID[photoID]
     }
 
     func devicePreviewCaption(for photo: PhotoEntry) -> String {
@@ -132,8 +227,28 @@ public final class GalleryStore: ObservableObject {
         let clamped = AppSettings.clampedDebugAdvanceIntervalSeconds(seconds)
         guard settings.debugAdvanceIntervalSeconds != clamped else { return }
         settings.debugAdvanceIntervalSeconds = clamped
-        try? AppConfig.saveSettings(settings)
+        AppConfig.saveSettingsAsync(settings)
         log.log(.system, level: .info, "Debug advance interval", detail: "\(clamped)s")
+    }
+
+    func bootstrapFromDiskIfNeeded() async {
+        await bootstrapDiskTask?.value
+    }
+
+    private func applyInitialDiskBootstrap(
+        settings diskSettings: AppSettings,
+        local diskLocal: AppConfig.LocalStateLoad
+    ) {
+        if settingsRevision == 1 {
+            settings = diskSettings
+            lastPersistedDisplayName = diskSettings.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if stateRevision == 1 {
+            state = diskLocal.state.withResolvedCurrentPhoto()
+            if diskLocal.needsServerPull {
+                isAwaitingInitialGalleryPull = true
+            }
+        }
     }
 
     private func applyState(_ next: GalleryState) {
@@ -147,7 +262,7 @@ public final class GalleryStore: ObservableObject {
         next.currentPhotoId = current.currentPhotoId
         next.currentPhotoUpdatedBy = current.currentPhotoUpdatedBy
         applyState(next)
-        try? AppConfig.saveLocalState(state)
+        AppConfig.saveLocalStateAsync(state)
     }
 
     private func makeSyncClient() throws -> SyncClient {
@@ -160,12 +275,15 @@ public final class GalleryStore: ObservableObject {
         downloadMissing: Bool = false
     ) async throws {
         let next = response.state
+        applyState(next)
+        let snapshot = state
+        try await AppConfig.saveLocalStateOnBackground(snapshot)
         if downloadMissing {
             let sync = try client ?? makeSyncClient()
-            try await sync.downloadMissing(for: next)
+            Task {
+                try? await sync.downloadMissing(for: snapshot)
+            }
         }
-        applyState(next)
-        try AppConfig.saveLocalState(state)
     }
 
     /// Mutation with `baseUpdatedAt`; on 409 applies server body and retries (up to 3 attempts).
@@ -210,8 +328,6 @@ public final class GalleryStore: ObservableObject {
               let photo = state.photos[photoID],
               !photo.isDeleted
         else { return }
-        let cacheURL = AppConfig.cacheURL(for: photoID)
-        if FileManager.default.fileExists(atPath: cacheURL.path) { return }
         do {
             let client = try makeSyncClient()
             try await client.cachePhotoIfMissing(photo)
@@ -227,8 +343,6 @@ public final class GalleryStore: ObservableObject {
               let photo = state.photos[photoID],
               !photo.isDeleted
         else { return }
-        let cacheURL = AppConfig.thumbnailCacheURL(for: photoID, width: width)
-        if FileManager.default.fileExists(atPath: cacheURL.path) { return }
         do {
             let client = try makeSyncClient()
             try await client.cacheThumbnailIfMissing(photo, width: width)
@@ -247,6 +361,13 @@ public final class GalleryStore: ObservableObject {
 
     func reloadSettings() {
         settings = AppConfig.loadSettings()
+        lastPersistedDisplayName = settings.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func reloadSettingsAsync() async {
+        let loaded = await AppConfig.loadSettingsAsync()
+        settings = loaded
+        lastPersistedDisplayName = loaded.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     public func setDebugMode(_ enabled: Bool) {
@@ -254,7 +375,7 @@ public final class GalleryStore: ObservableObject {
         let previousURL = settings.serverBaseURL
         settings.debugMode = enabled
         settings.serverBaseURL = AppSettings.syncServerBaseURL(debugMode: enabled)
-        try? AppConfig.saveSettings(settings)
+        AppConfig.saveSettingsAsync(settings)
         session?.noteSettingsChanged(store: self, previousServerURL: previousURL)
         log.log(
             .system,
@@ -270,8 +391,8 @@ public final class GalleryStore: ObservableObject {
         state = .empty
         selection.clearSelection()
         selection.closeLightbox()
-        try? AppConfig.saveLocalState(.empty)
-        AppConfig.clearPhotoCache()
+        AppConfig.saveLocalStateAsync(.empty)
+        AppConfig.clearPhotoCacheAsync()
         lastServerOK = nil
         serverLinkStatus = .down
         deviceLinkStatus = .down
@@ -280,7 +401,7 @@ public final class GalleryStore: ObservableObject {
     }
 
     func saveSettings(propagateDisplayNameChange shouldPropagate: Bool = true) {
-        let previousDisplayName = Self.persistedDisplayName()
+        let previousDisplayName = lastPersistedDisplayName.isEmpty ? nil : lastPersistedDisplayName
         let previousServerURL = settings.serverBaseURL
         settings.serverBaseURL = AppSettings.syncServerBaseURL(debugMode: settings.debugMode)
         settings.galleryName = "default"
@@ -289,8 +410,9 @@ public final class GalleryStore: ObservableObject {
             settings.displayName = previousDisplayName ?? ""
         } else {
             settings.displayName = newDisplayName
+            lastPersistedDisplayName = newDisplayName
         }
-        try? AppConfig.saveSettings(settings)
+        AppConfig.saveSettingsAsync(settings)
         session?.noteSettingsChanged(store: self, previousServerURL: previousServerURL)
         log.log(.system, level: .info, "Settings saved", detail: settings.serverBaseURL)
         if shouldPropagate,
@@ -302,14 +424,6 @@ public final class GalleryStore: ObservableObject {
             Task { await propagateDisplayNameChange(from: previousDisplayName, to: newDisplayName) }
         }
         Task { await updateConnectionStatus() }
-    }
-
-    private static func persistedDisplayName() -> String? {
-        guard let data = try? Data(contentsOf: AppConfig.settingsURL),
-              let decoded = try? JSONDecoder().decode(AppSettings.self, from: data)
-        else { return nil }
-        let trimmed = decoded.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
     }
 
     private func propagateDisplayNameChange(from oldName: String, to newName: String) async {
@@ -509,12 +623,16 @@ public final class GalleryStore: ObservableObject {
                 }
                 applyCurrentPhoto(token)
             } else {
-                // Foreground / manual: always fetch the latest catalog.
-                if case .modified(let response) = try await client.fetchGallery() {
+                // Foreground / manual: conditionally fetch catalog when we already have local photos;
+                // only poll /api/gallery/current separately on 304 Not Modified.
+                let conditionalETag = activePhotos.isEmpty ? nil : state.updatedAt
+                switch try await client.fetchGallery(ifNoneMatch: conditionalETag) {
+                case .modified(let response):
                     try await commit(response, client: client, downloadMissing: true)
-                }
-                if let token = try? await client.fetchCurrentPhoto() {
-                    applyCurrentPhoto(token)
+                case .notModified:
+                    if let token = try? await client.fetchCurrentPhoto() {
+                        applyCurrentPhoto(token)
+                    }
                 }
             }
             notePullSuccess()
@@ -529,21 +647,21 @@ public final class GalleryStore: ObservableObject {
                     .gallery,
                     level: .success,
                     "Gallery refreshed",
-                    detail: "updatedAt=\(state.updatedAt) active=\(state.activePhotos().count)"
+                    detail: "updatedAt=\(state.updatedAt) active=\(activePhotos.count)"
                 )
             case .manual:
                 log.log(
                     .server,
                     level: .success,
                     "Server sync OK",
-                    detail: "updatedAt=\(state.updatedAt) photos=\(state.activePhotos().count)"
+                    detail: "updatedAt=\(state.updatedAt) photos=\(activePhotos.count)"
                 )
             case .periodic:
                 log.log(
                     .sync,
                     level: .success,
                     "Scheduled sync OK",
-                    detail: "updatedAt=\(state.updatedAt) photos=\(state.activePhotos().count)"
+                    detail: "updatedAt=\(state.updatedAt) photos=\(activePhotos.count)"
                 )
             }
         } catch {
@@ -713,7 +831,9 @@ public final class GalleryStore: ObservableObject {
             return
         }
         #if os(macOS)
-        let uploads = urls.filter { GalleryFilePasteboard.isUploadableImageFile($0) }
+        let uploads = await Task.detached(priority: .userInitiated) {
+            urls.filter { GalleryFilePasteboard.isUploadableImageFile($0) }
+        }.value
         #else
         let uploads = urls
         #endif
@@ -725,15 +845,9 @@ public final class GalleryStore: ObservableObject {
         await run(label: "Upload", category: .gallery) {
             let client = try makeSyncClient()
             for (index, url) in uploads.enumerated() {
-                let accessed = url.startAccessingSecurityScopedResource()
-                defer {
-                    if accessed {
-                        url.stopAccessingSecurityScopedResource()
-                    }
-                }
-                let data = try PhotoCacheJPEG.normalizedJPEGData(fromFileURL: url)
+                let data = try await PhotoCacheJPEG.normalizedJPEGDataAsync(fromFileURL: url)
                 let name = url.lastPathComponent
-                let beforeIDs = Set(state.activePhotos().map(\.id))
+                let beforeIDs = Set(activePhotoIDs)
                 let isLast = index == uploads.count - 1
                 try await mutateGallery(
                     client: client,
@@ -746,7 +860,7 @@ public final class GalleryStore: ObservableObject {
                         baseUpdatedAt: base
                     )
                 }
-                let newIDs = Set(state.activePhotos().map(\.id)).subtracting(beforeIDs)
+                let newIDs = Set(activePhotoIDs).subtracting(beforeIDs)
                 guard !newIDs.isEmpty else {
                     log.log(
                         .gallery,
@@ -756,9 +870,12 @@ public final class GalleryStore: ObservableObject {
                     )
                     throw SyncError.decode
                 }
-                for newID in newIDs {
-                    try data.write(to: AppConfig.cacheURL(for: newID), options: .atomic)
-                }
+                let cacheURLs = newIDs.map { AppConfig.cacheURL(for: $0) }
+                try await Task.detached(priority: .utility) {
+                    for cacheURL in cacheURLs {
+                        try data.write(to: cacheURL, options: .atomic)
+                    }
+                }.value
                 log.log(
                     .gallery,
                     level: .info,
@@ -771,7 +888,7 @@ public final class GalleryStore: ObservableObject {
                 .gallery,
                 level: .success,
                 "Upload complete",
-                detail: "updatedAt=\(state.updatedAt) photos=\(state.activePhotos().count)"
+                detail: "updatedAt=\(state.updatedAt) photos=\(activePhotos.count)"
             )
             selection.clearSelection()
             await updateDeviceStatus()
@@ -808,7 +925,7 @@ public final class GalleryStore: ObservableObject {
             return
         }
         await run(label: "Reorder", category: .gallery) {
-            let activeIDs = Set(state.activePhotos().map(\.id))
+            let activeIDs = Set(activePhotoIDs)
             guard Set(order) == activeIDs else {
                 log.log(
                     .gallery,
@@ -862,23 +979,29 @@ public final class GalleryStore: ObservableObject {
         let jpegData = try await fullSizeJPEGData(for: photo)
         let filename = Self.downloadFilename(for: photo)
         #if os(macOS)
-        guard let downloads = FileManager.default.urls(
-            for: .downloadsDirectory,
-            in: .userDomainMask
-        ).first else {
-            throw NSError(
-                domain: "GatteyPhotos",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "Downloads folder unavailable"]
-            )
-        }
-        let dest = Self.uniqueFileURL(in: downloads, filename: filename)
-        try jpegData.write(to: dest, options: .atomic)
+        let dest = try await Task.detached(priority: .userInitiated) { () -> URL in
+            guard let downloads = FileManager.default.urls(
+                for: .downloadsDirectory,
+                in: .userDomainMask
+            ).first else {
+                throw NSError(
+                    domain: "GatteyPhotos",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "Downloads folder unavailable"]
+                )
+            }
+            let target = Self.uniqueFileURL(in: downloads, filename: filename)
+            try jpegData.write(to: target, options: .atomic)
+            return target
+        }.value
         log.log(.gallery, level: .success, "Saved to Downloads", detail: dest.lastPathComponent)
         #else
-        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
-        try? FileManager.default.removeItem(at: temp)
-        try jpegData.write(to: temp, options: .atomic)
+        let temp = try await Task.detached(priority: .userInitiated) { () -> URL in
+            let target = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+            try? FileManager.default.removeItem(at: target)
+            try jpegData.write(to: target, options: .atomic)
+            return target
+        }.value
         photoShareItem = PhotoShareItem(url: temp)
         log.log(.gallery, level: .success, "Ready to share", detail: filename)
         #endif
@@ -887,7 +1010,9 @@ public final class GalleryStore: ObservableObject {
     #if os(iOS)
     func clearPhotoShareItem() {
         if let url = photoShareItem?.url {
-            try? FileManager.default.removeItem(at: url)
+            Task.detached(priority: .utility) {
+                try? FileManager.default.removeItem(at: url)
+            }
         }
         photoShareItem = nil
     }
@@ -895,15 +1020,20 @@ public final class GalleryStore: ObservableObject {
 
     private func fullSizeJPEGData(for photo: PhotoEntry) async throws -> Data {
         let cacheURL = AppConfig.cacheURL(for: photo.id)
-        if FileManager.default.fileExists(atPath: cacheURL.path) {
-            return try Data(contentsOf: cacheURL)
+        if let cached = try? await Task.detached(priority: .userInitiated, operation: { () -> Data? in
+            guard FileManager.default.fileExists(atPath: cacheURL.path) else { return nil }
+            return try Data(contentsOf: cacheURL, options: .mappedIfSafe)
+        }).value {
+            return cached
         }
         let client = try makeSyncClient()
         try await client.cachePhotoIfMissing(photo)
-        return try Data(contentsOf: cacheURL)
+        return try await Task.detached(priority: .userInitiated) {
+            try Data(contentsOf: cacheURL, options: .mappedIfSafe)
+        }.value
     }
 
-    private static func downloadFilename(for photo: PhotoEntry) -> String {
+    private nonisolated static func downloadFilename(for photo: PhotoEntry) -> String {
         let name = photo.filename.trimmingCharacters(in: .whitespacesAndNewlines)
         if name.isEmpty { return "\(photo.id).jpg" }
         let ext = (name as NSString).pathExtension.lowercased()
@@ -911,7 +1041,7 @@ public final class GalleryStore: ObservableObject {
         return (name as NSString).deletingPathExtension + ".jpg"
     }
 
-    private static func uniqueFileURL(in directory: URL, filename: String) -> URL {
+    private nonisolated static func uniqueFileURL(in directory: URL, filename: String) -> URL {
         var candidate = directory.appendingPathComponent(filename)
         var duplicateIndex = 1
         let base = (filename as NSString).deletingPathExtension
