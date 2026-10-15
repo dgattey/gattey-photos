@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Pre-push CI: must pass before `git push` (see scripts/install-git-hooks.sh).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 echo "==> macOS: swift test"
-(cd macos && swift test)
+(cd macos && swift test --build-system native)
 
 echo "==> server: typecheck"
 # shellcheck source=scripts/lib/node-env.sh

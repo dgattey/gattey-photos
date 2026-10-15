@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# CI-only: import signing cert, build, and package a macOS release in one shell (keychain state persists).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=scripts/lib/signing.sh
@@ -68,7 +67,7 @@ echo "ci-build-macos-release: signing identity=${SIGN_ID}" >&2
 export GATTEY_SIGN_IDENTITY="$SIGN_ID"
 
 cd "$ROOT/macos"
-swift build -c release --product GatteyPhotos
+swift build --build-system native -c release --product GatteyPhotos
 
 VERSION="$("$ROOT/scripts/next-release-version.sh")"
 echo "ci-build-macos-release: packaging v${VERSION}"
