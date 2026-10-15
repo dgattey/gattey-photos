@@ -30,6 +30,15 @@ export function parseBaseUpdatedAt(value: unknown): string | Response {
   return value.trim();
 }
 
+export class GalleryMutationError extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "GalleryMutationError";
+    this.status = status;
+  }
+}
+
 /**
  * Optimistic manifest write. Throws `StaleGalleryError` (409) when `baseUpdatedAt`
  * is older than what is on disk. `writeManifest` resolves only once the blob is
@@ -45,7 +54,8 @@ export async function applyGalleryMutation(
   if (isNewerThan(state, baseUpdatedAt)) {
     throw new StaleGalleryError(state);
   }
-  const saved = await storage.writeManifest(touchGallery(update(state)));
+  const next = update(state);
+  const saved = await storage.writeManifest(touchGallery(next));
   // Update the sync token's catalog version so polling clients know to do a full pull.
   await storage.writeCurrent({
     galleryVersion: saved.updatedAt,
@@ -73,6 +83,9 @@ export async function respondGalleryMutation(
     if (init.cacheControl) headers["Cache-Control"] = init.cacheControl;
     return Response.json(gallery, { status: init.status ?? 200, headers });
   } catch (err) {
+    if (err instanceof GalleryMutationError) {
+      return jsonApiError(err.status, err.message);
+    }
     if (err instanceof StaleGalleryError) {
       return staleGalleryResponse(request, err);
     }
