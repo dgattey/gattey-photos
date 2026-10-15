@@ -872,34 +872,6 @@ private struct GalleryMacOSToolbarTitleRemoval: ViewModifier {
 #endif
 
 #if os(macOS)
-enum GalleryThumbnailSizeStep {
-    case smaller
-    case larger
-
-    var systemImage: String {
-        switch self {
-        case .smaller: "square.grid.3x3"
-        case .larger: "square.grid.2x2"
-        }
-    }
-
-    var help: String {
-        switch self {
-        case .smaller: "Smaller thumbnails"
-        case .larger: "Larger thumbnails"
-        }
-    }
-
-    func columnCount(steppingFrom count: Int) -> Int? {
-        let delta = switch self {
-        case .smaller: 1
-        case .larger: -1
-        }
-        let next = AppSettings.clampedGalleryGridColumnCount(count + delta)
-        return next == count ? nil : next
-    }
-}
-
 /// Thumbnail scale for the gallery grid (`AppSettings.galleryGridColumnCount`, photos per row).
 private struct GalleryThumbnailSizeToolbarControl: View {
     @EnvironmentObject private var store: GalleryStore
@@ -910,7 +882,7 @@ private struct GalleryThumbnailSizeToolbarControl: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            stepButton(.smaller)
+            stepButton(delta: 1, systemImage: "square.grid.3x3", help: "Smaller thumbnails")
             Slider(
                 value: columnCountSliderBinding,
                 in: Double(AppSettings.galleryGridColumnCountMin) ... Double(AppSettings.galleryGridColumnCountMax),
@@ -920,26 +892,20 @@ private struct GalleryThumbnailSizeToolbarControl: View {
             .help("Photos per row")
             .accessibilityLabel("Photos per row")
             .accessibilityValue("\(store.settings.galleryGridColumnCount) columns")
-            stepButton(.larger)
+            stepButton(delta: -1, systemImage: "square.grid.2x2", help: "Larger thumbnails")
         }
         .padding(.leading, Self.leadingPadding)
         .padding(.trailing, Self.trailingPadding)
         .fixedSize(horizontal: true, vertical: false)
-        // `.help` on the row would replace the step buttons' tooltips; behind them it only fills the gaps.
-        .background {
-            Color.clear
-                .contentShape(Rectangle())
-                .help("Photos per row")
-                .accessibilityHidden(true)
-        }
     }
 
-    private func stepButton(_ step: GalleryThumbnailSizeStep) -> some View {
-        let nextCount = step.columnCount(steppingFrom: store.settings.galleryGridColumnCount)
+    private func stepButton(delta: Int, systemImage: String, help: String) -> some View {
+        let current = store.settings.galleryGridColumnCount
+        let nextCount = AppSettings.clampedGalleryGridColumnCount(current + delta)
         return Button {
-            if let nextCount { persistColumnCount(nextCount) }
+            persistColumnCount(nextCount)
         } label: {
-            Image(systemName: step.systemImage)
+            Image(systemName: systemImage)
                 .font(.caption.weight(.medium))
                 .imageScale(.medium)
                 .foregroundStyle(.secondary)
@@ -947,9 +913,9 @@ private struct GalleryThumbnailSizeToolbarControl: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(nextCount == nil)
-        .help(step.help)
-        .accessibilityLabel(step.help)
+        .disabled(nextCount == current)
+        .help(help)
+        .accessibilityLabel(help)
     }
 
     /// Slider left = denser grid (more columns); stored value is photos per row.
@@ -997,16 +963,6 @@ private struct GalleryMacOSToolbarSizeActionsSeparator: ToolbarContent {
 }
 #endif
 
-enum GalleryToolbarCopy {
-    static func sync(isSyncing: Bool) -> String {
-        isSyncing ? "Syncing photos…" : "Sync photos"
-    }
-
-    static func activityLog(isShown: Bool) -> String {
-        isShown ? "Hide activity log" : "Show activity log"
-    }
-}
-
 /// Primary window toolbar scoped to the gallery (detail) column — not the activity inspector.
 private struct GalleryMainToolbar: ToolbarContent {
     @Environment(AppChromeState.self) private var chrome
@@ -1044,28 +1000,11 @@ private struct GalleryMainToolbar: ToolbarContent {
             .help("Add photos")
         }
         ToolbarItem(placement: .primaryAction) {
-            Button {
-                Task { await store.syncAll() }
-            } label: {
-                if store.isSyncing {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Label("Sync", systemImage: "arrow.clockwise")
-                }
-            }
-            .disabled(store.isBusy || store.isSyncing)
-            .help(GalleryToolbarCopy.sync(isSyncing: store.isSyncing))
-            .accessibilityLabel("Sync photos")
+            syncToolbarButton
         }
         if store.settings.debugMode {
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    chrome.showActivityInspector.toggle()
-                } label: {
-                    Label("Activity", systemImage: AppChromeState.activityInspectorSymbolName)
-                }
-                .help(GalleryToolbarCopy.activityLog(isShown: chrome.showActivityInspector))
+                activityToolbarButton
             }
         }
         ToolbarItem(placement: .primaryAction) {
@@ -1089,16 +1028,7 @@ private struct GalleryMainToolbar: ToolbarContent {
         #endif
     }
 
-    #if os(macOS)
-    @ViewBuilder
-    private var galleryMacOSActionToolbarItems: some View {
-        Button("Add", systemImage: "plus") {
-            Task { await store.uploadFromPanel() }
-        }
-        .modifier(GalleryMacOSToolbarActionButtonStyle())
-        .disabled(store.isBusy)
-        .help("Add photos")
-
+    private var syncToolbarButton: some View {
         Button {
             Task { await store.syncAll() }
         } label: {
@@ -1109,19 +1039,36 @@ private struct GalleryMainToolbar: ToolbarContent {
                 Label("Sync", systemImage: "arrow.clockwise")
             }
         }
-        .modifier(GalleryMacOSToolbarActionButtonStyle())
         .disabled(store.isBusy || store.isSyncing)
-        .help(GalleryToolbarCopy.sync(isSyncing: store.isSyncing))
+        .help(store.isSyncing ? "Syncing photos…" : "Sync photos")
         .accessibilityLabel("Sync photos")
+    }
+
+    private var activityToolbarButton: some View {
+        Button {
+            chrome.showActivityInspector.toggle()
+        } label: {
+            Label("Activity", systemImage: AppChromeState.activityInspectorSymbolName)
+        }
+        .help(chrome.showActivityInspector ? "Hide activity log" : "Show activity log")
+    }
+
+    #if os(macOS)
+    @ViewBuilder
+    private var galleryMacOSActionToolbarItems: some View {
+        Button("Add", systemImage: "plus") {
+            Task { await store.uploadFromPanel() }
+        }
+        .modifier(GalleryMacOSToolbarActionButtonStyle())
+        .disabled(store.isBusy)
+        .help("Add photos")
+
+        syncToolbarButton
+            .modifier(GalleryMacOSToolbarActionButtonStyle())
 
         if store.settings.debugMode {
-            Button {
-                chrome.showActivityInspector.toggle()
-            } label: {
-                Label("Activity", systemImage: AppChromeState.activityInspectorSymbolName)
-            }
-            .modifier(GalleryMacOSToolbarActionButtonStyle())
-            .help(GalleryToolbarCopy.activityLog(isShown: chrome.showActivityInspector))
+            activityToolbarButton
+                .modifier(GalleryMacOSToolbarActionButtonStyle())
         }
 
         Button("Settings", systemImage: "gearshape") {

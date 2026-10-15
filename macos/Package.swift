@@ -33,11 +33,6 @@ let package = Package(
             path: "Sources/GatteyPhotosUI",
             resources: [.process("Resources")]
         ),
-        .testTarget(
-            name: "GatteyPhotosUITests",
-            dependencies: ["GatteyPhotosCore", "GatteyPhotosUI"],
-            path: "Tests/GatteyPhotosUITests"
-        ),
         .executableTarget(
             name: "GatteyPhotosApp",
             dependencies: [
