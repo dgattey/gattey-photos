@@ -3,6 +3,7 @@ node_modules/
 .next/
 *.tsbuildinfo
 .vercel/
+*.tsbuildinfo
 .env
 .env*.local
 server/.data/

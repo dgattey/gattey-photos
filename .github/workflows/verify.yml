@@ -31,12 +31,12 @@ jobs:
           fi
           echo "Changed files:"
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^server/'; then
+          if echo "$CHANGED" | grep -qE '^(server/|scripts/next-release-version\.sh$|\.github/pull_request_template\.md$)'; then
             echo "server=true" >> "$GITHUB_OUTPUT"
           else
             echo "server=false" >> "$GITHUB_OUTPUT"
           fi
-          if echo "$CHANGED" | grep -qE '^(macos/|scripts/(verify|package-macos|package-release|ci-build-macos-release|launch|generate-app-icon|macos-release-inputs-changed)\.sh$|\.github/workflows/(verify|release-macos)\.yml$|skills/macos/)'; then
+          if echo "$CHANGED" | grep -qE '^(macos/|scripts/(verify|package-macos|package-release|ci-build-macos-release|launch|generate-app-icon|macos-release-inputs-changed|next-release-version)\.sh$|\.github/workflows/(verify|release-macos)\.yml$|skills/macos/)'; then
             echo "macos=true" >> "$GITHUB_OUTPUT"
           else
             echo "macos=false" >> "$GITHUB_OUTPUT"
