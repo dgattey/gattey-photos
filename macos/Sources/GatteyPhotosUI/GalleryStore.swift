@@ -279,16 +279,22 @@ public final class GalleryStore: ObservableObject {
         pullFailureStreak = 0
     }
 
-    func saveSettings() {
+    func saveSettings(propagateDisplayNameChange shouldPropagate: Bool = true) {
         let previousDisplayName = Self.persistedDisplayName()
         let previousServerURL = settings.serverBaseURL
         settings.serverBaseURL = AppSettings.syncServerBaseURL(debugMode: settings.debugMode)
         settings.galleryName = "default"
         let newDisplayName = settings.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if newDisplayName.isEmpty {
+            settings.displayName = previousDisplayName ?? ""
+        } else {
+            settings.displayName = newDisplayName
+        }
         try? AppConfig.saveSettings(settings)
         session?.noteSettingsChanged(store: self, previousServerURL: previousServerURL)
         log.log(.system, level: .info, "Settings saved", detail: settings.serverBaseURL)
-        if let previousDisplayName,
+        if shouldPropagate,
+           let previousDisplayName,
            previousDisplayName != newDisplayName,
            !newDisplayName.isEmpty,
            session?.isUnlocked == true
@@ -307,6 +313,15 @@ public final class GalleryStore: ObservableObject {
     }
 
     private func propagateDisplayNameChange(from oldName: String, to newName: String) async {
+        guard state.uploaders.values.contains(oldName) else { return }
+        if oldName.caseInsensitiveCompare(newName) != .orderedSame {
+            let collidesWithAnotherUploader = state.uploaders.values.contains { mapped in
+                mapped != oldName
+                    && mapped.trimmingCharacters(in: .whitespacesAndNewlines)
+                        .caseInsensitiveCompare(newName) == .orderedSame
+            }
+            if collidesWithAnotherUploader { return }
+        }
         await run(label: "Rename uploader", category: .gallery) {
             let client = try makeSyncClient()
             try await mutateGallery(client: client) { base in
