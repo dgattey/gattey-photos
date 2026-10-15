@@ -48,17 +48,31 @@ final class PhotoCacheJPEGTests: XCTestCase {
         XCTAssertLessThan(topLeftRed, 80)
     }
 
-    func testNormalizedJPEGDataPreservesFullDimensionsAbove4096ForNonJPEG() throws {
+    func testNormalizedJPEGDataDownscalesAbove4096AndBakesOrientation() throws {
         let rawPNG = try Self.makeTestImage(
             width: 5000,
-            height: 100,
+            height: 2500,
             exifOrientation: 6,
             utType: UTType.png
         )
         let normalized = try PhotoCacheJPEG.normalizedJPEGData(rawPNG)
         let props = try Self.imageProperties(for: normalized)
-        XCTAssertEqual(props.width, 100)
-        XCTAssertEqual(props.height, 5000)
+        XCTAssertEqual(props.width, 2048)
+        XCTAssertEqual(props.height, 4096)
+        XCTAssertTrue(props.orientation == nil || props.orientation == 1)
+    }
+
+    func testNormalizedJPEGDataDownscalesUprightJPEGAboveMaxPixelSize() throws {
+        let rawJPEG = try Self.makeTestJPEG(
+            width: 5000,
+            height: 2500,
+            exifOrientation: 1
+        )
+        let normalized = try PhotoCacheJPEG.normalizedJPEGData(rawJPEG)
+        XCTAssertNotEqual(normalized, rawJPEG)
+        let props = try Self.imageProperties(for: normalized)
+        XCTAssertEqual(props.width, 4096)
+        XCTAssertEqual(props.height, 2048)
         XCTAssertTrue(props.orientation == nil || props.orientation == 1)
     }
 

@@ -18,6 +18,7 @@ public enum PhotoCacheJPEGError: Error, LocalizedError {
 
 /// Local gallery cache bytes normalized to JPEG for upload and display.
 public enum PhotoCacheJPEG: Sendable {
+    public static let defaultMaxPixelSize = 4096
     private static let jpegMagic: [UInt8] = [0xFF, 0xD8, 0xFF]
 
     public static func isJPEG(_ data: Data) -> Bool {
@@ -25,9 +26,14 @@ public enum PhotoCacheJPEG: Sendable {
         return data[0] == jpegMagic[0] && data[1] == jpegMagic[1] && data[2] == jpegMagic[2]
     }
 
-    /// Normalizes raw image bytes to an upright JPEG (converting HEIC, etc., and baking
-    /// any non-1 EXIF/TIFF orientation into the pixel buffer).
-    public static func normalizedJPEGData(_ raw: Data, name: String = "image") throws -> Data {
+    /// Normalizes raw image bytes to an upright JPEG capped at `maxPixelSize` on the long edge
+    /// (converting HEIC, baking any non-1 EXIF/TIFF orientation into the pixel buffer, and downscaling >4096px images).
+    public static func normalizedJPEGData(
+        _ raw: Data,
+        name: String = "image",
+        compressionQuality: Double = 0.88,
+        maxPixelSize: Int = defaultMaxPixelSize
+    ) throws -> Data {
         guard let source = CGImageSourceCreateWithData(raw as CFData, nil),
               let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let pixelWidth = props[kCGImagePropertyPixelWidth] as? Int,
@@ -37,19 +43,33 @@ public enum PhotoCacheJPEG: Sendable {
         else {
             throw PhotoCacheJPEGError.unsupportedImageFile(name)
         }
-        if isJPEG(raw) && !needsOrientationBake(props) {
+        let fitsWithinMax = max(pixelWidth, pixelHeight) <= maxPixelSize
+        if isJPEG(raw) && !needsOrientationBake(props) && fitsWithinMax {
             return raw
         }
-        guard let encoded = encodeAsJPEG(from: source, maxPixelSize: max(pixelWidth, pixelHeight)) else {
+        guard let encoded = encodeAsJPEG(
+            from: source,
+            compressionQuality: compressionQuality,
+            maxPixelSize: maxPixelSize
+        ) else {
             throw PhotoCacheJPEGError.unsupportedImageFile(name)
         }
         return encoded
     }
 
-    /// Normalizes an on-disk upload to an upright JPEG when needed (HEIC from iPhone, EXIF orientation 2..8, etc.).
-    public static func normalizedJPEGData(fromFileURL url: URL) throws -> Data {
+    /// Normalizes an on-disk upload to an upright JPEG when needed (HEIC from iPhone, EXIF orientation 2..8, >4096px, etc.).
+    public static func normalizedJPEGData(
+        fromFileURL url: URL,
+        compressionQuality: Double = 0.88,
+        maxPixelSize: Int = defaultMaxPixelSize
+    ) throws -> Data {
         let raw = try Data(contentsOf: url)
-        return try normalizedJPEGData(raw, name: url.lastPathComponent)
+        return try normalizedJPEGData(
+            raw,
+            name: url.lastPathComponent,
+            compressionQuality: compressionQuality,
+            maxPixelSize: maxPixelSize
+        )
     }
 
     private static func needsOrientationBake(_ props: [CFString: Any]) -> Bool {
@@ -59,7 +79,11 @@ public enum PhotoCacheJPEG: Sendable {
         return (exifOrientation ?? tiffOrientation ?? 1) > 1
     }
 
-    private static func encodeAsJPEG(from source: CGImageSource, maxPixelSize: Int) -> Data? {
+    private static func encodeAsJPEG(
+        from source: CGImageSource,
+        compressionQuality: Double = 0.88,
+        maxPixelSize: Int = defaultMaxPixelSize
+    ) -> Data? {
         let options: [CFString: Any] = [
             kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
             kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -78,7 +102,7 @@ public enum PhotoCacheJPEG: Sendable {
             1,
             nil
         ) else { return nil }
-        let props: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: 0.92]
+        let props: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: compressionQuality]
         CGImageDestinationAddImage(dest, cgImage, props as CFDictionary)
         guard CGImageDestinationFinalize(dest) else { return nil }
         return out as Data

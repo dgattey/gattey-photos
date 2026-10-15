@@ -98,6 +98,28 @@ describe("normalizePhotoOrientation", () => {
       `expected cleared orientation, got ${afterMeta.orientation}`
     );
   });
+
+  it("downscales images exceeding 4096px on the longest edge while preserving aspect ratio and ICC profile", async () => {
+    const oversizedUpright = await makeOrientedJpeg(5000, 2500, 1);
+    const downscaled = await normalizePhotoOrientation(oversizedUpright);
+    assert.notEqual(downscaled, oversizedUpright);
+
+    const meta = await sharp(downscaled).metadata();
+    assert.equal(meta.width, 4096);
+    assert.equal(meta.height, 2048);
+    assert.equal(meta.hasProfile, true);
+    assert.ok(meta.orientation === undefined || meta.orientation === 1);
+  });
+
+  it("both rotates and downscales an EXIF orientation 6 image exceeding 4096px", async () => {
+    const oversizedSideways = await makeOrientedJpeg(5000, 2500, 6);
+    const result = await normalizePhotoOrientation(oversizedSideways);
+    const meta = await sharp(result).metadata();
+    assert.equal(meta.width, 2048);
+    assert.equal(meta.height, 4096);
+    assert.equal(meta.hasProfile, true);
+    assert.ok(meta.orientation === undefined || meta.orientation === 1);
+  });
 });
 
 describe("pushCurrentPhotoToAllDevices orientation normalization", () => {
