@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   coalesceUploaders,
   DEFAULT_UPLOADER_NAME,
+  ensureUploaderId,
   renameUploader,
   uploaderIdForName,
 } from "./gallery";
@@ -50,6 +51,33 @@ describe("renameUploader", () => {
     assert.equal(renameUploader(base, "Alex", "Alex"), base);
     assert.equal(renameUploader(base, "", "X"), base);
   });
+
+  it("does not overwrite an uploader when renaming to another existing uploader's name", () => {
+    const next = renameUploader(base, "Alex", "Sam");
+    assert.equal(next.uploaders[alexId], "Alex");
+    assert.equal(next.uploaders[samId], "Sam");
+  });
+});
+
+describe("ensureUploaderId", () => {
+  it("does not overwrite an existing uploader id mapped to a different display name", () => {
+    const dylanId = uploaderIdForName("Dylan");
+    const state: GalleryState = {
+      updatedAt: "2026-08-30T18:30:00.000Z",
+      order: ["p1"],
+      photos: {
+        p1: photo("p1", dylanId),
+      },
+      uploaders: {
+        [dylanId]: "Becca",
+      },
+      currentPhotoId: "p1",
+    };
+    const { state: next, uploaderId } = ensureUploaderId(state, "Dylan", dylanId);
+    assert.notEqual(uploaderId, dylanId);
+    assert.equal(next.uploaders[dylanId], "Becca");
+    assert.equal(next.uploaders[uploaderId], "Dylan");
+  });
 });
 
 describe("coalesceUploaders", () => {
@@ -85,6 +113,36 @@ describe("coalesceUploaders", () => {
     };
     const { uploaders } = coalesceUploaders(raw, {});
     assert.equal(uploaders[uid], DEFAULT_UPLOADER_NAME);
+  });
+
+  it("repairs the Aug 30 Dylan->Becca default-name overwrite without affecting pre-Aug-30 photos", () => {
+    const dylanId = uploaderIdForName("Dylan");
+    const beccaId = uploaderIdForName("Becca");
+    const raw: Record<string, RawPhotoEntry> = {
+      dylanPhoto: {
+        id: "dylanPhoto",
+        filename: "IMG_4722.jpeg",
+        blobPath: "photos/dylanPhoto.jpg",
+        sizeBytes: 4424947,
+        updatedAt: "2026-06-01T23:51:21.408Z",
+        deletedAt: null,
+        uploaderId: dylanId,
+      },
+      beccaPhoto: {
+        id: "beccaPhoto",
+        filename: "IMG_0873.jpeg",
+        blobPath: "photos/beccaPhoto.jpg",
+        sizeBytes: 372512,
+        updatedAt: "2026-09-08T21:27:13.914Z",
+        deletedAt: null,
+        uploaderId: dylanId,
+      },
+    };
+    const { photos, uploaders } = coalesceUploaders(raw, { [dylanId]: "Becca" });
+    assert.equal(uploaders[dylanId], "Dylan");
+    assert.equal(uploaders[beccaId], "Becca");
+    assert.equal(photos.dylanPhoto!.uploaderId, dylanId);
+    assert.equal(photos.beccaPhoto!.uploaderId, beccaId);
   });
 });
 
