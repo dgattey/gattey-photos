@@ -37,12 +37,10 @@ public enum PhotoCacheJPEG: Sendable {
         else {
             throw PhotoCacheJPEGError.unsupportedImageFile(name)
         }
-        let isRawJPEG = isJPEG(raw)
-        if isRawJPEG && !needsOrientationBake(props) {
+        if isJPEG(raw) && !needsOrientationBake(props) {
             return raw
         }
-        let maxPixelSize = isRawJPEG ? max(pixelWidth, pixelHeight) : 4096
-        guard let encoded = encodeAsJPEG(from: source, maxPixelSize: maxPixelSize) else {
+        guard let encoded = encodeAsJPEG(from: source, maxPixelSize: max(pixelWidth, pixelHeight)) else {
             throw PhotoCacheJPEGError.unsupportedImageFile(name)
         }
         return encoded
@@ -61,7 +59,7 @@ public enum PhotoCacheJPEG: Sendable {
         return (exifOrientation ?? tiffOrientation ?? 1) > 1
     }
 
-    private static func encodeAsJPEG(from source: CGImageSource, maxPixelSize: Int = 4096) -> Data? {
+    private static func encodeAsJPEG(from source: CGImageSource, maxPixelSize: Int) -> Data? {
         let options: [CFString: Any] = [
             kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
             kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -80,7 +78,7 @@ public enum PhotoCacheJPEG: Sendable {
             1,
             nil
         ) else { return nil }
-        let props: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: 0.88]
+        let props: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: 0.92]
         CGImageDestinationAddImage(dest, cgImage, props as CFDictionary)
         guard CGImageDestinationFinalize(dest) else { return nil }
         return out as Data

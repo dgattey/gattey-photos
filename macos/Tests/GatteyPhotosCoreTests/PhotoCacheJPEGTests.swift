@@ -48,7 +48,35 @@ final class PhotoCacheJPEGTests: XCTestCase {
         XCTAssertLessThan(topLeftRed, 80)
     }
 
+    func testNormalizedJPEGDataPreservesFullDimensionsAbove4096ForNonJPEG() throws {
+        let rawPNG = try Self.makeTestImage(
+            width: 5000,
+            height: 100,
+            exifOrientation: 6,
+            utType: UTType.png
+        )
+        let normalized = try PhotoCacheJPEG.normalizedJPEGData(rawPNG)
+        let props = try Self.imageProperties(for: normalized)
+        XCTAssertEqual(props.width, 100)
+        XCTAssertEqual(props.height, 5000)
+        XCTAssertTrue(props.orientation == nil || props.orientation == 1)
+    }
+
     private static func makeTestJPEG(width: Int, height: Int, exifOrientation: Int) throws -> Data {
+        try makeTestImage(
+            width: width,
+            height: height,
+            exifOrientation: exifOrientation,
+            utType: UTType.jpeg
+        )
+    }
+
+    private static func makeTestImage(
+        width: Int,
+        height: Int,
+        exifOrientation: Int,
+        utType: UTType
+    ) throws -> Data {
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         guard let ctx = CGContext(
             data: nil,
@@ -72,7 +100,7 @@ final class PhotoCacheJPEGTests: XCTestCase {
         let out = NSMutableData()
         guard let dest = CGImageDestinationCreateWithData(
             out,
-            UTType.jpeg.identifier as CFString,
+            utType.identifier as CFString,
             1,
             nil
         ) else {
