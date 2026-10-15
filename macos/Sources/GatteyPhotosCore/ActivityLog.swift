@@ -107,10 +107,35 @@ public enum ActivityLogFile {
 
     private static let queue = DispatchQueue(label: "com.gattey.photos.activity-log")
 
+    private static let fractionalISOFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let standardISOFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    public struct FileSignature: Equatable, Sendable {
+        public let modificationDate: Date
+        public let size: Int
+    }
+
+    public static func currentSignature() -> FileSignature? {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let mod = attrs[.modificationDate] as? Date,
+              let size = attrs[.size] as? Int
+        else { return nil }
+        return FileSignature(modificationDate: mod, size: size)
+    }
+
     public static func append(_ entry: LogEntry) {
         queue.sync {
             guard let line = encode(entry) else { return }
-            let data = Data(line.utf8)
+            let data = Data((line + "\n").utf8)
             if !FileManager.default.fileExists(atPath: url.path) {
                 FileManager.default.createFile(atPath: url.path, contents: data)
                 return
@@ -142,7 +167,7 @@ public enum ActivityLogFile {
     private static func encode(_ entry: LogEntry) -> String? {
         let payload: [String: String] = [
             "id": entry.id.uuidString,
-            "t": ISO8601DateFormatter().string(from: entry.timestamp),
+            "t": fractionalISOFormatter.string(from: entry.timestamp),
             "c": entry.category.rawValue,
             "l": entry.level.rawValue,
             "m": entry.message,
@@ -155,10 +180,8 @@ public enum ActivityLogFile {
     }
 
     private static func parseTimestamp(_ t: String) -> Date? {
-        let withFraction = ISO8601DateFormatter()
-        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = withFraction.date(from: t) { return d }
-        return ISO8601DateFormatter().date(from: t)
+        if let d = fractionalISOFormatter.date(from: t) { return d }
+        return standardISOFormatter.date(from: t)
     }
 
     private static func decode(_ line: String) -> LogEntry? {
@@ -198,6 +221,7 @@ public final class ActivityLogStore: ObservableObject {
     @Published public private(set) var entries: [LogEntry] = []
 
     private var liveReloadTask: Task<Void, Never>?
+    private var lastMergedSignature: ActivityLogFile.FileSignature?
 
     private init() {}
 
@@ -209,7 +233,7 @@ public final class ActivityLogStore: ObservableObject {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: UInt64(intervalSeconds * 1_000_000_000))
                 guard !Task.isCancelled else { break }
-                mergeFromDisk()
+                mergeFromDisk(onlyIfChanged: true)
             }
         }
     }
@@ -221,25 +245,36 @@ public final class ActivityLogStore: ObservableObject {
 
     /// Merges new lines from disk without removing in-memory entries.
     public func reload() {
-        mergeFromDisk()
+        mergeFromDisk(onlyIfChanged: false)
     }
 
     public func clear() {
         ActivityLogFile.clear()
+        lastMergedSignature = ActivityLogFile.currentSignature()
         entries = []
     }
 
     private func bootstrapFromDiskIfNeeded() {
         guard entries.isEmpty else { return }
-        mergeFromDisk()
+        mergeFromDisk(onlyIfChanged: false)
     }
 
-    private func mergeFromDisk() {
+    private func mergeFromDisk(onlyIfChanged: Bool) {
+        let currentSig = ActivityLogFile.currentSignature()
+        if onlyIfChanged, let currentSig, currentSig == lastMergedSignature {
+            return
+        }
+        lastMergedSignature = currentSig
         let fromFile = ActivityLogFile.loadRecent()
         var byID = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
+        var addedOrUpdated = false
         for entry in fromFile {
-            byID[entry.id] = entry
+            if byID[entry.id] != entry {
+                byID[entry.id] = entry
+                addedOrUpdated = true
+            }
         }
+        guard addedOrUpdated || entries.count != byID.count else { return }
         entries = byID.values.sorted { $0.timestamp > $1.timestamp }
     }
 
@@ -251,6 +286,7 @@ public final class ActivityLogStore: ObservableObject {
     ) {
         let entry = LogEntry(category: category, level: level, message: message, detail: detail)
         ActivityLogFile.append(entry)
+        lastMergedSignature = ActivityLogFile.currentSignature()
         if !entries.contains(where: { $0.id == entry.id }) {
             entries.insert(entry, at: 0)
         }

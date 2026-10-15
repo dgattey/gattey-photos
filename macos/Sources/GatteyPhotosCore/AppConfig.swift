@@ -44,6 +44,7 @@ public enum AppConfig {
 
     /// Removes JPEG cache files under Application Support.
     public static func clearPhotoCache() {
+        ImageDownsampler.clearMemoryCache()
         guard let entries = try? FileManager.default.contentsOfDirectory(
             at: cacheFolder,
             includingPropertiesForKeys: nil

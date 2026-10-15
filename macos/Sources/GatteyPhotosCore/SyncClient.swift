@@ -43,6 +43,24 @@ private struct StaleGalleryPayload: Codable {
     var state: GalleryState
 }
 
+private actor ImageDownloadDeduplicator {
+    static let shared = ImageDownloadDeduplicator()
+    private var inFlight: [String: Task<Void, Error>] = [:]
+
+    func run(key: String, operation: @escaping @Sendable () async throws -> Void) async throws {
+        if let existing = inFlight[key] {
+            try await existing.value
+            return
+        }
+        let task = Task {
+            try await operation()
+        }
+        inFlight[key] = task
+        defer { inFlight[key] = nil }
+        try await task.value
+    }
+}
+
 public struct SyncClient: Sendable {
     public var baseURL: URL
     public var bearer: String
@@ -340,34 +358,69 @@ public struct SyncClient: Sendable {
         to dest: URL
     ) async throws {
         if FileManager.default.fileExists(atPath: dest.path) { return }
-        var req = URLRequest(url: imageURL(for: photo, width: width))
-        req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
-        let (data, res) = try await session.data(for: req)
-        guard let http = res as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            let code = (res as? HTTPURLResponse)?.statusCode ?? -1
-            throw SyncError.http(SyncHTTPFailure(
-                statusCode: code,
-                method: "GET",
-                url: req.url?.absoluteString ?? baseURL.absoluteString,
-                responseBody: "image download failed",
-                context: "cache photo \(photo.id)\(width.map { " w=\($0)" } ?? "")"
-            ))
+        let reqURL = imageURL(for: photo, width: width)
+        let authBearer = bearer
+        let urlSession = session
+        let photoID = photo.id
+        let baseStr = baseURL.absoluteString
+        try await ImageDownloadDeduplicator.shared.run(key: dest.path) {
+            if FileManager.default.fileExists(atPath: dest.path) { return }
+            var req = URLRequest(url: reqURL)
+            req.setValue("Bearer \(authBearer)", forHTTPHeaderField: "Authorization")
+            let (data, res) = try await urlSession.data(for: req)
+            guard let http = res as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                let code = (res as? HTTPURLResponse)?.statusCode ?? -1
+                throw SyncError.http(SyncHTTPFailure(
+                    statusCode: code,
+                    method: "GET",
+                    url: req.url?.absoluteString ?? baseStr,
+                    responseBody: "image download failed",
+                    context: "cache photo \(photoID)\(width.map { " w=\($0)" } ?? "")"
+                ))
+            }
+            try data.write(to: dest, options: .atomic)
         }
-        try data.write(to: dest, options: .atomic)
     }
 
-    public func downloadMissing(for state: GalleryState) async throws {
-        for photo in state.activePhotos() {
-            do {
-                try await cachePhotoIfMissing(photo)
-            } catch {
-                await MainActor.run {
-                    ActivityLogStore.shared.log(
-                        .gallery,
-                        level: .warning,
-                        "Could not cache photo from server",
-                        detail: "\(photo.id): \(error.localizedDescription)"
-                    )
+    public func downloadMissing(for state: GalleryState, maxConcurrency: Int = 6) async throws {
+        let missing = state.activePhotos().filter { photo in
+            !FileManager.default.fileExists(atPath: AppConfig.cacheURL(for: photo.id).path)
+        }
+        guard !missing.isEmpty else { return }
+        let limit = max(1, maxConcurrency)
+        await withTaskGroup(of: (PhotoID, String?).self) { group in
+            var iterator = missing.makeIterator()
+            for _ in 0..<min(limit, missing.count) {
+                guard let photo = iterator.next() else { break }
+                group.addTask {
+                    do {
+                        try await self.cachePhotoIfMissing(photo)
+                        return (photo.id, nil)
+                    } catch {
+                        return (photo.id, error.localizedDescription)
+                    }
+                }
+            }
+            for await (photoID, errorDescription) in group {
+                if let errorDescription {
+                    await MainActor.run {
+                        ActivityLogStore.shared.log(
+                            .gallery,
+                            level: .warning,
+                            "Could not cache photo from server",
+                            detail: "\(photoID): \(errorDescription)"
+                        )
+                    }
+                }
+                if let next = iterator.next() {
+                    group.addTask {
+                        do {
+                            try await self.cachePhotoIfMissing(next)
+                            return (next.id, nil)
+                        } catch {
+                            return (next.id, error.localizedDescription)
+                        }
+                    }
                 }
             }
         }

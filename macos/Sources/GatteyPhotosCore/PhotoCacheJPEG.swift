@@ -22,13 +22,24 @@ public enum PhotoCacheJPEG: Sendable {
 
     public static func isJPEG(_ data: Data) -> Bool {
         guard data.count >= 3 else { return false }
-        return data[0] == jpegMagic[0] && data[1] == jpegMagic[1] && data[2] == jpegMagic[2]
+        let start = data.startIndex
+        return data[start] == jpegMagic[0]
+            && data[data.index(after: start)] == jpegMagic[1]
+            && data[data.index(start, offsetBy: 2)] == jpegMagic[2]
+    }
+
+    public static func isJPEGFile(at url: URL) -> Bool {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? handle.close() }
+        guard let prefix = try? handle.read(upToCount: 3) else { return false }
+        return isJPEG(prefix)
     }
 
     /// Normalizes an on-disk upload to JPEG when needed (HEIC from iPhone, etc.).
     public static func normalizedJPEGData(fromFileURL url: URL) throws -> Data {
-        let raw = try Data(contentsOf: url)
-        if isJPEG(raw) { return raw }
+        if isJPEGFile(at: url) {
+            return try Data(contentsOf: url, options: .mappedIfSafe)
+        }
         guard let encoded = encodeAsJPEG(from: url) else {
             throw PhotoCacheJPEGError.unsupportedImageFile(url.lastPathComponent)
         }
