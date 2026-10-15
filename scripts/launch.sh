@@ -1,41 +1,45 @@
 #!/usr/bin/env bash
-# Unified launcher: macOS app + iOS/iPad simulators.
-# Usage: ./scripts/launch.sh macos|ios|iphone|ipad|all [targets...]
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+OPEN_BACKGROUND="${GATTEY_OPEN_BACKGROUND:-1}"
 
 usage() {
   cat <<EOF >&2
-Usage: $(basename "$0") <target> [target...]
+Usage: $(basename "$0") [--foreground|--background] <target> [target...]
+
+Options:
+  --background, -g   Launch in the background without stealing focus (default)
+  --foreground, -f   Bring the launched app / Simulator window to the foreground
 
 Targets:
-  macos          Quit, rebuild dist/Gattey Photos.app, open
+  macos          Quit, rebuild dist/Gattey Photos.app, open (background by default)
   ios, iphone    Build and run on iPhone simulator (default: iPhone 17)
   ipad           Build and run on iPad simulator (default: iPad Pro 13-inch (M5))
   all            macos + ios + ipad
 
 Examples:
   $(basename "$0") macos
+  $(basename "$0") --foreground macos
   $(basename "$0") ios ipad
   $(basename "$0") all
 
-Overrides: IOS_DEVICE_NAME, IOS_SIM_DEST, IOS_SCHEME, IOS_CONFIG, IOS_DERIVED_DATA
+Overrides: GATTEY_OPEN_BACKGROUND, GATTEY_BUILD_CONFIG, IOS_OPEN_SIMULATOR_APP, IOS_DEVICE_NAME, IOS_SIM_DEST, IOS_SCHEME, IOS_CONFIG, IOS_DERIVED_DATA
 EOF
 }
 
 launch_macos() {
-  echo "launch: macos" >&2
+  echo "launch: macos (background=${OPEN_BACKGROUND})" >&2
   pkill -x GatteyPhotos 2>/dev/null || true
   for _ in $(seq 1 40); do
     pgrep -x GatteyPhotos >/dev/null || break
-    sleep 0.25
+    sleep 0.05
   done
   if pgrep -x GatteyPhotos >/dev/null; then
     echo "launch: force-quitting GatteyPhotos" >&2
     pkill -9 -x GatteyPhotos 2>/dev/null || true
-    sleep 0.5
+    sleep 0.2
   fi
-  "$ROOT/scripts/package-macos.sh"
+  GATTEY_OPEN_BACKGROUND="$OPEN_BACKGROUND" "$ROOT/scripts/package-macos.sh"
 }
 
 launch_ios_simulator() {
@@ -48,9 +52,10 @@ launch_ios_simulator() {
   local PRODUCTS="$DERIVED/Build/Products/${CONFIG}-iphonesimulator"
   local DEVICE_NAME="${IOS_DEVICE_NAME:-$default_device}"
   local DEST="${IOS_SIM_DEST:-platform=iOS Simulator,name=${DEVICE_NAME}}"
+  local OPEN_SIM_APP="${IOS_OPEN_SIMULATOR_APP:-$([[ "$OPEN_BACKGROUND" == "0" ]] && echo 1 || echo 0)}"
 
   cd "$MACOS"
-  echo "launch: scheme=$SCHEME device='$DEVICE_NAME'" >&2
+  echo "launch: scheme=$SCHEME device='$DEVICE_NAME' (openSimulatorApp=${OPEN_SIM_APP})" >&2
 
   xcodebuild \
     -scheme "$SCHEME" \
@@ -103,15 +108,16 @@ sys.exit(1)
     return 1
   fi
 
-  # Boot and wait before UI open (reduces FBSOpenApplication preflight failures).
   xcrun simctl boot "$UDID" 2>/dev/null || true
   if ! xcrun simctl bootstatus "$UDID" -b >&2; then
     echo "launch: warning: bootstatus timed out for $UDID; continuing anyway" >&2
   fi
 
-  echo "launch: opening Simulator (if no window: open -a Simulator)" >&2
-  open -a Simulator --args -CurrentDeviceUDID "$UDID"
-  sleep 2
+  if [[ "$OPEN_SIM_APP" == "1" ]]; then
+    echo "launch: opening Simulator.app in foreground" >&2
+    open -a Simulator --args -CurrentDeviceUDID "$UDID"
+    sleep 1
+  fi
 
   xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
   xcrun simctl install "$UDID" "$STAGE"
@@ -138,6 +144,19 @@ sys.exit(1)
   echo "launch: app=$STAGE" >&2
 }
 
+TARGETS=()
+for arg in "$@"; do
+  case "$arg" in
+    --foreground|-f) OPEN_BACKGROUND=0 ;;
+    --background|-g) OPEN_BACKGROUND=1 ;;
+    -h|--help|help)
+      usage
+      exit 0
+      ;;
+    *) TARGETS+=("$arg") ;;
+  esac
+done
+
 dispatch_target() {
   case "$1" in
     macos) launch_macos ;;
@@ -148,10 +167,6 @@ dispatch_target() {
       launch_ios_simulator "iPhone 17"
       launch_ios_simulator "iPad Pro 13-inch (M5)"
       ;;
-    -h|--help|help)
-      usage
-      exit 0
-      ;;
     *)
       echo "launch: unknown target '$1'" >&2
       usage
@@ -160,13 +175,13 @@ dispatch_target() {
   esac
 }
 
-if [[ $# -eq 0 ]]; then
+if [[ ${#TARGETS[@]} -eq 0 ]]; then
   usage
   exit 1
 fi
 
 FAILED=0
-for target in "$@"; do
+for target in "${TARGETS[@]}"; do
   dispatch_target "$target" || FAILED=1
 done
 exit "$FAILED"
