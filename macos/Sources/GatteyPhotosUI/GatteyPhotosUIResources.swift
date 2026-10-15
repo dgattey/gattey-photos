@@ -14,13 +14,14 @@ enum GatteyPhotosUIResources {
     private static func locateResourceBundle() -> Bundle? {
         func containsMarker(_ bundle: Bundle?) -> Bundle? {
             guard let bundle,
-                  bundle.url(forResource: markerResource, withExtension: markerExtension) != nil
+                bundle.url(forResource: markerResource, withExtension: markerExtension) != nil
             else { return nil }
             return bundle
         }
 
         if let executableURL = Bundle.main.executableURL {
-            let bundleURL = executableURL
+            let bundleURL =
+                executableURL
                 .deletingLastPathComponent()
                 .appendingPathComponent("\(resourceBundleName).bundle")
             if let bundle = containsMarker(Bundle(url: bundleURL)) {
@@ -29,7 +30,8 @@ enum GatteyPhotosUIResources {
         }
 
         if let path = Bundle.main.path(forResource: resourceBundleName, ofType: "bundle"),
-           let bundle = containsMarker(Bundle(path: path)) {
+            let bundle = containsMarker(Bundle(path: path))
+        {
             return bundle
         }
 

@@ -32,7 +32,8 @@ struct AutofillPasswordField: NSViewRepresentable {
         )
     }
 
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: AutofillPasswordContainerView, context: Context) -> CGSize? {
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: AutofillPasswordContainerView, context: Context) -> CGSize?
+    {
         let height = max(proposal.height ?? 0, nsView.intrinsicContentSize.height)
         guard let width = proposal.width, width > 0, width.isFinite else {
             return nil
@@ -87,7 +88,8 @@ final class AutofillPasswordContainerView: NSView {
         }
 
         let preserved = field?.stringValue ?? text
-        let wasFirstResponder = field?.window?.firstResponder === field?.currentEditor() || field?.window?.firstResponder === field
+        let wasFirstResponder =
+            field?.window?.firstResponder === field?.currentEditor() || field?.window?.firstResponder === field
 
         field?.removeFromSuperview()
         let newField = Self.makeField(secure: secure, placeholder: placeholder)

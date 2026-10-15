@@ -106,7 +106,9 @@ struct UnlockWelcomePhotoPanel: View {
     }
 
     @ViewBuilder
-    private func welcomeImageView(_ image: PlatformWelcomeImage, screenWidth: CGFloat, screenHeight: CGFloat) -> some View {
+    private func welcomeImageView(_ image: PlatformWelcomeImage, screenWidth: CGFloat, screenHeight: CGFloat)
+        -> some View
+    {
         #if os(macOS)
         Image(nsImage: image)
             .resizable()

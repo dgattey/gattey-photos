@@ -99,7 +99,9 @@ struct ActivityLogListView: View {
     }
 
     private func collapsedDetailPreview(_ detail: String) -> String {
-        let firstLine = detail.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? detail
+        let firstLine =
+            detail.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init)
+            ?? detail
         if firstLine.count <= Self.collapsedDetailLimit {
             return firstLine
         }

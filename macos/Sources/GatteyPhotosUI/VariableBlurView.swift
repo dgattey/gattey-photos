@@ -80,11 +80,13 @@ final class VariableBlurNSView: NSView {
             startOffset: startOffset
         )
         guard appliedConfiguration != next else { return }
-        guard let filter = Self.makeVariableBlurFilter(
-            maxBlurRadius: maxBlurRadius,
-            direction: direction,
-            startOffset: startOffset
-        ) else { return }
+        guard
+            let filter = Self.makeVariableBlurFilter(
+                maxBlurRadius: maxBlurRadius,
+                direction: direction,
+                startOffset: startOffset
+            )
+        else { return }
         appliedConfiguration = next
         backdropLayer.filters = [filter]
     }
@@ -94,11 +96,12 @@ final class VariableBlurNSView: NSView {
         direction: VariableBlurDirection,
         startOffset: CGFloat
     ) -> NSObject? {
-        let filterClassName = String("retliFAC".reversed()) // CAFilter
+        let filterClassName = String("retliFAC".reversed())  // CAFilter
         guard let filterClass = NSClassFromString(filterClassName) as? NSObject.Type else { return nil }
-        let selector = NSSelectorFromString(String(":epyThtiWretlif".reversed())) // filterWithType:
-        guard let filter = filterClass.perform(selector, with: "variableBlur")?
-            .takeUnretainedValue() as? NSObject
+        let selector = NSSelectorFromString(String(":epyThtiWretlif".reversed()))  // filterWithType:
+        guard
+            let filter = filterClass.perform(selector, with: "variableBlur")?
+                .takeUnretainedValue() as? NSObject
         else { return nil }
         let gradient = makeGradientImage(startOffset: startOffset, direction: direction)
         filter.setValue(maxBlurRadius, forKey: "inputRadius")
@@ -135,7 +138,7 @@ final class VariableBlurNSView: NSView {
             gradient.point1 = CGPoint(x: 0, y: height - startOffset * height)
         }
         guard let output = gradient.outputImage,
-              let image = sharedCIContext.createCGImage(output, from: CGRect(x: 0, y: 0, width: width, height: height))
+            let image = sharedCIContext.createCGImage(output, from: CGRect(x: 0, y: 0, width: width, height: height))
         else { return nil }
         gradientMaskCache[key] = image
         return image

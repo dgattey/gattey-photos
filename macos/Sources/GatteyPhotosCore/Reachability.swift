@@ -37,8 +37,8 @@ public enum Reachability {
         do {
             let (data, res) = try await session.data(for: req)
             guard let http = res as? HTTPURLResponse, http.statusCode == 200,
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  json["ok"] as? Bool == true
+                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                json["ok"] as? Bool == true
             else { return false }
             return true
         } catch {

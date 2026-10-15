@@ -4,6 +4,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+echo "==> macOS: swift-format lint"
+if command -v swift-format >/dev/null 2>&1; then
+  swift-format lint --strict --recursive --parallel --configuration "$ROOT/.swift-format" macos/Sources macos/Tests macos/Package.swift
+else
+  xcrun swift-format lint --strict --recursive --parallel --configuration "$ROOT/.swift-format" macos/Sources macos/Tests macos/Package.swift
+fi
+
 echo "==> macOS: swift test"
 (cd macos && swift test --build-system native)
 

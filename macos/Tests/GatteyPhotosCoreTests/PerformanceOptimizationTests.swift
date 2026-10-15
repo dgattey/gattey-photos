@@ -1,12 +1,14 @@
-#if os(macOS)
-import AppKit
-#endif
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 import XCTest
+
 @testable import GatteyPhotosCore
 @testable import GatteyPhotosUI
+
+#if os(macOS)
+import AppKit
+#endif
 
 final class PerformanceOptimizationTests: XCTestCase {
     @MainActor
@@ -72,7 +74,7 @@ final class PerformanceOptimizationTests: XCTestCase {
                     updatedAt: "2026-01-01T00:00:00.000Z",
                     deletedAt: nil,
                     uploaderId: "u1"
-                ),
+                )
             ],
             uploaders: ["u1": "Dylan"],
             currentPhotoId: "disk-photo"
@@ -98,7 +100,7 @@ final class PerformanceOptimizationTests: XCTestCase {
                     updatedAt: "2026-02-01T00:00:00.000Z",
                     deletedAt: nil,
                     uploaderId: "u1"
-                ),
+                )
             ],
             uploaders: ["u1": "Dylan"],
             currentPhotoId: "live-photo"

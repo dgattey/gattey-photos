@@ -31,17 +31,20 @@ enum GalleryFilePasteboard {
     static func hasCandidateUploadItems(in info: NSDraggingInfo) -> Bool {
         let pb = info.draggingPasteboard
         if let items = pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL],
-           items.contains(where: { $0.isFileURL && hasSupportedImageExtension($0) }) {
+            items.contains(where: { $0.isFileURL && hasSupportedImageExtension($0) })
+        {
             return true
         }
         let filenamesType = NSPasteboard.PasteboardType("NSFilenamesPboardType")
         if let paths = pb.propertyList(forType: filenamesType) as? [String],
-           paths.contains(where: { hasSupportedImageExtension(URL(fileURLWithPath: $0)) }) {
+            paths.contains(where: { hasSupportedImageExtension(URL(fileURLWithPath: $0)) })
+        {
             return true
         }
         if let path = pb.string(forType: .fileURL)?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !path.isEmpty,
-           hasSupportedImageExtension(URL(fileURLWithPath: path)) {
+            !path.isEmpty,
+            hasSupportedImageExtension(URL(fileURLWithPath: path))
+        {
             return true
         }
         return pb.availableType(from: imageTypes) != nil
@@ -50,16 +53,19 @@ enum GalleryFilePasteboard {
     static func urls(from info: NSDraggingInfo) -> [URL] {
         let pb = info.draggingPasteboard
         if let items = pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL],
-           !items.isEmpty {
+            !items.isEmpty
+        {
             return items.filter { $0.isFileURL }
         }
         let filenamesType = NSPasteboard.PasteboardType("NSFilenamesPboardType")
         if let paths = pb.propertyList(forType: filenamesType) as? [String],
-           !paths.isEmpty {
+            !paths.isEmpty
+        {
             return paths.map { URL(fileURLWithPath: $0) }
         }
         if let path = pb.string(forType: .fileURL)?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !path.isEmpty {
+            !path.isEmpty
+        {
             return [URL(fileURLWithPath: path)]
         }
         if let temp = writeImageDataToTemporaryFile(from: pb) {
@@ -86,7 +92,8 @@ enum GalleryFilePasteboard {
             }
         }
         if let path = pb.string(forType: .fileURL)?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !path.isEmpty {
+            !path.isEmpty
+        {
             let url = URL(fileURLWithPath: path)
             if hasSupportedImageExtension(url) {
                 return .fileURLs([url])
@@ -133,7 +140,7 @@ enum GalleryFilePasteboard {
     nonisolated static func isUploadableImageFile(_ url: URL) -> Bool {
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
-              !isDirectory.boolValue
+            !isDirectory.boolValue
         else { return false }
         return hasSupportedImageExtension(url)
     }

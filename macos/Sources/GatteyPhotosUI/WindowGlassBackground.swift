@@ -134,15 +134,15 @@ struct TransparentWindowConfigurator: NSViewRepresentable {
     }
 }
 
-public extension NSWindow {
+extension NSWindow {
     /// Matches SwiftUI `Window(id: "main")` — used so single-window enforcement ignores Sparkle dialogs.
-    static let gatteyPhotosMainSceneID = NSUserInterfaceItemIdentifier("main")
+    public static let gatteyPhotosMainSceneID = NSUserInterfaceItemIdentifier("main")
 
-    var isGatteyPhotosMainWindow: Bool {
+    public var isGatteyPhotosMainWindow: Bool {
         identifier == Self.gatteyPhotosMainSceneID
     }
 
-    func markAsGatteyPhotosMainWindowIfNeeded() {
+    public func markAsGatteyPhotosMainWindowIfNeeded() {
         if identifier != Self.gatteyPhotosMainSceneID {
             identifier = Self.gatteyPhotosMainSceneID
         }
@@ -152,7 +152,7 @@ public extension NSWindow {
     /// toolbar background bar; `isOpaque = false` + clear background let the `WindowGlassBackground`
     /// vibrancy (and desktop) show through the whole window. The scroll edge is faked with a top
     /// `VariableBlurView` strip in the gallery, since the real effect needs the system toolbar bar.
-    func applyGatteyPhotosGalleryChrome() {
+    public func applyGatteyPhotosGalleryChrome() {
         styleMask.insert(.fullSizeContentView)
         isMovableByWindowBackground = false
         isOpaque = false
@@ -164,7 +164,7 @@ public extension NSWindow {
     }
 
     /// Unlock / launch: full glass titlebar (no toolbar items).
-    func applyGatteyPhotosUnlockChrome() {
+    public func applyGatteyPhotosUnlockChrome() {
         styleMask.insert(.fullSizeContentView)
         isMovableByWindowBackground = true
         isOpaque = false
@@ -176,13 +176,14 @@ public extension NSWindow {
     }
 
     /// Hides the centered title label SwiftUI/unified toolbar injects beside the traffic lights.
-    func setTitlebarCenteredTitleHidden(_ hidden: Bool) {
+    public func setTitlebarCenteredTitleHidden(_ hidden: Bool) {
         guard let close = standardWindowButton(.closeButton) else { return }
         var container: NSView? = close.superview
         while let view = container {
             hideTitlebarLabelText(in: view, hidden: hidden)
             container = view.superview
-            if container?.className.contains("NSTitlebar") == true || container?.className.contains("Titlebar") == true {
+            if container?.className.contains("NSTitlebar") == true || container?.className.contains("Titlebar") == true
+            {
                 break
             }
         }

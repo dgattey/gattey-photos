@@ -18,20 +18,20 @@ struct UnlockView: View {
 
     var body: some View {
         unlockScrollContent
-        .onPreferenceChange(UnlockFormHeightPreferenceKey.self) { height in
-            if height > 0, height != unlockFormHeight {
-                unlockFormHeight = height
+            .onPreferenceChange(UnlockFormHeightPreferenceKey.self) { height in
+                if height > 0, height != unlockFormHeight {
+                    unlockFormHeight = height
+                }
             }
-        }
-        #if os(iOS)
+            #if os(iOS)
         .padding(.horizontal, unlockOuterPadding)
-        #else
+            #else
         .padding(unlockOuterPadding)
-        #endif
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(UnlockGlassBackground())
-        .background(TransparentWindowConfigurator())
-        #if os(macOS)
+            #endif
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(UnlockGlassBackground())
+            .background(TransparentWindowConfigurator())
+            #if os(macOS)
         .toolbarBackground(.hidden, for: .windowToolbar)
         #endif
         .onAppear {
@@ -134,100 +134,100 @@ struct UnlockView: View {
     private var unlockFormColumn: some View {
         VStack(alignment: .leading, spacing: 36) {
             VStack(alignment: .leading, spacing: 10) {
-                    Text("Welcome to Gattey Photos")
-                        .font(AppTypography.primaryTitle)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(unlockSubtitle)
-                        .font(AppTypography.unlockSubtitle)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
+                Text("Welcome to Gattey Photos")
+                    .font(AppTypography.primaryTitle)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(unlockSubtitle)
+                    .font(AppTypography.unlockSubtitle)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             VStack(alignment: .leading, spacing: 20) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Your name")
-                            .font(AppTypography.unlockBody)
-                        TextField("Name shown on uploads", text: $displayName)
-                            .textFieldStyle(.roundedBorder)
-                            .font(AppTypography.unlockBody)
-                            .textContentType(.username)
-                            .autocorrectionDisabled()
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Your name")
+                        .font(AppTypography.unlockBody)
+                    TextField("Name shown on uploads", text: $displayName)
+                        .textFieldStyle(.roundedBorder)
+                        .font(AppTypography.unlockBody)
+                        .textContentType(.username)
+                        .autocorrectionDisabled()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                    bloomin8SetupField
+                bloomin8SetupField
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 6) {
-                            Text("Family password")
-                                .font(AppTypography.unlockBody)
-                            Button {
-                                showPasswordHelp = true
-                            } label: {
-                                Image(systemName: "questionmark.circle")
-                            }
-                            .buttonStyle(.borderless)
-                            #if os(macOS)
-                            .help("Where to find the family password")
-                            .popover(isPresented: $showPasswordHelp, arrowEdge: .top) {
-                                PasswordHelpPopover()
-                            }
-                            #else
-                            .unlockHelpSheet(isPresented: $showPasswordHelp, title: "Family password") {
-                                PasswordHelpPopover(showsInlineTitle: false)
-                            }
-                            #endif
-                            Spacer(minLength: 0)
-                        }
-                        HStack(spacing: 8) {
-                            UnlockPasswordField(
-                                text: $password,
-                                showsPlaintext: showPassword,
-                                placeholder: "Password"
-                            )
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Text("Family password")
                             .font(AppTypography.unlockBody)
-                            #if os(macOS)
-                            .fixedSize(horizontal: false, vertical: true)
-                            #else
-                            .frame(minHeight: 28)
-                            #endif
-                            Button {
-                                showPassword.toggle()
-                            } label: {
-                                Image(systemName: showPassword ? "eye.slash" : "eye")
-                            }
-                            .buttonStyle(.borderless)
-                            .help(showPassword ? "Hide password" : "Show password")
+                        Button {
+                            showPasswordHelp = true
+                        } label: {
+                            Image(systemName: "questionmark.circle")
                         }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    if let err = session.unlockError {
-                        Text(err)
-                            .font(AppTypography.unlockBody)
-                            .foregroundStyle(.red)
-                            .multilineTextAlignment(.leading)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    Button {
-                        Task { await attemptUnlock() }
-                    } label: {
-                        HStack(spacing: 8) {
-                            Text("Unlock")
-                            if isUnlocking {
-                                ProgressView()
-                                    .controlSize(.small)
-                            }
+                        .buttonStyle(.borderless)
+                        #if os(macOS)
+                        .help("Where to find the family password")
+                        .popover(isPresented: $showPasswordHelp, arrowEdge: .top) {
+                            PasswordHelpPopover()
                         }
-                        .frame(maxWidth: .infinity, alignment: .center)
+                        #else
+                        .unlockHelpSheet(isPresented: $showPasswordHelp, title: "Family password") {
+                            PasswordHelpPopover(showsInlineTitle: false)
+                        }
+                        #endif
+                        Spacer(minLength: 0)
+                    }
+                    HStack(spacing: 8) {
+                        UnlockPasswordField(
+                            text: $password,
+                            showsPlaintext: showPassword,
+                            placeholder: "Password"
+                        )
+                        .font(AppTypography.unlockBody)
+                        #if os(macOS)
+                        .fixedSize(horizontal: false, vertical: true)
+                        #else
                         .frame(minHeight: 28)
+                        #endif
+                        Button {
+                            showPassword.toggle()
+                        } label: {
+                            Image(systemName: showPassword ? "eye.slash" : "eye")
+                        }
+                        .buttonStyle(.borderless)
+                        .help(showPassword ? "Hide password" : "Show password")
                     }
-                    .controlSize(.large)
-                    .buttonStyle(.borderedProminent)
-                    .disabled(isUnlocking || !canSubmitUnlock)
-                    .keyboardShortcut(.defaultAction)
-                    .frame(maxWidth: .infinity)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if let err = session.unlockError {
+                    Text(err)
+                        .font(AppTypography.unlockBody)
+                        .foregroundStyle(.red)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Button {
+                    Task { await attemptUnlock() }
+                } label: {
+                    HStack(spacing: 8) {
+                        Text("Unlock")
+                        if isUnlocking {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .frame(minHeight: 28)
+                }
+                .controlSize(.large)
+                .buttonStyle(.borderedProminent)
+                .disabled(isUnlocking || !canSubmitUnlock)
+                .keyboardShortcut(.defaultAction)
+                .frame(maxWidth: .infinity)
             }
         }
         .frame(
@@ -333,7 +333,12 @@ struct PasswordHelpPopover: View {
                 Text("Family password")
                     .font(.headline)
             }
-            (Text("Look up ") + Text("Gattey Photos Key").fontWeight(.semibold) + Text(" in 1Password (website URL should be ") + Text("https://photos.gattey.com").fontWeight(.semibold) + Text(" for AutoFill suggestions) or use the password key in the field. It is the shared password that unlocks the gallery for everyone in the family."))
+            (Text("Look up ") + Text("Gattey Photos Key").fontWeight(.semibold)
+                + Text(" in 1Password (website URL should be ")
+                + Text("https://photos.gattey.com").fontWeight(.semibold)
+                + Text(
+                    " for AutoFill suggestions) or use the password key in the field. It is the shared password that unlocks the gallery for everyone in the family."
+                ))
                 .font(.body)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -399,8 +404,8 @@ struct Bloomin8TokenHelpPopover: View {
 }
 
 #if os(iOS)
-private extension View {
-    func unlockHelpSheet<Content: View>(
+extension View {
+    fileprivate func unlockHelpSheet<Content: View>(
         isPresented: Binding<Bool>,
         title: String,
         @ViewBuilder content: @escaping () -> Content

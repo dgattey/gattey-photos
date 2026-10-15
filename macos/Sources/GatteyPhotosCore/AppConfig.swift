@@ -44,7 +44,8 @@ public enum AppConfig {
     private static func loadSettingsFromDisk() -> AppSettings {
         var settings: AppSettings
         if let data = try? Data(contentsOf: settingsURL),
-           let decoded = try? JSONDecoder().decode(AppSettings.self, from: data) {
+            let decoded = try? JSONDecoder().decode(AppSettings.self, from: data)
+        {
             settings = decoded
         } else {
             settings = .defaults
@@ -74,10 +75,12 @@ public enum AppConfig {
     }
 
     private static func removePhotoCacheFilesFromDisk() {
-        guard let entries = try? FileManager.default.contentsOfDirectory(
-            at: cacheFolder,
-            includingPropertiesForKeys: nil
-        ) else { return }
+        guard
+            let entries = try? FileManager.default.contentsOfDirectory(
+                at: cacheFolder,
+                includingPropertiesForKeys: nil
+            )
+        else { return }
         for url in entries {
             try? FileManager.default.removeItem(at: url)
         }
@@ -125,7 +128,7 @@ public enum AppConfig {
             return LocalStateLoad(state: .empty, needsServerPull: false)
         }
         guard let data = try? Data(contentsOf: localStateURL),
-              let decoded = try? JSONDecoder().decode(GalleryState.self, from: data)
+            let decoded = try? JSONDecoder().decode(GalleryState.self, from: data)
         else {
             try? FileManager.default.removeItem(at: localStateURL)
             return LocalStateLoad(state: .empty, needsServerPull: true)

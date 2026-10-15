@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import GatteyPhotosCore
 
 final class Bloomin8TokenParserTests: XCTestCase {
@@ -6,10 +7,10 @@ final class Bloomin8TokenParserTests: XCTestCase {
         "703A5D9FD4850827784AEED7AB800226.7be9909001aa2c0e9c51abdedb6e83746a12685392c70bbe105364031d8af474"
 
     private let sampleBlock = """
-    🖼️ Bloomin8 Device Token
-    Device: Bedroom | Interval: 6h
-    Token: 703A5D9FD4850827784AEED7AB800226.7be9909001aa2c0e9c51abdedb6e83746a12685392c70bbe105364031d8af474
-    """
+        🖼️ Bloomin8 Device Token
+        Device: Bedroom | Interval: 6h
+        Token: 703A5D9FD4850827784AEED7AB800226.7be9909001aa2c0e9c51abdedb6e83746a12685392c70bbe105364031d8af474
+        """
 
     func testParseTokenFromFullBlock() {
         XCTAssertEqual(Bloomin8TokenParser.parseToken(from: sampleBlock), sampleToken)

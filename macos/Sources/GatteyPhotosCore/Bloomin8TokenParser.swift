@@ -16,7 +16,8 @@ public enum Bloomin8TokenParser: Sendable {
             }
         }
 
-        let collapsed = trimmed
+        let collapsed =
+            trimmed
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty && !isSetupHeaderLine($0) }
@@ -38,7 +39,8 @@ public enum Bloomin8TokenParser: Sendable {
         for line in text.components(separatedBy: .newlines) {
             let lineTrim = line.trimmingCharacters(in: .whitespaces)
             guard let raw = valueAfterLabel("Device:", in: lineTrim), !raw.isEmpty else { continue }
-            let name = raw.split(separator: "|", maxSplits: 1, omittingEmptySubsequences: false)
+            let name =
+                raw.split(separator: "|", maxSplits: 1, omittingEmptySubsequences: false)
                 .first
                 .map { String($0).trimmingCharacters(in: .whitespaces) } ?? raw
             return name.isEmpty ? nil : name

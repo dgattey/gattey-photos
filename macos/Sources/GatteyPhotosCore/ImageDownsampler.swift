@@ -36,11 +36,13 @@ public enum ImageDownsampler {
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceShouldCacheImmediately: true,
         ]
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(
-            source,
-            0,
-            options as CFDictionary
-        ) else { return nil }
+        guard
+            let cgImage = CGImageSourceCreateThumbnailAtIndex(
+                source,
+                0,
+                options as CFDictionary
+            )
+        else { return nil }
         #if os(macOS)
         let size = NSSize(width: cgImage.width, height: cgImage.height)
         let image = NSImage(cgImage: cgImage, size: size)

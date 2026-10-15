@@ -169,10 +169,12 @@ struct PhotoLightboxView: View {
         .clipped()
         .animation(nil, value: photo.id)
         .padding(sideBySide ? lightboxHeroPaddingWide : lightboxHeroPaddingCompact)
-        .modifier(LightboxHeroWidthModifier(
-            expandsHorizontally: !sideBySide,
-            horizontalAlignment: lightboxHeroHorizontalAlignment(sideBySide: sideBySide)
-        ))
+        .modifier(
+            LightboxHeroWidthModifier(
+                expandsHorizontally: !sideBySide,
+                horizontalAlignment: lightboxHeroHorizontalAlignment(sideBySide: sideBySide)
+            )
+        )
         .allowsHitTesting(false)
         .focusable(false)
         #if os(macOS)
@@ -234,79 +236,79 @@ struct PhotoLightboxView: View {
         let metaAlignment: HorizontalAlignment = sideBySide ? .trailing : .leading
         let textAlignment: TextAlignment = sideBySide ? .trailing : .leading
         return VStack(alignment: metaAlignment, spacing: 20) {
-                VStack(alignment: metaAlignment, spacing: Self.lightboxAttributionBlockSpacing) {
-                    Text(PhotoFormatters.addedBy(photo, uploaders: store.state.uploaders))
-                        .font(AppTypography.lightboxAttribution)
-                        .multilineTextAlignment(textAlignment)
-                    Text(photo.filename)
-                        .font(AppTypography.lightboxFilename)
-                        .multilineTextAlignment(textAlignment)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .frame(
-                            maxWidth: sideBySide ? Self.sideColumnPreferredWidth : .infinity,
-                            alignment: sideBySide ? .trailing : .leading
-                        )
-                    Text("Updated \(PhotoFormatters.updatedAt(photo.updatedAt))")
-                        .font(AppTypography.lightboxMeta)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(textAlignment)
-                }
+            VStack(alignment: metaAlignment, spacing: Self.lightboxAttributionBlockSpacing) {
+                Text(PhotoFormatters.addedBy(photo, uploaders: store.state.uploaders))
+                    .font(AppTypography.lightboxAttribution)
+                    .multilineTextAlignment(textAlignment)
+                Text(photo.filename)
+                    .font(AppTypography.lightboxFilename)
+                    .multilineTextAlignment(textAlignment)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(
+                        maxWidth: sideBySide ? Self.sideColumnPreferredWidth : .infinity,
+                        alignment: sideBySide ? .trailing : .leading
+                    )
+                Text("Updated \(PhotoFormatters.updatedAt(photo.updatedAt))")
+                    .font(AppTypography.lightboxMeta)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(textAlignment)
+            }
 
-                VStack(alignment: metaAlignment, spacing: 6) {
+            VStack(alignment: metaAlignment, spacing: 6) {
+                Button {
+                    Task { await store.setAsCurrent(photoID: photo.id) }
+                } label: {
+                    Text(lightboxShowTodayButtonLabel(for: photo))
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .galleryPrimaryButtonStyle()
+                .galleryFullWidthButtonLayout(minHeight: 56)
+                #if os(macOS)
+                .controlSize(.large)
+                #endif
+                .disabled(store.isBusy || !store.canSetAsCurrent(photoID: photo.id))
+                .opacity(lightboxShowTodayButtonOpacity(for: photo))
+
+                HStack(spacing: 12) {
                     Button {
-                        Task { await store.setAsCurrent(photoID: photo.id) }
+                        Task { await store.downloadPhoto(photo) }
                     } label: {
-                        Text(lightboxShowTodayButtonLabel(for: photo))
-                            .font(.body.weight(.semibold))
+                        Text("Download")
                             .frame(maxWidth: .infinity)
                     }
-                    .galleryPrimaryButtonStyle()
-                    .galleryFullWidthButtonLayout(minHeight: 56)
+                    .galleryBorderedButtonStyle()
+                    .frame(maxWidth: .infinity, minHeight: 42)
                     #if os(macOS)
-                    .controlSize(.large)
+                    .controlSize(.regular)
                     #endif
-                    .disabled(store.isBusy || !store.canSetAsCurrent(photoID: photo.id))
-                    .opacity(lightboxShowTodayButtonOpacity(for: photo))
+                    .disabled(store.isBusy)
 
-                    HStack(spacing: 12) {
-                        Button {
-                            Task { await store.downloadPhoto(photo) }
-                        } label: {
-                            Text("Download")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .galleryBorderedButtonStyle()
-                        .frame(maxWidth: .infinity, minHeight: 42)
-                        #if os(macOS)
-                        .controlSize(.regular)
-                        #endif
-                        .disabled(store.isBusy)
-
-                        Button {
-                            galleryDeleteRequest?(Set([photo.id]))
-                        } label: {
-                            Text("Delete")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .galleryDestructiveButtonStyle()
-                        .frame(maxWidth: .infinity, minHeight: 42)
-                        #if os(macOS)
-                        .controlSize(.regular)
-                        #endif
-                        .disabled(store.isBusy || !store.canDeletePhotos(ids: [photo.id]))
-                        .galleryDestructiveChromeOpacity(
-                            isEnabled: !store.isBusy && store.canDeletePhotos(ids: [photo.id])
-                        )
+                    Button {
+                        galleryDeleteRequest?(Set([photo.id]))
+                    } label: {
+                        Text("Delete")
+                            .frame(maxWidth: .infinity)
                     }
+                    .galleryDestructiveButtonStyle()
+                    .frame(maxWidth: .infinity, minHeight: 42)
+                    #if os(macOS)
+                    .controlSize(.regular)
+                    #endif
+                    .disabled(store.isBusy || !store.canDeletePhotos(ids: [photo.id]))
+                    .galleryDestructiveChromeOpacity(
+                        isEnabled: !store.isBusy && store.canDeletePhotos(ids: [photo.id])
+                    )
                 }
-                .frame(maxWidth: .infinity, alignment: sideBySide ? .trailing : .leading)
             }
             .frame(maxWidth: .infinity, alignment: sideBySide ? .trailing : .leading)
-            .padding(lightboxDetailsPadding(sideBySide: sideBySide))
-            #if os(macOS)
-            .animation(nil, value: photo.id)
-            #endif
+        }
+        .frame(maxWidth: .infinity, alignment: sideBySide ? .trailing : .leading)
+        .padding(lightboxDetailsPadding(sideBySide: sideBySide))
+        #if os(macOS)
+        .animation(nil, value: photo.id)
+        #endif
     }
 
     private func lightboxShowTodayButtonLabel(for photo: PhotoEntry) -> String {

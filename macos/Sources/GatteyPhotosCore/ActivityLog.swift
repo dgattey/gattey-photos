@@ -132,8 +132,8 @@ public enum ActivityLogFile {
 
     private static func readCurrentSignatureOnQueue() -> FileSignature? {
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
-              let mod = attrs[.modificationDate] as? Date,
-              let size = attrs[.size] as? Int
+            let mod = attrs[.modificationDate] as? Date,
+            let size = attrs[.size] as? Int
         else { return nil }
         return FileSignature(modificationDate: mod, size: size)
     }
@@ -184,7 +184,7 @@ public enum ActivityLogFile {
 
     private static func loadRecentOnQueue(limit: Int = 2000) -> [LogEntry] {
         guard let data = try? Data(contentsOf: url),
-              let text = String(data: data, encoding: .utf8)
+            let text = String(data: data, encoding: .utf8)
         else { return [] }
         let lines = text.split(separator: "\n", omittingEmptySubsequences: true)
         return lines.suffix(limit).compactMap { decode(String($0)) }
@@ -235,7 +235,7 @@ public enum ActivityLogFile {
             "d": entry.detail ?? "",
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: payload),
-              let json = String(data: data, encoding: .utf8)
+            let json = String(data: data, encoding: .utf8)
         else { return nil }
         return json
     }
@@ -247,15 +247,15 @@ public enum ActivityLogFile {
 
     private static func decode(_ line: String) -> LogEntry? {
         guard let data = line.data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: String],
-              let id = UUID(uuidString: obj["id"] ?? ""),
-              let t = obj["t"],
-              let ts = parseTimestamp(t),
-              let c = obj["c"],
-              let category = LogCategory(rawValue: c),
-              let l = obj["l"],
-              let level = LogLevel(rawValue: l),
-              let message = obj["m"]
+            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+            let id = UUID(uuidString: obj["id"] ?? ""),
+            let t = obj["t"],
+            let ts = parseTimestamp(t),
+            let c = obj["c"],
+            let category = LogCategory(rawValue: c),
+            let l = obj["l"],
+            let level = LogLevel(rawValue: l),
+            let message = obj["m"]
         else { return nil }
         let detail = obj["d"].flatMap { $0.isEmpty ? nil : $0 }
         return LogEntry(id: id, timestamp: ts, category: category, level: level, message: message, detail: detail)
@@ -263,11 +263,11 @@ public enum ActivityLogFile {
 
     private static func trimIfNeeded() {
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
-              let size = attrs[.size] as? Int,
-              size > maxFileBytes
+            let size = attrs[.size] as? Int,
+            size > maxFileBytes
         else { return }
         guard let data = try? Data(contentsOf: url),
-              let text = String(data: data, encoding: .utf8)
+            let text = String(data: data, encoding: .utf8)
         else { return }
         let lines = text.split(separator: "\n", omittingEmptySubsequences: true)
         let keep = lines.suffix(200).joined(separator: "\n") + "\n"
@@ -287,7 +287,9 @@ public final class ActivityLogStore: ObservableObject {
     private var lastMergedSignature: ActivityLogFile.FileSignature?
     private var mergeGeneration: UInt64 = 0
 
-    private init() {}
+    public init(entries: [LogEntry] = []) {
+        self.entries = entries
+    }
 
     /// Polls `activity.log` so entries written from other processes appear in the UI.
     public func startLiveReload(intervalSeconds: TimeInterval = 4) {
@@ -358,7 +360,8 @@ public final class ActivityLogStore: ObservableObject {
         }
         guard addedOrUpdated || entries.count != byID.count else { return }
         let sorted = byID.values.sorted { $0.timestamp > $1.timestamp }
-        entries = sorted.count > Self.maxInMemoryEntries
+        entries =
+            sorted.count > Self.maxInMemoryEntries
             ? Array(sorted.prefix(Self.maxInMemoryEntries))
             : sorted
     }

@@ -21,8 +21,8 @@ public final class AppSession: ObservableObject {
     private static func canonicalServerBaseURL(_ raw: String) -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let parsed = URL(string: trimmed),
-              var parts = URLComponents(url: parsed, resolvingAgainstBaseURL: false),
-              let host = parts.host?.lowercased()
+            var parts = URLComponents(url: parsed, resolvingAgainstBaseURL: false),
+            let host = parts.host?.lowercased()
         else { return trimmed }
         let localHosts: Set<String> = ["127.0.0.1", "localhost", "::1"]
         guard localHosts.contains(host) else { return trimmed }

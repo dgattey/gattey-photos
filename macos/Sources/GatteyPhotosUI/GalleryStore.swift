@@ -114,7 +114,8 @@ public final class GalleryStore: ObservableObject {
         }
         let active = state.activePhotos()
         let activeIDs = active.map(\.id)
-        let orderRevision = activeIDs == derivedCache.activePhotoIDs
+        let orderRevision =
+            activeIDs == derivedCache.activePhotoIDs
             ? max(derivedCache.activeOrderRevision, 1)
             : derivedCache.activeOrderRevision &+ 1
         derivedCache = DerivedStateCache(
@@ -154,10 +155,11 @@ public final class GalleryStore: ObservableObject {
         let debug = settings.debugMode
         let interval = settings.debugAdvanceIntervalSeconds
         if rotationCache.activeOrderRevision == orderRevision,
-           rotationCache.currentPhotoID == currentID,
-           rotationCache.debugMode == debug,
-           rotationCache.debugAdvanceIntervalSeconds == interval,
-           now < rotationCache.nextCronBoundary {
+            rotationCache.currentPhotoID == currentID,
+            rotationCache.debugMode == debug,
+            rotationCache.debugAdvanceIntervalSeconds == interval,
+            now < rotationCache.nextCronBoundary
+        {
             return
         }
         let order = derivedCache.activePhotoIDs
@@ -218,7 +220,7 @@ public final class GalleryStore: ObservableObject {
     /// Lightbox secondary line when this photo is the device current (rotation end date).
     func lightboxShowingUntilCaption(for photo: PhotoEntry) -> String? {
         guard state.currentPhotoId == photo.id,
-              let until = rotationPlan?.currentShowingUntil
+            let until = rotationPlan?.currentShowingUntil
         else { return nil }
         return PhotoFormatters.showingUntil(until)
     }
@@ -325,8 +327,8 @@ public final class GalleryStore: ObservableObject {
     /// Ensures the on-disk JPEG cache exists for grid/lightbox display.
     func ensurePhotoCached(photoID: PhotoID) async {
         guard session?.isUnlocked == true,
-              let photo = state.photos[photoID],
-              !photo.isDeleted
+            let photo = state.photos[photoID],
+            !photo.isDeleted
         else { return }
         do {
             let client = try makeSyncClient()
@@ -340,8 +342,8 @@ public final class GalleryStore: ObservableObject {
     /// Ensures a small width-bounded thumbnail is cached for the grid (downloads the resized variant).
     func ensureThumbnailCached(photoID: PhotoID, width: Int) async {
         guard session?.isUnlocked == true,
-              let photo = state.photos[photoID],
-              !photo.isDeleted
+            let photo = state.photos[photoID],
+            !photo.isDeleted
         else { return }
         do {
             let client = try makeSyncClient()
@@ -416,10 +418,10 @@ public final class GalleryStore: ObservableObject {
         session?.noteSettingsChanged(store: self, previousServerURL: previousServerURL)
         log.log(.system, level: .info, "Settings saved", detail: settings.serverBaseURL)
         if shouldPropagate,
-           let previousDisplayName,
-           previousDisplayName != newDisplayName,
-           !newDisplayName.isEmpty,
-           session?.isUnlocked == true
+            let previousDisplayName,
+            previousDisplayName != newDisplayName,
+            !newDisplayName.isEmpty,
+            session?.isUnlocked == true
         {
             Task { await propagateDisplayNameChange(from: previousDisplayName, to: newDisplayName) }
         }
@@ -613,7 +615,8 @@ public final class GalleryStore: ObservableObject {
                 // do a full catalog pull when the version actually changed.
                 let token = try await client.fetchCurrentPhoto()
                 if token.galleryVersion != state.updatedAt,
-                   case .modified(let response) = try await client.fetchGallery() {
+                    case .modified(let response) = try await client.fetchGallery()
+                {
                     try await commit(response, client: client, downloadMissing: true)
                 }
                 applyCurrentPhoto(token)
@@ -665,7 +668,6 @@ public final class GalleryStore: ObservableObject {
             markServerUnreachableAfterSyncFailure(error)
         }
     }
-
 
     private func markServerUnreachableAfterSyncFailure(_ error: Error) {
         if shouldLockForSyncError(error) {
@@ -975,10 +977,12 @@ public final class GalleryStore: ObservableObject {
         let filename = Self.downloadFilename(for: photo)
         #if os(macOS)
         let dest = try await Task.detached(priority: .userInitiated) { () -> URL in
-            guard let downloads = FileManager.default.urls(
-                for: .downloadsDirectory,
-                in: .userDomainMask
-            ).first else {
+            guard
+                let downloads = FileManager.default.urls(
+                    for: .downloadsDirectory,
+                    in: .userDomainMask
+                ).first
+            else {
                 throw NSError(
                     domain: "GatteyPhotos",
                     code: 1,
@@ -1015,10 +1019,13 @@ public final class GalleryStore: ObservableObject {
 
     private func fullSizeJPEGData(for photo: PhotoEntry) async throws -> Data {
         let cacheURL = AppConfig.cacheURL(for: photo.id)
-        if let cached = try? await Task.detached(priority: .userInitiated, operation: { () -> Data? in
-            guard FileManager.default.fileExists(atPath: cacheURL.path) else { return nil }
-            return try Data(contentsOf: cacheURL, options: .mappedIfSafe)
-        }).value {
+        if let cached = try? await Task.detached(
+            priority: .userInitiated,
+            operation: { () -> Data? in
+                guard FileManager.default.fileExists(atPath: cacheURL.path) else { return nil }
+                return try Data(contentsOf: cacheURL, options: .mappedIfSafe)
+            }
+        ).value {
             return cached
         }
         let client = try makeSyncClient()
@@ -1075,7 +1082,9 @@ public final class GalleryStore: ObservableObject {
 
     private func logPulledCurrentPhotoChange(delta: CurrentPhotoPullDelta?, merged: GalleryState) {
         guard let delta, delta.didChange, delta.newId != setAsCurrentInFlight else { return }
-        guard let pair = GalleryCurrentPhotoActivity.logEntry(delta: delta, photo: merged.currentPhoto()) else { return }
+        guard let pair = GalleryCurrentPhotoActivity.logEntry(delta: delta, photo: merged.currentPhoto()) else {
+            return
+        }
         log.log(.gallery, level: .success, pair.message, detail: pair.detail)
     }
 

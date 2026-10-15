@@ -51,14 +51,14 @@ struct DeviceCurrentPreview: View {
 
             framedPreview(screenWidth: screenW)
                 .frame(width: framedSize.width, alignment: .topLeading)
-            #if os(macOS)
+                #if os(macOS)
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .padding(.leading, PreviewPaneLayout.macOSPanePaddingLeading)
             .padding(.bottom, PreviewPaneLayout.macOSPanePaddingLeading)
-            #else
+                #else
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(panePadding)
-            #endif
+                #endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -86,14 +86,14 @@ struct DeviceCurrentPreview: View {
     @ViewBuilder
     private func framedPreview(screenWidth: CGFloat) -> some View {
         framedDevice(screenWidth: screenWidth)
-        #if os(macOS)
-            .onChange(of: store.currentPhoto?.id) { _, _ in
-                if store.currentPhoto == nil {
-                    chrome.resetDevicePreviewHoverTilt()
-                    isPreviewHovered = false
-                }
+            #if os(macOS)
+        .onChange(of: store.currentPhoto?.id) { _, _ in
+            if store.currentPhoto == nil {
+                chrome.resetDevicePreviewHoverTilt()
+                isPreviewHovered = false
             }
-        #endif
+        }
+            #endif
     }
 
     @ViewBuilder
@@ -101,11 +101,11 @@ struct DeviceCurrentPreview: View {
         DevicePreviewFramed(screenWidth: screenWidth, screenAspectRatio: screenAspectRatio) {
             deviceScreenContent
                 #if os(macOS)
-                .overlay(alignment: .bottomTrailing) {
-                    if let photo = store.currentPhoto, isPreviewHovered {
-                        devicePreviewHoverBadge(for: photo)
-                    }
+            .overlay(alignment: .bottomTrailing) {
+                if let photo = store.currentPhoto, isPreviewHovered {
+                    devicePreviewHoverBadge(for: photo)
                 }
+            }
                 #endif
         }
         #if os(macOS)
