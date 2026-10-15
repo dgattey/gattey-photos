@@ -25,14 +25,32 @@ public enum PhotoCacheJPEG: Sendable {
         return data[0] == jpegMagic[0] && data[1] == jpegMagic[1] && data[2] == jpegMagic[2]
     }
 
-    /// Normalizes an on-disk upload to JPEG when needed (HEIC from iPhone, etc.).
+    /// Normalizes an on-disk upload to JPEG when needed (HEIC from iPhone, etc.)
+    /// and bakes any non-upright EXIF orientation into the pixel buffer.
     public static func normalizedJPEGData(fromFileURL url: URL) throws -> Data {
         let raw = try Data(contentsOf: url)
-        if isJPEG(raw) { return raw }
+        if isJPEG(raw) && !needsOrientationBake(at: url) {
+            return raw
+        }
         guard let encoded = encodeAsJPEG(from: url) else {
             throw PhotoCacheJPEGError.unsupportedImageFile(url.lastPathComponent)
         }
         return encoded
+    }
+
+    private static func needsOrientationBake(at url: URL) -> Bool {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+        else { return false }
+        if let orientation = props[kCGImagePropertyOrientation] as? Int, orientation > 1 {
+            return true
+        }
+        if let tiff = props[kCGImagePropertyTIFFDictionary] as? [CFString: Any],
+           let orientation = tiff[kCGImagePropertyTIFFOrientation] as? Int,
+           orientation > 1 {
+            return true
+        }
+        return false
     }
 
     private static func encodeAsJPEG(from url: URL, maxPixelSize: Int = 4096) -> Data? {

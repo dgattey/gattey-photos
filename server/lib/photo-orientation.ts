@@ -1,3 +1,5 @@
+import sharp from "sharp";
+
 export type NormalizedPhotoResult = {
   bytes: Buffer;
   didRotate: boolean;
@@ -11,5 +13,19 @@ export type NormalizedPhotoResult = {
 export async function normalizePhotoOrientation(
   bytes: Buffer
 ): Promise<NormalizedPhotoResult> {
-  return { bytes, didRotate: false };
+  try {
+    const metadata = await sharp(bytes, { failOn: "none" }).metadata();
+    const orientation = metadata.orientation;
+    if (typeof orientation !== "number" || orientation <= 1) {
+      return { bytes, didRotate: false };
+    }
+    const rotated = await sharp(bytes, { failOn: "none" })
+      .rotate()
+      .jpeg({ quality: 92 })
+      .toBuffer();
+    return { bytes: rotated, didRotate: true };
+  } catch (err) {
+    console.warn("[photo-orientation] failed to inspect/rotate image:", err);
+    return { bytes, didRotate: false };
+  }
 }

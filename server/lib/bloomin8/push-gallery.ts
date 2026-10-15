@@ -1,4 +1,5 @@
 import { listDevicesDecrypted, recordDevicePushResults } from "../devices/registry";
+import { normalizePhotoOrientation } from "../photo-orientation";
 import type { GalleryState } from "../types";
 import * as storage from "../storage";
 import { pushImage } from "./open-api";
@@ -25,10 +26,19 @@ export async function pushCurrentPhotoToAllDevices(
     return summary;
   }
 
-  const bytes = await storage.readPhotoBytes(photo.blobPath);
-  if (!bytes?.length) {
+  const rawBytes = await storage.readPhotoBytes(photo.blobPath);
+  if (!rawBytes?.length) {
     console.error("[device-push] missing JPEG for", photo.blobPath);
     return summary;
+  }
+
+  const { bytes, didRotate } = await normalizePhotoOrientation(rawBytes);
+  if (didRotate) {
+    try {
+      await storage.putPhotoBytes(photo.blobPath, bytes);
+    } catch (err) {
+      console.warn("[device-push] failed to persist orientation-healed JPEG:", err);
+    }
   }
 
   const devices = await listDevicesDecrypted();
