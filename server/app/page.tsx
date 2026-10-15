@@ -83,6 +83,11 @@ export default function HomePage() {
                       Open Anyway appears after you try to launch the app once.
                     </figcaption>
                   </figure>
+                  <p className={styles.finePrint}>
+                    On MDM-managed work Macs where <strong>Open Anyway</strong> still blocks the app,
+                    clear quarantine once in Terminal:{" "}
+                    <code>xattr -cr &quot;/Applications/Gattey Photos.app&quot;</code>
+                  </p>
                 </div>
               </details>
             </div>

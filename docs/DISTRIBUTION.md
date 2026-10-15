@@ -78,8 +78,15 @@ Leave Vercel **Production** Git deploys enabled (default). You do not need to ch
 1. Download from [photos.gattey.com](https://photos.gattey.com), unzip, drag **Gattey Photos** to Applications.
 2. Try to open the app once (macOS will block it).
 3. **System Settings → Privacy & Security → Open Anyway**, then open the app again.
+4. **MDM-managed Macs (`DisableOverride = true`)**: Work MDM profiles (such as Kandji setting `DisableOverride = true` in `/Library/Managed Preferences/com.apple.systempolicy.managed.plist`) block **Open Anyway** from clearing `com.apple.quarantine` (`GKQuarantineResolver` fails with `Error -60005`). On those Macs, clear quarantine once in Terminal:
 
-The release zip is ad-hoc signed with `com.apple.security.cs.disable-library-validation` and verified by Sparkle 2 via EdDSA; macOS blocks unknown developers until you approve the app once via **Open Anyway**.
+```bash
+xattr -cr "/Applications/Gattey Photos.app"
+```
+
+After initial approval or `xattr -cr`, subsequent in-place **Sparkle** updates do not attach `com.apple.quarantine` and launch cleanly.
+
+The release zip is ad-hoc signed with `com.apple.security.cs.disable-library-validation` (and stripped of build-machine Xcode toolchain `LC_RPATH` entries before signing) and verified by Sparkle 2 via EdDSA; macOS blocks unknown developers until you approve the app once via **Open Anyway** (or clear quarantine via `xattr -cr`).
 
 ## Notes
 
