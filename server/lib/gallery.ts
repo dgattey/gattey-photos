@@ -24,29 +24,24 @@ export function uploaderIdForName(name: string): UploaderId {
   return `u-${(h >>> 0).toString(16).padStart(8, "0")}`;
 }
 
-/**
- * Repairs the Aug 30 – Sep 8, 2026 uploader merge where a fresh client install defaulted
- * `displayName` to `"Dylan"`, renamed `"Dylan"` → `"Becca"`, and coalesced Becca's uploads into
- * `uploaderIdForName("Dylan")` (`u-49559801`). Restores `u-49559801` → `"Dylan"` and moves
- * Becca's Aug 30 – Sep 8 uploads onto `uploaderIdForName("Becca")` (`u-c5f67375`).
- */
 const BECCA_UPLOADER_NAME = "Becca";
 const MERGED_BECCA_WINDOW_START = "2026-08-30T00:00:00.000Z";
 const MERGED_BECCA_WINDOW_END = "2026-09-09T00:00:00.000Z";
 
+/** One-time migration for the Aug 30 – Sep 8, 2026 default-uploader ("Dylan" → "Becca") manifest collision. */
 function repairMergedDefaultUploader(
   photos: Record<PhotoId, PhotoEntry>,
   uploaders: Record<UploaderId, string>
 ): void {
   const dylanId = uploaderIdForName(DEFAULT_UPLOADER_NAME);
   const beccaId = uploaderIdForName(BECCA_UPLOADER_NAME);
-  if (uploaders[dylanId] !== BECCA_UPLOADER_NAME || uploaders[beccaId] !== undefined) {
-    return;
+  if (uploaders[dylanId] === BECCA_UPLOADER_NAME) {
+    uploaders[dylanId] = DEFAULT_UPLOADER_NAME;
   }
-  uploaders[dylanId] = DEFAULT_UPLOADER_NAME;
   let movedBeccaPhoto = false;
   for (const photo of Object.values(photos)) {
     if (
+      photo.deletedAt === null &&
       photo.uploaderId === dylanId &&
       photo.updatedAt >= MERGED_BECCA_WINDOW_START &&
       photo.updatedAt < MERGED_BECCA_WINDOW_END
@@ -55,7 +50,7 @@ function repairMergedDefaultUploader(
       movedBeccaPhoto = true;
     }
   }
-  if (movedBeccaPhoto) {
+  if (movedBeccaPhoto && !uploaders[beccaId]) {
     uploaders[beccaId] = BECCA_UPLOADER_NAME;
   }
 }
@@ -250,11 +245,7 @@ export function resolveCurrentPhoto(state: GalleryState): {
   return { state: { ...state, currentPhotoId: active[0]! }, dirty: true };
 }
 
-/**
- * Point every uploader id named `fromName` at `toName` (settings rename). One map write; photos
- * untouched. Refuses to overwrite `fromName` when `toName` already belongs to a distinct uploader
- * id in the gallery (switching a client's active user to another existing family member).
- */
+/** Point every uploader id named `fromName` at `toName` (settings rename). No-op if `toName` is already used by another uploader. */
 export function renameUploader(
   state: GalleryState,
   fromName: string,

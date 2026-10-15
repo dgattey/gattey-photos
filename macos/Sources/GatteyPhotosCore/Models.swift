@@ -101,22 +101,20 @@ public struct GalleryState: Codable, Equatable, Sendable {
     private static let mergedBeccaWindowStart = "2026-08-30T00:00:00.000Z"
     private static let mergedBeccaWindowEnd = "2026-09-09T00:00:00.000Z"
 
-    /// Repairs the Aug 30 – Sep 8, 2026 uploader merge where a fresh client install defaulted
-    /// `displayName` to `"Dylan"`, renamed `"Dylan"` → `"Becca"`, and coalesced Becca's uploads into
-    /// `u-49559801` (matches server `repairMergedDefaultUploader`).
+    /// Repairs the Aug 30 – Sep 8, 2026 "Dylan" → "Becca" manifest collision (matches server `repairMergedDefaultUploader`).
     private static func repairMergedDefaultUploader(
         photos: inout [PhotoID: PhotoEntry],
         uploaders: inout [UploaderID: String]
     ) {
         let dylanId = Self.uploaderId(forDisplayName: defaultUploaderDisplayName)
         let beccaId = Self.uploaderId(forDisplayName: beccaUploaderDisplayName)
-        guard uploaders[dylanId] == beccaUploaderDisplayName, uploaders[beccaId] == nil else {
-            return
+        if uploaders[dylanId] == beccaUploaderDisplayName {
+            uploaders[dylanId] = defaultUploaderDisplayName
         }
-        uploaders[dylanId] = defaultUploaderDisplayName
         var movedBeccaPhoto = false
         for (id, var photo) in photos {
-            if photo.uploaderId == dylanId,
+            if !photo.isDeleted,
+               photo.uploaderId == dylanId,
                photo.updatedAt >= mergedBeccaWindowStart,
                photo.updatedAt < mergedBeccaWindowEnd
             {
@@ -125,7 +123,7 @@ public struct GalleryState: Codable, Equatable, Sendable {
                 movedBeccaPhoto = true
             }
         }
-        if movedBeccaPhoto {
+        if movedBeccaPhoto, uploaders[beccaId] == nil {
             uploaders[beccaId] = beccaUploaderDisplayName
         }
     }
@@ -327,8 +325,6 @@ public struct AppSettings: Codable, Sendable {
 
     public static let debugAdvanceIntervalSecondsDefault: Int = GalleryRotationSchedule.defaultDebugAdvanceIntervalSeconds
 
-    /// Fresh installs leave `displayName` empty so the unlock screen requires the user to enter their own name
-    /// instead of inheriting a hardcoded person's name and renaming that person's existing uploads.
     public static let defaultDisplayName = ""
 
     public static var defaults: AppSettings {
