@@ -97,7 +97,7 @@ struct FramesSettingsSection: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(frame.displayName)
                         .font(.subheadline.weight(.medium))
-                    Text(PhotoFormatters.deviceRegisteredAt(frame.registeredAt))
+                    Text(PhotoFormatters.deviceRegisteredAt(frame.registeredAt, registeredBy: frame.registeredBy))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if let err = frame.lastPushError, !err.isEmpty {

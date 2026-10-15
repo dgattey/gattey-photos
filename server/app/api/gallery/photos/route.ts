@@ -7,6 +7,7 @@ import {
   parseBaseUpdatedAt,
   respondGalleryMutation,
 } from "@/lib/gallery-mutation";
+import { normalizePhotoOrientation } from "@/lib/photo-orientation";
 import * as storage from "@/lib/storage";
 
 export async function POST(request: Request) {
@@ -25,10 +26,11 @@ export async function POST(request: Request) {
       return jsonApiError(400, "image required");
     }
 
-    const bytes = Buffer.from(await file.arrayBuffer());
-    if (bytes.length === 0) {
+    const rawBytes = Buffer.from(await file.arrayBuffer());
+    if (rawBytes.length === 0) {
       return jsonApiError(400, "empty image");
     }
+    const bytes = await normalizePhotoOrientation(rawBytes);
 
     const uploadedByField = form.get("uploadedBy");
     const uploadedBy =

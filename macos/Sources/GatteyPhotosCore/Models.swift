@@ -293,7 +293,7 @@ public struct AppSettings: Codable, Sendable {
 
     public static let debugAdvanceIntervalSecondsDefault: Int = GalleryRotationSchedule.defaultDebugAdvanceIntervalSeconds
 
-    public static let defaultDisplayName = "Dylan"
+    public static let defaultDisplayName = ""
 
     public static var defaults: AppSettings {
         AppSettings(
@@ -326,9 +326,7 @@ public struct AppSettings: Codable, Sendable {
         self.debugMode = debugMode
         self.syncSessionToken = syncSessionToken
         self.galleryName = galleryName
-        self.displayName = displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? Self.defaultDisplayName
-            : displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.displayName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         self.previewPaneSplitFraction = Self.clampedPreviewPaneSplitFraction(previewPaneSplitFraction)
         self.galleryGridColumnCount = Self.clampedGalleryGridColumnCount(galleryGridColumnCount)
         self.debugAdvanceIntervalSeconds = Self.clampedDebugAdvanceIntervalSeconds(debugAdvanceIntervalSeconds)
@@ -354,9 +352,7 @@ public struct AppSettings: Codable, Sendable {
         syncSessionToken = try c.decodeIfPresent(String.self, forKey: .syncSessionToken) ?? d.syncSessionToken
         galleryName = try c.decodeIfPresent(String.self, forKey: .galleryName) ?? d.galleryName
         let nameRaw = try c.decodeIfPresent(String.self, forKey: .displayName) ?? Self.defaultDisplayName
-        displayName = nameRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? Self.defaultDisplayName
-            : nameRaw.trimmingCharacters(in: .whitespacesAndNewlines)
+        displayName = nameRaw.trimmingCharacters(in: .whitespacesAndNewlines)
         let splitRaw = try c.decodeIfPresent(Double.self, forKey: .previewPaneSplitFraction)
             ?? Self.previewPaneSplitFractionDefault
         previewPaneSplitFraction = Self.clampedPreviewPaneSplitFraction(splitRaw)
