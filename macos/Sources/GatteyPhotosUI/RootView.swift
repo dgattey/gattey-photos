@@ -86,9 +86,17 @@ struct RootView: View {
                 if store.activePhotos.isEmpty {
                     store.markAwaitingInitialGalleryPull()
                 }
-                async let gallery: Void = store.refresh()
+                let serverAlreadyDown = store.serverLinkStatus == .down
+                if serverAlreadyDown {
+                    store.finishOfflineBootstrap()
+                }
                 async let status: Void = store.updateConnectionStatus()
-                _ = await (gallery, status)
+                if serverAlreadyDown {
+                    _ = await status
+                } else {
+                    async let gallery: Void = store.refresh()
+                    _ = await (gallery, status)
+                }
             }
             #if os(macOS)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willResignActiveNotification)) { _ in
