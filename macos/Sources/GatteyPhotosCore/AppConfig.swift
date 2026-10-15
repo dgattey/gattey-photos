@@ -54,10 +54,6 @@ public enum AppConfig {
             settings.serverBaseURL = expected
             try? writeSettingsToDisk(settings)
         }
-        if settings.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            settings.displayName = AppSettings.defaultDisplayName
-            try? writeSettingsToDisk(settings)
-        }
         return settings
     }
 

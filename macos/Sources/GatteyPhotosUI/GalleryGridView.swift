@@ -889,32 +889,40 @@ private struct GalleryThumbnailSizeToolbarControl: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: "square.grid.3x3")
-                .font(.caption.weight(.medium))
-                .imageScale(.medium)
-                .foregroundStyle(.secondary)
-                .frame(width: Self.iconFrame, height: Self.iconFrame, alignment: .center)
-                .accessibilityHidden(true)
+            stepButton(delta: 1, systemImage: "square.grid.3x3", help: "Smaller thumbnails")
             Slider(
                 value: columnCountSliderBinding,
                 in: Double(AppSettings.galleryGridColumnCountMin) ... Double(AppSettings.galleryGridColumnCountMax),
                 step: 1
             )
             .frame(width: 120)
-            Image(systemName: "square.grid.2x2")
-                .font(.caption.weight(.medium))
-                .imageScale(.medium)
-                .foregroundStyle(.secondary)
-                .frame(width: Self.iconFrame, height: Self.iconFrame, alignment: .center)
-                .accessibilityHidden(true)
+            .help("Photos per row")
+            .accessibilityLabel("Photos per row")
+            .accessibilityValue("\(store.settings.galleryGridColumnCount) columns")
+            stepButton(delta: -1, systemImage: "square.grid.2x2", help: "Larger thumbnails")
         }
         .padding(.leading, Self.leadingPadding)
         .padding(.trailing, Self.trailingPadding)
         .fixedSize(horizontal: true, vertical: false)
-        .help("Photos per row")
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Photos per row")
-        .accessibilityValue("\(store.settings.galleryGridColumnCount) columns")
+    }
+
+    private func stepButton(delta: Int, systemImage: String, help: String) -> some View {
+        let current = store.settings.galleryGridColumnCount
+        let nextCount = AppSettings.clampedGalleryGridColumnCount(current + delta)
+        return Button {
+            persistColumnCount(nextCount)
+        } label: {
+            Image(systemName: systemImage)
+                .font(.caption.weight(.medium))
+                .imageScale(.medium)
+                .foregroundStyle(.secondary)
+                .frame(width: Self.iconFrame, height: Self.iconFrame, alignment: .center)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(nextCount == current)
+        .help(help)
+        .accessibilityLabel(help)
     }
 
     /// Slider left = denser grid (more columns); stored value is photos per row.
@@ -996,34 +1004,21 @@ private struct GalleryMainToolbar: ToolbarContent {
                 Label("Add", systemImage: "plus")
             }
             .disabled(store.isBusy)
+            .help("Add photos")
         }
         ToolbarItem(placement: .primaryAction) {
-            Button {
-                Task { await store.syncAll() }
-            } label: {
-                if store.isSyncing {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Label("Sync", systemImage: "arrow.clockwise")
-                }
-            }
-            .disabled(store.isBusy || store.isSyncing)
+            syncToolbarButton
         }
         if store.settings.debugMode {
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    chrome.showActivityInspector.toggle()
-                } label: {
-                    Label("Activity", systemImage: AppChromeState.activityInspectorSymbolName)
-                }
-                .help(chrome.showActivityInspector ? "Hide activity log" : "Show activity log")
+                activityToolbarButton
             }
         }
         ToolbarItem(placement: .primaryAction) {
             Button("Settings", systemImage: "gearshape") {
                 showSettings.toggle()
             }
+            .help("Settings")
             .sheet(isPresented: $showSettings) {
                 NavigationStack {
                     SettingsPopover()
@@ -1040,15 +1035,7 @@ private struct GalleryMainToolbar: ToolbarContent {
         #endif
     }
 
-    #if os(macOS)
-    @ViewBuilder
-    private var galleryMacOSActionToolbarItems: some View {
-        Button("Add", systemImage: "plus") {
-            Task { await store.uploadFromPanel() }
-        }
-        .modifier(GalleryMacOSToolbarActionButtonStyle())
-        .disabled(store.isBusy)
-
+    private var syncToolbarButton: some View {
         Button {
             Task { await store.syncAll() }
         } label: {
@@ -1059,23 +1046,43 @@ private struct GalleryMainToolbar: ToolbarContent {
                 Label("Sync", systemImage: "arrow.clockwise")
             }
         }
-        .modifier(GalleryMacOSToolbarActionButtonStyle())
         .disabled(store.isBusy || store.isSyncing)
+        .help(store.isSyncing ? "Syncing photos…" : "Sync photos")
+        .accessibilityLabel("Sync photos")
+    }
+
+    private var activityToolbarButton: some View {
+        Button {
+            chrome.showActivityInspector.toggle()
+        } label: {
+            Label("Activity", systemImage: AppChromeState.activityInspectorSymbolName)
+        }
+        .help(chrome.showActivityInspector ? "Hide activity log" : "Show activity log")
+    }
+
+    #if os(macOS)
+    @ViewBuilder
+    private var galleryMacOSActionToolbarItems: some View {
+        Button("Add", systemImage: "plus") {
+            Task { await store.uploadFromPanel() }
+        }
+        .modifier(GalleryMacOSToolbarActionButtonStyle())
+        .disabled(store.isBusy)
+        .help("Add photos")
+
+        syncToolbarButton
+            .modifier(GalleryMacOSToolbarActionButtonStyle())
 
         if store.settings.debugMode {
-            Button {
-                chrome.showActivityInspector.toggle()
-            } label: {
-                Label("Activity", systemImage: AppChromeState.activityInspectorSymbolName)
-            }
-            .modifier(GalleryMacOSToolbarActionButtonStyle())
-            .help(chrome.showActivityInspector ? "Hide activity log" : "Show activity log")
+            activityToolbarButton
+                .modifier(GalleryMacOSToolbarActionButtonStyle())
         }
 
         Button("Settings", systemImage: "gearshape") {
             showSettings.toggle()
         }
         .modifier(GalleryMacOSToolbarActionButtonStyle())
+        .help("Settings")
         .popover(isPresented: $showSettings, arrowEdge: .top) {
             SettingsPopover()
                 .frame(width: 340)

@@ -1,5 +1,6 @@
 import { coalesceUploaders, resolveCurrentPhoto } from "../gallery";
 import { emptyGalleryUpdatedAt } from "../gallery-mutation";
+import { normalizePhotoOrientation } from "../photo-orientation";
 import type {
   CurrentManifest,
   GalleryState,
@@ -135,10 +136,8 @@ export async function putPhotoBytes(
 }
 
 export async function readPhotoBytes(blobPath: string): Promise<Buffer | null> {
-  if (useLocal()) {
-    const local = await import("./local");
-    return local.getBytes(blobPath);
-  }
-  const blob = await import("./blob");
-  return blob.readPhotoBytes(blobPath);
+  const raw = useLocal()
+    ? await (await import("./local")).getBytes(blobPath)
+    : await (await import("./blob")).readPhotoBytes(blobPath);
+  return raw ? normalizePhotoOrientation(raw) : null;
 }

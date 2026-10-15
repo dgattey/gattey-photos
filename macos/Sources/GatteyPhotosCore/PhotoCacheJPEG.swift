@@ -18,6 +18,7 @@ public enum PhotoCacheJPEGError: Error, LocalizedError {
 
 /// Local gallery cache bytes normalized to JPEG for upload and display.
 public enum PhotoCacheJPEG: Sendable {
+    public static let defaultMaxPixelSize = 4096
     private static let jpegMagic: [UInt8] = [0xFF, 0xD8, 0xFF]
 
     public static func isJPEG(_ data: Data) -> Bool {
@@ -35,19 +36,58 @@ public enum PhotoCacheJPEG: Sendable {
         return isJPEG(prefix)
     }
 
-    /// Normalizes an on-disk upload to JPEG when needed (HEIC from iPhone, etc.).
-    public static func normalizedJPEGData(fromFileURL url: URL) throws -> Data {
-        if isJPEGFile(at: url) {
-            return try Data(contentsOf: url, options: .mappedIfSafe)
+    /// Normalizes raw image bytes to an upright JPEG capped at `maxPixelSize` on the long edge
+    /// (converting HEIC, baking any non-1 EXIF/TIFF orientation into the pixel buffer, and downscaling >4096px images).
+    public static func normalizedJPEGData(
+        _ raw: Data,
+        name: String = "image",
+        compressionQuality: Double = 0.88,
+        maxPixelSize: Int = defaultMaxPixelSize
+    ) throws -> Data {
+        guard let source = CGImageSourceCreateWithData(raw as CFData, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let pixelWidth = props[kCGImagePropertyPixelWidth] as? Int,
+              let pixelHeight = props[kCGImagePropertyPixelHeight] as? Int,
+              pixelWidth > 0,
+              pixelHeight > 0
+        else {
+            throw PhotoCacheJPEGError.unsupportedImageFile(name)
         }
-        guard let encoded = encodeAsJPEG(from: url) else {
-            throw PhotoCacheJPEGError.unsupportedImageFile(url.lastPathComponent)
+        let fitsWithinMax = max(pixelWidth, pixelHeight) <= maxPixelSize
+        if isJPEG(raw) && !needsOrientationBake(props) && fitsWithinMax {
+            return raw
+        }
+        guard let encoded = encodeAsJPEG(
+            from: source,
+            compressionQuality: compressionQuality,
+            maxPixelSize: maxPixelSize
+        ) else {
+            throw PhotoCacheJPEGError.unsupportedImageFile(name)
         }
         return encoded
     }
 
+    /// Normalizes an on-disk upload to an upright JPEG when needed (HEIC from iPhone, EXIF orientation 2..8, >4096px, etc.).
+    public static func normalizedJPEGData(
+        fromFileURL url: URL,
+        compressionQuality: Double = 0.88,
+        maxPixelSize: Int = defaultMaxPixelSize
+    ) throws -> Data {
+        let raw = try Data(contentsOf: url, options: .mappedIfSafe)
+        return try normalizedJPEGData(
+            raw,
+            name: url.lastPathComponent,
+            compressionQuality: compressionQuality,
+            maxPixelSize: maxPixelSize
+        )
+    }
+
     /// Reads and normalizes `url` to JPEG on a background worker (leaving the main actor free).
-    public static func normalizedJPEGDataAsync(fromFileURL url: URL) async throws -> Data {
+    public static func normalizedJPEGDataAsync(
+        fromFileURL url: URL,
+        compressionQuality: Double = 0.88,
+        maxPixelSize: Int = defaultMaxPixelSize
+    ) async throws -> Data {
         try await Task.detached(priority: .userInitiated) {
             let accessed = url.startAccessingSecurityScopedResource()
             defer {
@@ -55,12 +95,26 @@ public enum PhotoCacheJPEG: Sendable {
                     url.stopAccessingSecurityScopedResource()
                 }
             }
-            return try normalizedJPEGData(fromFileURL: url)
+            return try normalizedJPEGData(
+                fromFileURL: url,
+                compressionQuality: compressionQuality,
+                maxPixelSize: maxPixelSize
+            )
         }.value
     }
 
-    private static func encodeAsJPEG(from url: URL, maxPixelSize: Int = 4096) -> Data? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+    private static func needsOrientationBake(_ props: [CFString: Any]) -> Bool {
+        let exifOrientation = props[kCGImagePropertyOrientation] as? Int
+        let tiff = props[kCGImagePropertyTIFFDictionary] as? [CFString: Any]
+        let tiffOrientation = tiff?[kCGImagePropertyTIFFOrientation] as? Int
+        return (exifOrientation ?? tiffOrientation ?? 1) > 1
+    }
+
+    private static func encodeAsJPEG(
+        from source: CGImageSource,
+        compressionQuality: Double = 0.88,
+        maxPixelSize: Int = defaultMaxPixelSize
+    ) -> Data? {
         let options: [CFString: Any] = [
             kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
             kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -79,7 +133,7 @@ public enum PhotoCacheJPEG: Sendable {
             1,
             nil
         ) else { return nil }
-        let props: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: 0.88]
+        let props: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: compressionQuality]
         CGImageDestinationAddImage(dest, cgImage, props as CFDictionary)
         guard CGImageDestinationFinalize(dest) else { return nil }
         return out as Data

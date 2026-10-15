@@ -46,14 +46,28 @@ enum PhotoFormatters {
         return formatted
     }
 
-    static func deviceRegisteredAt(_ iso: String) -> String {
+    static func deviceRegisteredAt(_ iso: String, registeredBy: String? = nil) -> String {
+        let by = (registeredBy ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let cacheKey = "\(iso)|\(by)"
         cacheLock.lock()
         defer { cacheLock.unlock() }
-        if let hit = deviceRegisteredAtCache[iso] { return hit }
+        if let hit = deviceRegisteredAtCache[cacheKey] { return hit }
         let date = isoWithFraction.date(from: iso) ?? isoPlain.date(from: iso)
-        let formatted = date.map { "Added \(dateOnly.string(from: $0))" } ?? "Date unknown"
+        let knownOwner = (!by.isEmpty && by.caseInsensitiveCompare("Unknown") != .orderedSame) ? by : nil
+        let formatted: String
+        if let date {
+            if let knownOwner {
+                formatted = "Added \(dateOnly.string(from: date)) by \(knownOwner)"
+            } else {
+                formatted = "Added \(dateOnly.string(from: date))"
+            }
+        } else if let knownOwner {
+            formatted = "Added by \(knownOwner)"
+        } else {
+            formatted = "Date unknown"
+        }
         if deviceRegisteredAtCache.count > 128 { deviceRegisteredAtCache.removeAll(keepingCapacity: true) }
-        deviceRegisteredAtCache[iso] = formatted
+        deviceRegisteredAtCache[cacheKey] = formatted
         return formatted
     }
 
@@ -70,7 +84,9 @@ enum PhotoFormatters {
 
     static func addedBy(_ photo: PhotoEntry, uploaders: [UploaderID: String]) -> String {
         let raw = uploaders[photo.uploaderId]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let name = raw.isEmpty ? defaultUploaderDisplayName : raw
+        let name = (!raw.isEmpty && raw.caseInsensitiveCompare("Unknown") != .orderedSame)
+            ? raw
+            : defaultUploaderDisplayName
         return "Added by \(name)"
     }
 

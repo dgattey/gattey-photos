@@ -38,7 +38,8 @@ public final class AppSession: ObservableObject {
         await store.bootstrapFromDiskIfNeeded()
         await store.reloadSettingsAsync()
         let url = Self.canonicalServerBaseURL(store.settings.serverBaseURL)
-        guard !url.isEmpty, store.settings.syncBearer != nil else {
+        let hasDisplayName = !store.settings.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard !url.isEmpty, hasDisplayName, store.settings.syncBearer != nil else {
             lock(store: store)
             return
         }
