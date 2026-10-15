@@ -112,7 +112,7 @@ public struct SyncClient: Sendable {
     public var bearer: String
     private let session: URLSession
 
-    public init(settings: AppSettings, session: URLSession = .shared) throws {
+    public init(settings: AppSettings, session: URLSession = SyncURLSession.shared) throws {
         let base = settings.serverBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let url = URL(string: base) else {
             throw SyncError.badURL(base)
@@ -174,6 +174,7 @@ public struct SyncClient: Sendable {
         url.append(path: path.hasPrefix("/") ? String(path.dropFirst()) : path)
         var req = URLRequest(url: url)
         req.httpMethod = method
+        req.timeoutInterval = SyncURLSession.requestTimeout
         req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
         if let contentType {
             req.setValue(contentType, forHTTPHeaderField: "Content-Type")

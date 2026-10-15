@@ -43,6 +43,10 @@ public final class AppSession: ObservableObject {
             lock(store: store)
             return
         }
+        guard await Reachability.pingServer(baseURL: url) else {
+            unlockOffline(store: store, serverURL: url)
+            return
+        }
         switch await AuthVerifier.verify(settings: store.settings) {
         case .ok:
             unlockedServerBaseURL = Self.canonicalServerBaseURL(url)
@@ -53,13 +57,18 @@ public final class AppSession: ObservableObject {
         case .unauthorized:
             lock(store: store)
         case .unreachable:
-            unlockedServerBaseURL = Self.canonicalServerBaseURL(url)
-            isUnlocked = true
-            sessionPhase = .unlocked
-            unlockError = nil
-            store.markServerUnreachable()
-            resumePeriodicPull(store: store)
+            unlockOffline(store: store, serverURL: url)
         }
+    }
+
+    private func unlockOffline(store: GalleryStore, serverURL: String) {
+        unlockedServerBaseURL = Self.canonicalServerBaseURL(serverURL)
+        isUnlocked = true
+        sessionPhase = .unlocked
+        unlockError = nil
+        store.markServerUnreachable()
+        store.finishOfflineBootstrap()
+        resumePeriodicPull(store: store)
     }
 
     @discardableResult

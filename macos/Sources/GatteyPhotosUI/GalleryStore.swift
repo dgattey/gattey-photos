@@ -532,6 +532,11 @@ public final class GalleryStore: ObservableObject {
         isAwaitingInitialGalleryPull = true
     }
 
+    /// Clears the first-load spinner when the server is already known to be down.
+    func finishOfflineBootstrap() {
+        isAwaitingInitialGalleryPull = false
+    }
+
     func refresh() async {
         defer { isAwaitingInitialGalleryPull = false }
         await pullFromServer(kind: .foreground)
