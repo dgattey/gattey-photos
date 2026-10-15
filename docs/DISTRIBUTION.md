@@ -16,6 +16,30 @@ Small family install: **self-signed** code signing + Sparkle EdDSA. No Apple Dev
 
 PRs into `main` work the same way: merge → one code push (maybe + one `Release v…` commit). No release branch and no manual steps.
 
+## Pick the version bump in the PR
+
+GitHub fills new PR bodies from `.github/pull_request_template.md`, which ends with a **Release info** section:
+
+```md
+# Release info
+
+- [ ] Major
+- [ ] Minor
+- [x] Patch
+```
+
+To ship a minor or major release, check **Minor** or **Major** before you merge. From 1.0.16, a patch release is 1.0.17, a minor release is 1.1.0, and a major release is 2.0.0. If more than one box is checked, Major wins over Minor and Minor wins over Patch. Only boxes under the `Release info` heading count, so a checked item under `What changed?` does not change the version.
+
+`scripts/next-release-version.sh` computes the version. It reads the current version from the committed `server/public/appcast.xml`, then the live `appcast.xml`, then `macos/VERSION`, and falls back to `1.0.0`. It takes the release type from the first of these sources that has text:
+
+1. `--release-type` or `GATTEY_RELEASE_TYPE`. A manual run of `release-macos.yml` sets it from the **release_type** input.
+2. `--pr-body` or `GATTEY_PR_BODY`.
+3. `pull_request.body` in the event file at `--event-path` or `GITHUB_EVENT_PATH`.
+4. The merged PR for `GITHUB_SHA`, from the GitHub API. Tests set `GATTEY_PULLS_JSON` instead.
+5. The commit message, or `GATTEY_COMMIT_MESSAGE` in tests.
+
+If the first source with text has no checked Major or Minor box, or no source has text, the release is a patch. To pin the current version in a test, pass `--current` or set `GATTEY_CURRENT_VERSION`. `server/lib/next-release-version.test.ts` covers each source.
+
 ## One-time setup
 
 ### EdDSA key
