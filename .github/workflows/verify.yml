@@ -36,7 +36,7 @@ jobs:
           else
             echo "server=false" >> "$GITHUB_OUTPUT"
           fi
-          if echo "$CHANGED" | grep -qE '^(macos/|scripts/(verify|package-macos|package-release|ci-build-macos-release|launch|generate-app-icon|macos-release-inputs-changed)\.sh$|\.github/workflows/(verify|release-macos)\.yml$|skills/macos/)'; then
+          if echo "$CHANGED" | grep -qE '^(macos/|scripts/(verify|package-macos|package-release|ci-build-macos-release|launch|generate-app-icon|macos-release-inputs-changed|next-release-version)\.sh$|\.github/workflows/(verify|release-macos)\.yml$|\.github/pull_request_template\.md$|skills/macos/)'; then
             echo "macos=true" >> "$GITHUB_OUTPUT"
           else
             echo "macos=false" >> "$GITHUB_OUTPUT"

@@ -18,9 +18,16 @@ on:
       - 'scripts/fetch-live-macos-release.sh'
       - '.github/workflows/release-macos.yml'
   workflow_dispatch:
+    inputs:
+      release_type:
+        description: Version bump for this release
+        type: choice
+        options: [patch, minor, major]
+        default: patch
 
 permissions:
   contents: write
+  pull-requests: read
 
 concurrency:
   group: release-macos
@@ -39,6 +46,8 @@ jobs:
 
       - name: Decide whether to rebuild the macOS app
         id: macos
+        env:
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
         run: |
           if ./scripts/macos-release-inputs-changed.sh; then
             echo "build=true" >> "$GITHUB_OUTPUT"
@@ -53,6 +62,8 @@ jobs:
           GATTEY_CODESIGN_P12_BASE64: ${{ secrets.GATTEY_CODESIGN_P12_BASE64 }}
           GATTEY_CODESIGN_P12_PASSWORD: ${{ secrets.GATTEY_CODESIGN_P12_PASSWORD }}
           SPARKLE_ED_PRIVATE_KEY_BASE64: ${{ secrets.SPARKLE_ED_PRIVATE_KEY_BASE64 }}
+          GH_TOKEN: ${{ github.token }}
+          GATTEY_RELEASE_TYPE: ${{ inputs.release_type }}
         run: ./scripts/ci-build-macos-release.sh
 
       - name: Commit and push release artifacts
