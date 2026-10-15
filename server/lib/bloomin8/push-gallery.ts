@@ -32,20 +32,13 @@ export async function pushCurrentPhotoToAllDevices(
     return summary;
   }
 
-  const { bytes, didRotate } = await normalizePhotoOrientation(rawBytes);
-  if (didRotate) {
-    try {
-      await storage.putPhotoBytes(photo.blobPath, bytes);
-    } catch (err) {
-      console.warn("[device-push] failed to persist orientation-healed JPEG:", err);
-    }
-  }
-
   const devices = await listDevicesDecrypted();
   summary.registered = devices.length;
   if (devices.length === 0) {
     return summary;
   }
+
+  const bytes = await normalizePhotoOrientation(rawBytes);
 
   const outcomes = await Promise.all(
     devices.map(async (device) => {

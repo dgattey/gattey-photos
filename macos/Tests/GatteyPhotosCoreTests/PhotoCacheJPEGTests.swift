@@ -6,7 +6,7 @@ import XCTest
 
 final class PhotoCacheJPEGTests: XCTestCase {
     func testIsJPEGRecognizesJFIFHeader() {
-        let jpeg = Data([0xFF, 0xFF, 0xD8].dropFirst() + [0xFF, 0xE0, 0x00, 0x10])
+        let jpeg = Data([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10])
         XCTAssertTrue(PhotoCacheJPEG.isJPEG(jpeg))
     }
 

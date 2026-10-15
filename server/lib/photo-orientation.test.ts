@@ -50,8 +50,7 @@ describe("normalizePhotoOrientation", () => {
   it("returns upright (orientation 1) JPEGs unchanged without re-encoding", async () => {
     const upright = await makeOrientedJpeg(40, 20, 1);
     const result = await normalizePhotoOrientation(upright);
-    assert.equal(result.didRotate, false);
-    assert.equal(result.bytes, upright);
+    assert.equal(result, upright);
   });
 
   it("rotates EXIF orientation 3 (180° upside down, like IMG_0873.jpeg) into upright pixels", async () => {
@@ -59,10 +58,10 @@ describe("normalizePhotoOrientation", () => {
     const beforeMeta = await sharp(upsideDown).metadata();
     assert.equal(beforeMeta.orientation, 3);
 
-    const result = await normalizePhotoOrientation(upsideDown);
-    assert.equal(result.didRotate, true);
+    const rotated = await normalizePhotoOrientation(upsideDown);
+    assert.notEqual(rotated, upsideDown);
 
-    const afterMeta = await sharp(result.bytes).metadata();
+    const afterMeta = await sharp(rotated).metadata();
     assert.equal(afterMeta.width, 40);
     assert.equal(afterMeta.height, 20);
     assert.ok(
@@ -70,7 +69,7 @@ describe("normalizePhotoOrientation", () => {
       `expected cleared orientation, got ${afterMeta.orientation}`
     );
 
-    const { data, info } = await sharp(result.bytes)
+    const { data, info } = await sharp(rotated)
       .raw()
       .toBuffer({ resolveWithObject: true });
     const topLeftRed = data[(5 * info.width + 5) * info.channels]!;
@@ -86,10 +85,10 @@ describe("normalizePhotoOrientation", () => {
     assert.equal(beforeMeta.height, 20);
     assert.equal(beforeMeta.orientation, 6);
 
-    const result = await normalizePhotoOrientation(sideways);
-    assert.equal(result.didRotate, true);
+    const rotated = await normalizePhotoOrientation(sideways);
+    assert.notEqual(rotated, sideways);
 
-    const afterMeta = await sharp(result.bytes).metadata();
+    const afterMeta = await sharp(rotated).metadata();
     assert.equal(afterMeta.width, 20);
     assert.equal(afterMeta.height, 40);
     assert.ok(
@@ -197,12 +196,5 @@ describe("pushCurrentPhotoToAllDevices orientation normalization", () => {
     assert.equal(pushedMeta.width, 20);
     assert.equal(pushedMeta.height, 40);
     assert.ok(pushedMeta.orientation === undefined || pushedMeta.orientation === 1);
-
-    const healedBytes = await storage.readPhotoBytes(blobPath);
-    assert.ok(healedBytes);
-    const healedMeta = await sharp(healedBytes).metadata();
-    assert.equal(healedMeta.width, 20);
-    assert.equal(healedMeta.height, 40);
-    assert.ok(healedMeta.orientation === undefined || healedMeta.orientation === 1);
   });
 });

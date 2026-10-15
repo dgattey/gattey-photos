@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     if (rawBytes.length === 0) {
       return jsonApiError(400, "empty image");
     }
-    const { bytes } = await normalizePhotoOrientation(rawBytes);
+    const bytes = await normalizePhotoOrientation(rawBytes);
 
     const uploadedByField = form.get("uploadedBy");
     const uploadedBy =
