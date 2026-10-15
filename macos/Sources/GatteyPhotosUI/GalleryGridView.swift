@@ -95,7 +95,7 @@ struct GalleryGridView: View {
         .galleryDeleteKeyboard(photoIDs: gridDeleteKeyPhotoIDs)
         .galleryOpenLightboxKeyboard(
             isEnabled: galleryGridKeyboardEnabled,
-            photoOrder: store.activePhotos.map(\.id)
+            photoOrder: store.activePhotoIDs
         )
         .galleryClearSelectionKeyboard(isEnabled: galleryGridKeyboardEnabled)
         .galleryArrowSelectionKeyboard(isEnabled: galleryGridKeyboardEnabled)
@@ -248,7 +248,7 @@ struct GalleryGridView: View {
             id,
             append: modifiers.append,
             rangeSelect: modifiers.rangeSelect,
-            photoOrder: store.activePhotos.map(\.id)
+            photoOrder: store.activePhotoIDs
         )
         if !store.selection.isLightboxOpen {
             syncGridKeyboardFocus()
@@ -293,7 +293,7 @@ struct GalleryGridView: View {
 
     private func handleReorderDrop(draggedIDs: [String], insertionIndex: Int) -> Bool {
         guard let draggedID = draggedIDs.first else { return false }
-        let order = store.activePhotos.map(\.id)
+        let order = store.activePhotoIDs
         let next = PhotoManifestReorder.applyingMove(
             draggedID: draggedID,
             insertionIndex: insertionIndex,
@@ -405,6 +405,8 @@ private struct GalleryPhotoGrid: View {
 
     @ViewBuilder
     private func gridItem(index: Int, photo: PhotoEntry) -> some View {
+        let showsInsertionBefore = dropInsertionIndex == index
+        let showsInsertionAfter = dropInsertionIndex == index + 1
         #if os(macOS)
         PhotoGridItem(
             photo: photo,
@@ -413,14 +415,17 @@ private struct GalleryPhotoGrid: View {
             thumbAspectRatio: thumbAspectRatio,
             thumbMaxPixelSize: thumbMaxPixelSize,
             isCurrentOnDevice: currentPhotoID == photo.id,
-            dropInsertionIndex: dropInsertionIndex,
+            showsInsertionLineBefore: showsInsertionBefore,
+            showsInsertionLineAfter: showsInsertionAfter,
             onSelectPhoto: onSelectPhoto,
             onOpenLightbox: onOpenLightbox,
             onReorderDrop: onReorderDrop,
             onFileDrop: onFileDrop,
             onFileDropTargeted: onFileDropTargeted,
             onDropInsertionIndexChange: { gap in
-                dropInsertionIndex = gap
+                if dropInsertionIndex != gap {
+                    dropInsertionIndex = gap
+                }
             }
         )
         #else
@@ -431,12 +436,15 @@ private struct GalleryPhotoGrid: View {
             thumbAspectRatio: thumbAspectRatio,
             thumbMaxPixelSize: thumbMaxPixelSize,
             isCurrentOnDevice: currentPhotoID == photo.id,
-            dropInsertionIndex: dropInsertionIndex,
+            showsInsertionLineBefore: showsInsertionBefore,
+            showsInsertionLineAfter: showsInsertionAfter,
             onSelectPhoto: onSelectPhoto,
             onOpenLightbox: onOpenLightbox,
             onReorderDrop: onReorderDrop,
             onDropInsertionIndexChange: { gap in
-                dropInsertionIndex = gap
+                if dropInsertionIndex != gap {
+                    dropInsertionIndex = gap
+                }
             }
         )
         #endif
@@ -453,7 +461,8 @@ private struct PhotoGridItem: View {
     let thumbAspectRatio: CGFloat
     let thumbMaxPixelSize: Int
     var isCurrentOnDevice: Bool = false
-    let dropInsertionIndex: Int?
+    let showsInsertionLineBefore: Bool
+    let showsInsertionLineAfter: Bool
     let onSelectPhoto: (PhotoID, GridTapModifiers) -> Void
     let onOpenLightbox: (PhotoID) -> Void
     let onReorderDrop: ([String], Int) -> Bool
@@ -465,14 +474,6 @@ private struct PhotoGridItem: View {
 
     private var isSelected: Bool {
         selection.isSelected(photo.id)
-    }
-
-    private var showsInsertionLineBefore: Bool {
-        dropInsertionIndex == photoIndex
-    }
-
-    private var showsInsertionLineAfter: Bool {
-        dropInsertionIndex == photoIndex + 1
     }
 
     var body: some View {

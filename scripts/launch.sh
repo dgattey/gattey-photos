@@ -35,7 +35,7 @@ launch_macos() {
     pkill -9 -x GatteyPhotos 2>/dev/null || true
     sleep 0.5
   fi
-  "$ROOT/scripts/package-macos.sh"
+  GATTEY_OPEN_BACKGROUND="${GATTEY_OPEN_BACKGROUND:-1}" "$ROOT/scripts/package-macos.sh"
 }
 
 launch_ios_simulator() {

@@ -20,6 +20,7 @@ BUILD_NUMBER="${GATTEY_BUILD_NUMBER:-$(date +%s)}"
 SIGN_ID="${GATTEY_SIGN_IDENTITY:--}"
 SIGN_ENTITLEMENTS="${GATTEY_SIGN_ENTITLEMENTS:-$ROOT/macos/GatteyPhotos.local.entitlements}"
 OPEN_AFTER="${GATTEY_OPEN_AFTER:-1}"
+OPEN_BACKGROUND="${GATTEY_OPEN_BACKGROUND:-0}"
 
 # Sparkle auto-update feed, hosted on the app's own server (server/public/appcast.xml on Vercel).
 # The public EdDSA key is committed (it is public) once scripts/generate-sparkle-key.sh has been
@@ -190,5 +191,9 @@ echo "  CFBundleShortVersionString=${SHORT_VERSION}  CFBundleVersion=${BUILD_NUM
 echo "  Sparkle: feed=${SU_FEED_URL} publicKey=$([[ -n "$SU_PUBLIC_KEY" ]] && echo present || echo MISSING)"
 echo "  Launch only this bundle (not /Applications): $APP"
 if [[ "$OPEN_AFTER" == "1" ]]; then
-  open "$APP"
+  if [[ "$OPEN_BACKGROUND" == "1" ]]; then
+    open -g "$APP"
+  else
+    open "$APP"
+  fi
 fi

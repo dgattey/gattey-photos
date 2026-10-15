@@ -70,8 +70,51 @@ public final class GalleryStore: ObservableObject {
         case periodic
     }
 
+    private struct DerivedStateCache {
+        var updatedAt: String = ""
+        var order: [PhotoID] = []
+        var photoCount: Int = -1
+        var activePhotos: [PhotoEntry] = []
+        var activePhotoIDs: [PhotoID] = []
+    }
+
+    private struct RotationPlanCache {
+        var activePhotoIDs: [PhotoID] = []
+        var currentPhotoID: PhotoID?
+        var debugMode: Bool = false
+        var debugAdvanceIntervalSeconds: Int = -1
+        var nextCronBoundary: Date = .distantPast
+        var plan: GalleryRotationPlan?
+        var formattedTagByPhotoID: [PhotoID: String] = [:]
+    }
+
+    private var derivedCache = DerivedStateCache()
+    private var rotationCache = RotationPlanCache()
+
+    private func ensureDerivedCache() {
+        if derivedCache.updatedAt == state.updatedAt,
+           derivedCache.photoCount == state.photos.count,
+           derivedCache.order == state.order {
+            return
+        }
+        let active = state.activePhotos()
+        derivedCache = DerivedStateCache(
+            updatedAt: state.updatedAt,
+            order: state.order,
+            photoCount: state.photos.count,
+            activePhotos: active,
+            activePhotoIDs: active.map(\.id)
+        )
+    }
+
     var activePhotos: [PhotoEntry] {
-        state.activePhotos()
+        ensureDerivedCache()
+        return derivedCache.activePhotos
+    }
+
+    var activePhotoIDs: [PhotoID] {
+        ensureDerivedCache()
+        return derivedCache.activePhotoIDs
     }
 
     var currentPhoto: PhotoEntry? {
@@ -86,17 +129,49 @@ public final class GalleryStore: ObservableObject {
         state.canSetAsCurrent(photoID: photoID)
     }
 
-    /// Next cron boundary and per-photo slot starts for the active gallery order.
-    var rotationPlan: GalleryRotationPlan? {
-        let order = activePhotos.map(\.id)
-        return GalleryRotationSchedule.plan(
+    private func ensureRotationPlanCache(now: Date = Date()) {
+        let order = activePhotoIDs
+        let currentID = state.currentPhotoId
+        let debug = settings.debugMode
+        let interval = settings.debugAdvanceIntervalSeconds
+        if rotationCache.activePhotoIDs == order,
+           rotationCache.currentPhotoID == currentID,
+           rotationCache.debugMode == debug,
+           rotationCache.debugAdvanceIntervalSeconds == interval,
+           now < rotationCache.nextCronBoundary {
+            return
+        }
+        let plan = GalleryRotationSchedule.plan(
             activeOrder: order,
-            currentPhotoID: state.currentPhotoId,
+            currentPhotoID: currentID,
+            now: now,
             kind: GalleryRotationSchedule.kind(
-                debugMode: settings.debugMode,
-                debugAdvanceIntervalSeconds: settings.debugAdvanceIntervalSeconds
+                debugMode: debug,
+                debugAdvanceIntervalSeconds: interval
             )
         )
+        var tags: [PhotoID: String] = [:]
+        if let plan {
+            tags.reserveCapacity(plan.showingStartByPhotoID.count)
+            for (id, date) in plan.showingStartByPhotoID {
+                tags[id] = PhotoFormatters.showingStartDate(date)
+            }
+        }
+        rotationCache = RotationPlanCache(
+            activePhotoIDs: order,
+            currentPhotoID: currentID,
+            debugMode: debug,
+            debugAdvanceIntervalSeconds: interval,
+            nextCronBoundary: plan?.nextCron ?? now.addingTimeInterval(60),
+            plan: plan,
+            formattedTagByPhotoID: tags
+        )
+    }
+
+    /// Next cron boundary and per-photo slot starts for the active gallery order.
+    var rotationPlan: GalleryRotationPlan? {
+        ensureRotationPlanCache()
+        return rotationCache.plan
     }
 
     func showingTag(for photoID: PhotoID) -> String? {
@@ -105,8 +180,8 @@ public final class GalleryStore: ObservableObject {
         if state.currentPhotoId == photoID {
             return PhotoFormatters.showingTodayTag
         }
-        guard let date = rotationPlan?.showingStartByPhotoID[photoID] else { return nil }
-        return PhotoFormatters.showingStartDate(date)
+        ensureRotationPlanCache()
+        return rotationCache.formattedTagByPhotoID[photoID]
     }
 
     func devicePreviewCaption(for photo: PhotoEntry) -> String {
@@ -160,12 +235,15 @@ public final class GalleryStore: ObservableObject {
         downloadMissing: Bool = false
     ) async throws {
         let next = response.state
-        if downloadMissing {
-            let sync = try client ?? makeSyncClient()
-            try await sync.downloadMissing(for: next)
-        }
         applyState(next)
         try AppConfig.saveLocalState(state)
+        if downloadMissing {
+            let sync = try client ?? makeSyncClient()
+            let snapshot = state
+            Task {
+                try? await sync.downloadMissing(for: snapshot)
+            }
+        }
     }
 
     /// Mutation with `baseUpdatedAt`; on 409 applies server body and retries (up to 3 attempts).
@@ -489,12 +567,16 @@ public final class GalleryStore: ObservableObject {
                 }
                 applyCurrentPhoto(token)
             } else {
-                // Foreground / manual: always fetch the latest catalog.
-                if case .modified(let response) = try await client.fetchGallery() {
+                // Foreground / manual: conditionally fetch catalog when we already have local photos;
+                // only poll /api/gallery/current separately on 304 Not Modified.
+                let conditionalETag = activePhotos.isEmpty ? nil : state.updatedAt
+                switch try await client.fetchGallery(ifNoneMatch: conditionalETag) {
+                case .modified(let response):
                     try await commit(response, client: client, downloadMissing: true)
-                }
-                if let token = try? await client.fetchCurrentPhoto() {
-                    applyCurrentPhoto(token)
+                case .notModified:
+                    if let token = try? await client.fetchCurrentPhoto() {
+                        applyCurrentPhoto(token)
+                    }
                 }
             }
             notePullSuccess()
@@ -713,20 +795,20 @@ public final class GalleryStore: ObservableObject {
                 }
                 let data = try PhotoCacheJPEG.normalizedJPEGData(fromFileURL: url)
                 let name = url.lastPathComponent
-                let beforeIDs = Set(state.activePhotos().map(\.id))
-                let isLast = index == uploads.count - 1
-                try await mutateGallery(
-                    client: client,
-                    downloadMissing: isLast
-                ) { base in
-                    try await client.uploadPhoto(
-                        jpegData: data,
-                        filename: name,
-                        uploadedBy: settings.displayName,
-                        baseUpdatedAt: base
-                    )
-                }
-                let newIDs = Set(state.activePhotos().map(\.id)).subtracting(beforeIDs)
+        let beforeIDs = Set(activePhotoIDs)
+        let isLast = index == uploads.count - 1
+        try await mutateGallery(
+            client: client,
+            downloadMissing: isLast
+        ) { base in
+            try await client.uploadPhoto(
+                jpegData: data,
+                filename: name,
+                uploadedBy: settings.displayName,
+                baseUpdatedAt: base
+            )
+        }
+        let newIDs = Set(activePhotoIDs).subtracting(beforeIDs)
                 guard !newIDs.isEmpty else {
                     log.log(
                         .gallery,
@@ -788,7 +870,7 @@ public final class GalleryStore: ObservableObject {
             return
         }
         await run(label: "Reorder", category: .gallery) {
-            let activeIDs = Set(state.activePhotos().map(\.id))
+            let activeIDs = Set(activePhotoIDs)
             guard Set(order) == activeIDs else {
                 log.log(
                     .gallery,

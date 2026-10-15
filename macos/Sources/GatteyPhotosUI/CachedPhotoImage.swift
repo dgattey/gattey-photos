@@ -30,13 +30,20 @@ final class PhotoImageModel: ObservableObject {
         loadedPhotoID = photoID
         loadedMaxPixelSize = maxPixelSize
         loadTask?.cancel()
+        let url = thumbnailWidth.map { AppConfig.thumbnailCacheURL(for: photoID, width: $0) }
+            ?? AppConfig.cacheURL(for: photoID)
+        if let memoryHit = ImageDownsampler.cachedThumbnail(from: url, maxPixelSize: maxPixelSize) {
+            image = memoryHit
+            isLoading = false
+            loadFailed = false
+            loadTask = nil
+            return
+        }
         if photoChanged {
             image = nil
             loadFailed = false
         }
         isLoading = image == nil
-        let url = thumbnailWidth.map { AppConfig.thumbnailCacheURL(for: photoID, width: $0) }
-            ?? AppConfig.cacheURL(for: photoID)
         let requestedID = photoID
         let requestedSize = maxPixelSize
         loadTask = Task {

@@ -3,7 +3,7 @@ import AppKit
 import CoreImage.CIFilterBuiltins
 import SwiftUI
 
-enum VariableBlurDirection {
+enum VariableBlurDirection: Hashable {
     case blurredTopClearBottom
     case blurredBottomClearTop
 }
@@ -29,7 +29,22 @@ struct VariableBlurView: NSViewRepresentable {
 }
 
 final class VariableBlurNSView: NSView {
+    private struct AppliedConfiguration: Equatable {
+        let maxBlurRadius: CGFloat
+        let direction: VariableBlurDirection
+        let startOffset: CGFloat
+    }
+
+    private struct GradientCacheKey: Hashable {
+        let direction: VariableBlurDirection
+        let startOffsetMillis: Int
+    }
+
+    private static let sharedCIContext = CIContext(options: [.useSoftwareRenderer: false])
+    private static var gradientMaskCache: [GradientCacheKey: CGImage] = [:]
+
     private let backdropLayer: CALayer
+    private var appliedConfiguration: AppliedConfiguration?
 
     init(maxBlurRadius: CGFloat, direction: VariableBlurDirection, startOffset: CGFloat) {
         if let backdropClass = NSClassFromString(["CA", "Backdrop", "Layer"].joined()) as? CALayer.Type {
@@ -59,11 +74,18 @@ final class VariableBlurNSView: NSView {
     }
 
     func apply(maxBlurRadius: CGFloat, direction: VariableBlurDirection, startOffset: CGFloat) {
+        let next = AppliedConfiguration(
+            maxBlurRadius: maxBlurRadius,
+            direction: direction,
+            startOffset: startOffset
+        )
+        guard appliedConfiguration != next else { return }
         guard let filter = Self.makeVariableBlurFilter(
             maxBlurRadius: maxBlurRadius,
             direction: direction,
             startOffset: startOffset
         ) else { return }
+        appliedConfiguration = next
         backdropLayer.filters = [filter]
     }
 
@@ -93,6 +115,13 @@ final class VariableBlurNSView: NSView {
         startOffset: CGFloat,
         direction: VariableBlurDirection
     ) -> CGImage? {
+        let key = GradientCacheKey(
+            direction: direction,
+            startOffsetMillis: Int((startOffset * 1000).rounded())
+        )
+        if let cached = gradientMaskCache[key] {
+            return cached
+        }
         // Smoothstep falloff (not linear) so the blur tapers gradually with no hard edge.
         let gradient = CIFilter.smoothLinearGradient()
         gradient.color0 = CIColor.black
@@ -105,8 +134,11 @@ final class VariableBlurNSView: NSView {
             gradient.point0 = CGPoint(x: 0, y: 0)
             gradient.point1 = CGPoint(x: 0, y: height - startOffset * height)
         }
-        guard let output = gradient.outputImage else { return nil }
-        return CIContext().createCGImage(output, from: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let output = gradient.outputImage,
+              let image = sharedCIContext.createCGImage(output, from: CGRect(x: 0, y: 0, width: width, height: height))
+        else { return nil }
+        gradientMaskCache[key] = image
+        return image
     }
 }
 #endif
