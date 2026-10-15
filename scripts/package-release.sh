@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Build a signed macOS release and write Sparkle artifacts to server/public/.
-# CI commits server/public/; Vercel Git deploys. Requires self-signed cert in keychain.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=scripts/lib/signing.sh
@@ -39,6 +37,8 @@ if [[ -z "${GATTEY_BUILD_NUMBER:-}" && -f "$PUBLIC_DIR/appcast.xml" ]]; then
 fi
 
 GATTEY_DIST_DIR="$STAGE" \
+GATTEY_BUILD_CONFIG=release \
+GATTEY_FORCE_RESIGN=1 \
 GATTEY_APP_SHORT_VERSION="$VERSION" \
 GATTEY_BUILD_NUMBER="$BUILD_NUMBER" \
 GATTEY_SIGN_IDENTITY="$SIGN_ID" \

@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# Build dist/Gattey Photos.app (Swift release binaries only).
-#
-# Dev defaults reproduce the old behavior (ad-hoc signature, timestamp build number, opens the app).
-# scripts/package-release.sh reuses this by overriding the GATTEY_* env vars below.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p "$HOME/Library/Application Support/GatteyPhotos"
@@ -15,54 +11,56 @@ MACOS_BIN="$CONTENTS/MacOS"
 RESOURCES="$CONTENTS/Resources"
 FRAMEWORKS="$CONTENTS/Frameworks"
 
+BUILD_CONFIG="${GATTEY_BUILD_CONFIG:-debug}"
 SHORT_VERSION="${GATTEY_APP_SHORT_VERSION:-1.0.0}"
 BUILD_NUMBER="${GATTEY_BUILD_NUMBER:-$(date +%s)}"
 SIGN_ID="${GATTEY_SIGN_IDENTITY:--}"
 SIGN_ENTITLEMENTS="${GATTEY_SIGN_ENTITLEMENTS:-$ROOT/macos/GatteyPhotos.local.entitlements}"
 OPEN_AFTER="${GATTEY_OPEN_AFTER:-1}"
+OPEN_BACKGROUND="${GATTEY_OPEN_BACKGROUND:-1}"
+FORCE_RESIGN="${GATTEY_FORCE_RESIGN:-0}"
+if [[ "$BUILD_CONFIG" == "release" || "$SIGN_ID" != "-" ]]; then
+  FORCE_RESIGN=1
+fi
 
-# Sparkle auto-update feed, hosted on the app's own server (server/public/appcast.xml on Vercel).
-# The public EdDSA key is committed (it is public) once scripts/generate-sparkle-key.sh has been
-# run; without it the app ships update-capable but inert (AppUpdaterModel does not start the
-# updater, so there is no "improperly configured" alert).
 SU_FEED_URL="${GATTEY_SU_FEED_URL:-https://photos.gattey.com/appcast.xml}"
 SU_PUBLIC_KEY=""
 if [[ -f "$ROOT/macos/sparkle-public-key.txt" ]]; then
   SU_PUBLIC_KEY="$(tr -d '[:space:]' <"$ROOT/macos/sparkle-public-key.txt")"
 fi
 
-# codesign with the configured identity, splitting any extra options (e.g. --options runtime).
 csign() {
+  local extra_opts=()
   if [[ -n "${GATTEY_CODESIGN_EXTRA_OPTS:-}" ]]; then
-    # shellcheck disable=SC2086
-    codesign --force --sign "$SIGN_ID" ${GATTEY_CODESIGN_EXTRA_OPTS} "$@"
+    read -r -a extra_opts <<<"$GATTEY_CODESIGN_EXTRA_OPTS"
+    codesign --force --sign "$SIGN_ID" "${extra_opts[@]}" "$@"
   else
     codesign --force --sign "$SIGN_ID" "$@"
   fi
 }
 
 chmod +x "$ROOT/scripts/generate-app-icon.sh"
-"$ROOT/scripts/generate-app-icon.sh"
+CAR_OUT="$MACOS/Assets.car"
+if [[ "$FORCE_RESIGN" == "1" || ! -f "$CAR_OUT" ]] || [[ -n "$(find "$MACOS/AppIcon.icon" -newer "$CAR_OUT" -print -quit 2>/dev/null || true)" ]]; then
+  "$ROOT/scripts/generate-app-icon.sh"
+fi
 
 cd "$MACOS"
-APP_BIN=".build/release/GatteyPhotos"
-if [[ -f "$APP_BIN" ]]; then
-  stale="$(find Sources/GatteyPhotosApp Sources/GatteyPhotosCore Sources/GatteyPhotosUI -name '*.swift' -newer "$APP_BIN" -print -quit 2>/dev/null || true)"
-  if [[ -n "${stale:-}" ]]; then
-    echo "package-macos: app sources newer than binary — forcing GatteyPhotos rebuild" >&2
-    rm -f "$APP_BIN"
-  fi
+swift build --build-system native -c "$BUILD_CONFIG" --product GatteyPhotos
+BIN_DIR="$MACOS/.build/$BUILD_CONFIG"
+if [[ ! -f "$BIN_DIR/GatteyPhotos" ]]; then
+  BIN_DIR="$(swift build --build-system native -c "$BUILD_CONFIG" --show-bin-path)"
 fi
-swift build -c release --product GatteyPhotos
+APP_BIN="$BIN_DIR/GatteyPhotos"
 if [[ ! -f "$APP_BIN" ]]; then
   echo "package-macos: missing $APP_BIN after swift build" >&2
   exit 1
 fi
 
-# Locate the Sparkle framework SwiftPM produced (copied next to the product, or in the artifact bundle).
 SPARKLE_SRC=""
 for cand in \
-  "$MACOS/.build/release/Sparkle.framework" \
+  "$BIN_DIR/Sparkle.framework" \
+  "$MACOS/.build/$BUILD_CONFIG/Sparkle.framework" \
   "$MACOS"/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-*/Sparkle.framework; do
   if [[ -d "$cand" ]]; then SPARKLE_SRC="$cand"; break; fi
 done
@@ -71,27 +69,34 @@ if [[ -z "$SPARKLE_SRC" ]]; then
   exit 1
 fi
 
-rm -rf "$APP"
+if [[ "$FORCE_RESIGN" == "1" ]]; then
+  rm -rf "$APP"
+fi
 mkdir -p "$MACOS_BIN" "$RESOURCES" "$FRAMEWORKS"
 
 cp "$APP_BIN" "$MACOS_BIN/GatteyPhotos"
 for bundle in GatteyPhotos_GatteyPhotosApp GatteyPhotos_GatteyPhotosUI; do
-  src=".build/release/${bundle}.bundle"
+  src="$BIN_DIR/${bundle}.bundle"
   if [[ -d "$src" ]]; then
     rm -rf "$MACOS_BIN/${bundle}.bundle"
     cp -R "$src" "$MACOS_BIN/"
   fi
 done
-cp "$ROOT/macos/Assets.car" "$RESOURCES/Assets.car"
-UI_RESOURCE_BUNDLE=".build/release/GatteyPhotos_GatteyPhotosUI.bundle"
+cp "$CAR_OUT" "$RESOURCES/Assets.car"
+UI_RESOURCE_BUNDLE="$BIN_DIR/GatteyPhotos_GatteyPhotosUI.bundle"
 if [[ -f "$UI_RESOURCE_BUNDLE/unlock-welcome.png" ]]; then
   cp "$UI_RESOURCE_BUNDLE/unlock-welcome.png" "$RESOURCES/unlock-welcome.png"
 fi
 chmod +x "$MACOS_BIN/GatteyPhotos"
 
 # Embed Sparkle.framework. ditto preserves the framework symlinks codesign needs.
-rm -rf "$FRAMEWORKS/Sparkle.framework"
-ditto "$SPARKLE_SRC" "$FRAMEWORKS/Sparkle.framework"
+FW="$FRAMEWORKS/Sparkle.framework"
+SPARKLE_CHANGED=0
+if [[ "$FORCE_RESIGN" == "1" || ! -d "$FW" ]]; then
+  rm -rf "$FW"
+  ditto "$SPARKLE_SRC" "$FW"
+  SPARKLE_CHANGED=1
+fi
 
 SU_PUBLIC_KEY_PLIST=""
 if [[ -n "$SU_PUBLIC_KEY" ]]; then
@@ -165,30 +170,29 @@ done
 
 # Sign Sparkle inside-out (XPC services, helper, Updater.app, then the framework). Never --deep:
 # it corrupts the XPC signatures. Order matters so the outer signature seals valid inner ones.
-FW="$FRAMEWORKS/Sparkle.framework"
-FWV="$FW/Versions/B"
-[[ -e "$FWV/XPCServices/Installer.xpc" ]] && csign "$FWV/XPCServices/Installer.xpc"
-if [[ -e "$FWV/XPCServices/Downloader.xpc" ]]; then
-  # Downloader.xpc ships sandbox/network entitlements that must survive re-signing.
-  if [[ -n "${GATTEY_CODESIGN_EXTRA_OPTS:-}" ]]; then
-    # shellcheck disable=SC2086
-    codesign --force --sign "$SIGN_ID" ${GATTEY_CODESIGN_EXTRA_OPTS} --preserve-metadata=entitlements "$FWV/XPCServices/Downloader.xpc"
-  else
-    codesign --force --sign "$SIGN_ID" --preserve-metadata=entitlements "$FWV/XPCServices/Downloader.xpc"
+if [[ "$SPARKLE_CHANGED" == "1" ]]; then
+  FWV="$FW/Versions/B"
+  [[ -e "$FWV/XPCServices/Installer.xpc" ]] && csign "$FWV/XPCServices/Installer.xpc"
+  if [[ -e "$FWV/XPCServices/Downloader.xpc" ]]; then
+    # Downloader.xpc ships sandbox/network entitlements that must survive re-signing.
+    csign --preserve-metadata=entitlements "$FWV/XPCServices/Downloader.xpc"
   fi
+  [[ -e "$FWV/Autoupdate" ]] && csign "$FWV/Autoupdate"
+  [[ -e "$FWV/Updater.app" ]] && csign "$FWV/Updater.app"
+  csign "$FW"
 fi
-[[ -e "$FWV/Autoupdate" ]] && csign "$FWV/Autoupdate"
-[[ -e "$FWV/Updater.app" ]] && csign "$FWV/Updater.app"
-csign "$FW"
 
-# Dist builds use local entitlements only (associated-domains needs an Apple Developer ID).
 csign --entitlements "$SIGN_ENTITLEMENTS" "$APP"
 
 APP_SIZE="$(du -sh "$APP" | cut -f1)"
 echo "Packaged: $APP ($APP_SIZE)"
-echo "  CFBundleShortVersionString=${SHORT_VERSION}  CFBundleVersion=${BUILD_NUMBER}  identity=${SIGN_ID}"
+echo "  CFBundleShortVersionString=${SHORT_VERSION}  CFBundleVersion=${BUILD_NUMBER}  config=${BUILD_CONFIG}  identity=${SIGN_ID}"
 echo "  Sparkle: feed=${SU_FEED_URL} publicKey=$([[ -n "$SU_PUBLIC_KEY" ]] && echo present || echo MISSING)"
 echo "  Launch only this bundle (not /Applications): $APP"
 if [[ "$OPEN_AFTER" == "1" ]]; then
-  open "$APP"
+  if [[ "$OPEN_BACKGROUND" == "1" ]]; then
+    open -g -j "$APP"
+  else
+    open "$APP"
+  fi
 fi

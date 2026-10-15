@@ -49,7 +49,8 @@ export function coalesceUploaders(
 
 /**
  * Find the uploader id already mapped to `name`, or register `newId` for it. Keeps one id per
- * display name so a person's uploads share an id and a single rename covers them all.
+ * display name so a person's uploads share an id and a single rename covers them all. Never
+ * overwrites an existing uploader id that is already mapped to a different display name.
  */
 export function ensureUploaderId(
   state: GalleryState,
@@ -57,12 +58,26 @@ export function ensureUploaderId(
   newId: UploaderId
 ): { state: GalleryState; uploaderId: UploaderId } {
   const trimmed = name.trim() || DEFAULT_UPLOADER_NAME;
+  if (state.uploaders[newId] === trimmed) {
+    return { state, uploaderId: newId };
+  }
   for (const [id, mapped] of Object.entries(state.uploaders)) {
     if (mapped === trimmed) return { state, uploaderId: id };
   }
+  let targetId = newId;
+  if (state.uploaders[targetId] !== undefined && state.uploaders[targetId] !== trimmed) {
+    let suffix = 2;
+    while (
+      state.uploaders[`${newId}-${suffix}`] !== undefined &&
+      state.uploaders[`${newId}-${suffix}`] !== trimmed
+    ) {
+      suffix += 1;
+    }
+    targetId = `${newId}-${suffix}`;
+  }
   return {
-    state: { ...state, uploaders: { ...state.uploaders, [newId]: trimmed } },
-    uploaderId: newId,
+    state: { ...state, uploaders: { ...state.uploaders, [targetId]: trimmed } },
+    uploaderId: targetId,
   };
 }
 
@@ -198,7 +213,7 @@ export function resolveCurrentPhoto(state: GalleryState): {
   return { state: { ...state, currentPhotoId: active[0]! }, dirty: true };
 }
 
-/** Point every uploader id named `fromName` at `toName` (settings rename). One map write; photos untouched. */
+/** Point every uploader id named `fromName` at `toName` (settings rename). No-op if `toName` is already used by another uploader. */
 export function renameUploader(
   state: GalleryState,
   fromName: string,
@@ -207,6 +222,15 @@ export function renameUploader(
   const from = fromName.trim();
   const to = toName.trim();
   if (!from || !to || from === to) return state;
+
+  const toLower = to.toLowerCase();
+  const fromLower = from.toLowerCase();
+  if (toLower !== fromLower) {
+    const targetExistsElsewhere = Object.values(state.uploaders).some(
+      (name) => name !== from && name.trim().toLowerCase() === toLower
+    );
+    if (targetExistsElsewhere) return state;
+  }
 
   let dirty = false;
   const uploaders = { ...state.uploaders };

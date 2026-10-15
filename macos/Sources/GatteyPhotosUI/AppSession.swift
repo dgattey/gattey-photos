@@ -37,7 +37,8 @@ public final class AppSession: ObservableObject {
         guard sessionPhase == .checking else { return }
         store.reloadSettings()
         let url = Self.canonicalServerBaseURL(store.settings.serverBaseURL)
-        guard !url.isEmpty, store.settings.syncBearer != nil else {
+        let hasDisplayName = !store.settings.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard !url.isEmpty, hasDisplayName, store.settings.syncBearer != nil else {
             lock(store: store)
             return
         }

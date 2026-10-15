@@ -295,7 +295,6 @@ struct UnlockView: View {
             session.unlockError = "Enter your name so uploads can be attributed to you."
             return
         }
-        store.settings.displayName = trimmedName
         isUnlocking = true
         defer { isUnlocking = false }
         let ok = await session.unlock(password: password, store: store)
@@ -303,7 +302,8 @@ struct UnlockView: View {
             password = ""
             let setupPaste = bloomin8SetupText.trimmingCharacters(in: .whitespacesAndNewlines)
             bloomin8SetupText = ""
-            store.saveSettings()
+            store.settings.displayName = trimmedName
+            store.saveSettings(propagateDisplayNameChange: false)
             if !setupPaste.isEmpty {
                 do {
                     try await store.registerFrame(setupText: setupPaste)

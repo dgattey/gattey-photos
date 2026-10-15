@@ -35,10 +35,6 @@ public enum AppConfig {
             settings.serverBaseURL = expected
             try? saveSettings(settings)
         }
-        if settings.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            settings.displayName = AppSettings.defaultDisplayName
-            try? saveSettings(settings)
-        }
         return settings
     }
 

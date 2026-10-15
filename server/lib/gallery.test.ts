@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   coalesceUploaders,
   DEFAULT_UPLOADER_NAME,
+  ensureUploaderId,
   renameUploader,
   uploaderIdForName,
 } from "./gallery";
@@ -49,6 +50,33 @@ describe("renameUploader", () => {
   it("is a no-op when names match or empty", () => {
     assert.equal(renameUploader(base, "Alex", "Alex"), base);
     assert.equal(renameUploader(base, "", "X"), base);
+  });
+
+  it("does not overwrite an uploader when renaming to another existing uploader's name", () => {
+    const next = renameUploader(base, "Alex", "Sam");
+    assert.equal(next.uploaders[alexId], "Alex");
+    assert.equal(next.uploaders[samId], "Sam");
+  });
+});
+
+describe("ensureUploaderId", () => {
+  it("does not overwrite an existing uploader id mapped to a different display name", () => {
+    const alexId = uploaderIdForName("Alex");
+    const state: GalleryState = {
+      updatedAt: "2026-08-30T18:30:00.000Z",
+      order: ["p1"],
+      photos: {
+        p1: photo("p1", alexId),
+      },
+      uploaders: {
+        [alexId]: "Sam",
+      },
+      currentPhotoId: "p1",
+    };
+    const { state: next, uploaderId } = ensureUploaderId(state, "Alex", alexId);
+    assert.notEqual(uploaderId, alexId);
+    assert.equal(next.uploaders[alexId], "Sam");
+    assert.equal(next.uploaders[uploaderId], "Alex");
   });
 });
 
