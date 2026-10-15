@@ -12,7 +12,7 @@ fi
 
 if [[ "${GITHUB_EVENT_NAME:-}" == "push" && -n "${GITHUB_EVENT_BEFORE:-}" && "${GITHUB_EVENT_BEFORE}" != "0000000000000000000000000000000000000000" ]]; then
   if git diff --name-only "$GITHUB_EVENT_BEFORE" "$GITHUB_SHA" | grep -qE \
-    '^(macos/|scripts/(package-macos|package-release|ci-build-macos-release|macos-release-inputs-changed|export-ci-secrets|lib/signing|next-release-version|setup-self-signed-cert|fetch-live-macos-release)\.sh|\.github/workflows/release-macos\.yml)'; then
+    '^(macos/|scripts/(package-macos|package-release|ci-build-macos-release|macos-release-inputs-changed|export-ci-secrets|lib/signing|next-release-version|setup-self-signed-cert|fetch-live-macos-release)\.sh$|\.github/workflows/release-macos\.yml$)'; then
     exit 0
   fi
   exit 1

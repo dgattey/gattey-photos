@@ -1,16 +1,15 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createServer, type IncomingHttpHeaders } from "node:http";
 import type { AddressInfo } from "node:net";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoFile = (path: string) => fileURLToPath(new URL(`../../${path}`, import.meta.url));
 const SCRIPT = repoFile("scripts/next-release-version.sh");
 const TEMPLATE = readFileSync(repoFile(".github/pull_request_template.md"), "utf8");
+const CURRENT_VERSION = "1.0.16";
 
 type Box = "Major" | "Minor" | "Patch";
 const check = (body: string, box: Box) => body.replace(`- [ ] ${box}`, `- [x] ${box}`);
@@ -35,8 +34,6 @@ function run(args: string[], env: Record<string, string> = {}): Promise<Run> {
     );
   });
 }
-
-const CURRENT_VERSION = "1.0.16";
 
 async function next(args: string[], env: Record<string, string> = {}): Promise<string> {
   const result = await run(["--current", CURRENT_VERSION, ...args], env);
@@ -80,25 +77,30 @@ describe("next-release-version.sh PR template checkboxes", () => {
     assert.equal(await nextForBody("Fixes the download splash on small screens."), "1.0.17");
   });
 
-  it("falls back to patch for an empty body", async () => {
-    assert.equal(await nextForBody(""), "1.0.17");
+  it("does not fall through to the commit message when --pr-body is empty", async () => {
+    assert.equal(await next(["--pr-body", ""], { GATTEY_COMMIT_MESSAGE: templateWith("Major") }), "1.0.17");
   });
 
   it("parses CRLF line endings", async () => {
     assert.equal(await nextForBody(templateWith("Major").replace(/\n/g, "\r\n")), "2.0.0");
-    const scoped = "# What changed?\r\n- [x] Major cleanup\r\n# Release info\r\n- [x] Patch\r\n";
+    const scoped = "# What changed?\r\n- [x] Major\r\n# Release info\r\n- [x] Patch\r\n";
     assert.equal(await nextForBody(scoped), "1.0.17");
   });
 });
 
 describe("next-release-version.sh Release info section", () => {
   it("ignores checked boxes under What changed? when Release info has Patch", async () => {
-    const body = TEMPLATE.replace("# What changed?\n\n- ", "# What changed?\n\n- [x] Major rewrite of the gallery");
+    const body = TEMPLATE.replace("# What changed?\n\n- ", "# What changed?\n\n- [x] Major");
     assert.equal(await nextForBody(body), "1.0.17");
   });
 
-  it("reads the whole body when there is no Release info heading", async () => {
-    assert.equal(await nextForBody("# What changed?\n- [x] Major rewrite of the gallery"), "2.0.0");
+  it("ignores checkboxes when there is no Release info heading", async () => {
+    assert.equal(await nextForBody("# What changed?\n- [x] Major"), "1.0.17");
+  });
+
+  it("ignores checklist prose that starts with Major or Minor", async () => {
+    assert.equal(await nextForBody("# Release info\n- [x] Major rewrite of the gallery"), "1.0.17");
+    assert.equal(await nextForBody("# Release info\n- [x] Minor cleanup"), "1.0.17");
   });
 
   it("accepts a level-two Release info heading", async () => {
@@ -147,113 +149,15 @@ describe("next-release-version.sh version math", () => {
     assert.equal(result.stdout, "");
     assert.match(result.stderr, /'v1\.x'/);
   });
+
+  it("rejects an unknown flag", async () => {
+    const result = await run(["--bogus"]);
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /unknown option --bogus/);
+  });
 });
 
 describe("next-release-version.sh release type sources", () => {
-  let dir = "";
-  const eventFile = (name: string, event: object) => {
-    const path = join(dir, name);
-    writeFileSync(path, JSON.stringify(event));
-    return path;
-  };
-
-  before(() => {
-    dir = mkdtempSync(join(tmpdir(), "next-release-version-"));
-  });
-  after(() => rmSync(dir, { recursive: true, force: true }));
-
-  it("uses --release-type over the PR body", async () => {
-    assert.equal(await next(["--release-type", "major", "--pr-body", templateWith("Minor")]), "2.0.0");
-  });
-
-  it("uses GATTEY_RELEASE_TYPE case-insensitively", async () => {
-    assert.equal(await next([], { GATTEY_RELEASE_TYPE: "Minor" }), "1.1.0");
-  });
-
-  it("uses --release-type over GATTEY_RELEASE_TYPE", async () => {
-    assert.equal(await next(["--release-type", "patch"], { GATTEY_RELEASE_TYPE: "major" }), "1.0.17");
-  });
-
-  it("ignores an empty GATTEY_RELEASE_TYPE from push events", async () => {
-    assert.equal(await next(["--pr-body", templateWith("Major")], { GATTEY_RELEASE_TYPE: "" }), "2.0.0");
-  });
-
-  for (const [label, args, env] of [
-    ["--release-type", ["--release-type", "huge"], {}],
-    ["GATTEY_RELEASE_TYPE", [], { GATTEY_RELEASE_TYPE: "huge" }],
-  ] as const) {
-    it(`rejects an invalid release type from ${label}`, async () => {
-      const result = await run(["--current", "1.0.16", ...args], env);
-      assert.equal(result.status, 2);
-      assert.equal(result.stdout, "");
-      assert.match(result.stderr, /'huge'/);
-    });
-  }
-
-  it("reads the PR body from GATTEY_PR_BODY", async () => {
-    assert.equal(await next([], { GATTEY_PR_BODY: templateWith("Minor") }), "1.1.0");
-  });
-
-  it("uses --pr-body over the event payload", async () => {
-    const event = eventFile("major-pr.json", { pull_request: { body: templateWith("Major") } });
-    assert.equal(await next(["--pr-body", templateWith("Minor"), "--event-path", event]), "1.1.0");
-  });
-
-  it("reads pull_request.body from --event-path", async () => {
-    const event = eventFile("minor-pr.json", { pull_request: { body: templateWith("Minor") } });
-    assert.equal(await next(["--event-path", event]), "1.1.0");
-  });
-
-  it("reads pull_request.body from GITHUB_EVENT_PATH", async () => {
-    const event = eventFile("major-pr-env.json", { pull_request: { body: templateWith("Major") } });
-    assert.equal(await next([], { GITHUB_EVENT_PATH: event }), "2.0.0");
-  });
-
-  it("uses the event body over the merged PR", async () => {
-    const event = eventFile("major-pr-over-pulls.json", { pull_request: { body: templateWith("Major") } });
-    const merged = pulls({ number: 3, merged_at: "2026-10-01T00:00:00Z", merge_commit_sha: "abc", body: templateWith("Minor") });
-    assert.equal(await next(["--event-path", event], { GATTEY_PULLS_JSON: merged }), "2.0.0");
-  });
-
-  it("falls through a push payload to the merged PR", async () => {
-    const event = eventFile("push.json", { before: "0123abc", after: "abc" });
-    const merged = pulls({ number: 3, merged_at: "2026-10-01T00:00:00Z", merge_commit_sha: "abc", body: templateWith("Minor") });
-    assert.equal(await next(["--event-path", event], { GATTEY_PULLS_JSON: merged, GITHUB_SHA: "abc" }), "1.1.0");
-  });
-
-  it("prefers the merged PR whose merge commit is GITHUB_SHA", async () => {
-    const prs = pulls(
-      { number: 5, merged_at: "2026-10-01T00:00:00Z", merge_commit_sha: "aaa", body: templateWith("Minor") },
-      { number: 9, merged_at: "2026-10-02T00:00:00Z", merge_commit_sha: "bbb", body: templateWith("Major") },
-    );
-    assert.equal(await next([], { GATTEY_PULLS_JSON: prs, GITHUB_SHA: "aaa" }), "1.1.0");
-  });
-
-  it("picks the highest-numbered merged PR when no merge commit matches", async () => {
-    const prs = pulls(
-      { number: 9, merged_at: "2026-10-02T00:00:00Z", merge_commit_sha: "bbb", body: templateWith("Major") },
-      { number: 5, merged_at: "2026-10-01T00:00:00Z", merge_commit_sha: "aaa", body: templateWith("Minor") },
-    );
-    assert.equal(await next([], { GATTEY_PULLS_JSON: prs, GITHUB_SHA: "ccc" }), "2.0.0");
-  });
-
-  it("skips an unmerged PR and falls back to the commit message", async () => {
-    const open = pulls({ number: 4, merged_at: null, merge_commit_sha: "abc", body: templateWith("Major") });
-    const env = { GATTEY_PULLS_JSON: open, GITHUB_SHA: "abc", GATTEY_COMMIT_MESSAGE: templateWith("Minor") };
-    assert.equal(await next([], env), "1.1.0");
-  });
-
-  it("falls back to patch when there are no PRs and the commit message has no boxes", async () => {
-    const env = { GATTEY_PULLS_JSON: "[]", GATTEY_COMMIT_MESSAGE: "Fix typo in the download page" };
-    assert.equal(await next([], env), "1.0.17");
-  });
-
-  it("reads checkboxes from the commit message", async () => {
-    assert.equal(await next([], { GATTEY_COMMIT_MESSAGE: `Ship albums (#12)\n\n${templateWith("Major")}` }), "2.0.0");
-  });
-});
-
-describe("next-release-version.sh GitHub API lookup", () => {
   let baseUrl = "";
   let reply: { status: number; body: string } = { status: 200, body: "[]" };
   const requests: Array<{ url: string | undefined; headers: IncomingHttpHeaders }> = [];
@@ -277,6 +181,38 @@ describe("next-release-version.sh GitHub API lookup", () => {
     ...extra,
   });
 
+  it("uses --release-type over the PR body", async () => {
+    assert.equal(await next(["--release-type", "major", "--pr-body", templateWith("Minor")]), "2.0.0");
+  });
+
+  it("uses GATTEY_RELEASE_TYPE case-insensitively", async () => {
+    assert.equal(await next([], { GATTEY_RELEASE_TYPE: "Minor" }), "1.1.0");
+  });
+
+  it("uses --release-type over GATTEY_RELEASE_TYPE", async () => {
+    assert.equal(await next(["--release-type", "patch"], { GATTEY_RELEASE_TYPE: "major" }), "1.0.17");
+  });
+
+  it("ignores an empty GATTEY_RELEASE_TYPE from push events", async () => {
+    assert.equal(await next(["--pr-body", templateWith("Major")], { GATTEY_RELEASE_TYPE: "" }), "2.0.0");
+  });
+
+  for (const [label, args, env] of [
+    ["--release-type", ["--release-type", "huge"], {}],
+    ["GATTEY_RELEASE_TYPE", [], { GATTEY_RELEASE_TYPE: "huge" }],
+  ] as const) {
+    it(`rejects an invalid release type from ${label}`, async () => {
+      const result = await run(["--current", CURRENT_VERSION, ...args], env);
+      assert.equal(result.status, 2);
+      assert.equal(result.stdout, "");
+      assert.match(result.stderr, /'huge'/);
+    });
+  }
+
+  it("reads the PR body from GATTEY_PR_BODY", async () => {
+    assert.equal(await next([], { GATTEY_PR_BODY: templateWith("Minor") }), "1.1.0");
+  });
+
   it("reads the merged PR for GITHUB_SHA with the GH_TOKEN", async () => {
     requests.length = 0;
     reply = {
@@ -289,8 +225,49 @@ describe("next-release-version.sh GitHub API lookup", () => {
     assert.equal(requests[0].headers.authorization, "Bearer test-token");
   });
 
-  it("falls back to the commit message when the API request fails", async () => {
+  it("prefers the merged PR whose merge commit is GITHUB_SHA", async () => {
+    reply = {
+      status: 200,
+      body: pulls(
+        { number: 5, merged_at: "2026-10-01T00:00:00Z", merge_commit_sha: "abc123", body: templateWith("Minor") },
+        { number: 9, merged_at: "2026-10-02T00:00:00Z", merge_commit_sha: "bbb", body: templateWith("Major") },
+      ),
+    };
+    assert.equal(await next([], apiEnv()), "1.1.0");
+  });
+
+  it("picks the highest-numbered merged PR when no merge commit matches", async () => {
+    reply = {
+      status: 200,
+      body: pulls(
+        { number: 9, merged_at: "2026-10-02T00:00:00Z", merge_commit_sha: "bbb", body: templateWith("Major") },
+        { number: 5, merged_at: "2026-10-01T00:00:00Z", merge_commit_sha: "aaa", body: templateWith("Minor") },
+      ),
+    };
+    assert.equal(await next([], apiEnv({ GITHUB_SHA: "ccc" })), "2.0.0");
+  });
+
+  it("skips an unmerged PR and falls back to the commit message", async () => {
+    reply = {
+      status: 200,
+      body: pulls({ number: 4, merged_at: null, merge_commit_sha: "abc123", body: templateWith("Major") }),
+    };
+    assert.equal(await next([], apiEnv({ GATTEY_COMMIT_MESSAGE: templateWith("Minor") })), "1.1.0");
+  });
+
+  it("falls back to the commit message when the API request fails or returns a non-array", async () => {
     reply = { status: 500, body: "{}" };
     assert.equal(await next([], apiEnv({ GATTEY_COMMIT_MESSAGE: templateWith("Minor") })), "1.1.0");
+    reply = { status: 200, body: '{"message":"rate limit"}' };
+    assert.equal(await next([], apiEnv({ GATTEY_COMMIT_MESSAGE: templateWith("Major") })), "2.0.0");
+  });
+
+  it("falls back to patch when there are no PRs and the commit message has no boxes", async () => {
+    reply = { status: 200, body: "[]" };
+    assert.equal(await next([], apiEnv({ GATTEY_COMMIT_MESSAGE: "Fix typo in the download page" })), "1.0.17");
+  });
+
+  it("reads checkboxes from the commit message", async () => {
+    assert.equal(await next([], { GATTEY_COMMIT_MESSAGE: `Ship albums (#12)\n\n${templateWith("Major")}` }), "2.0.0");
   });
 });
