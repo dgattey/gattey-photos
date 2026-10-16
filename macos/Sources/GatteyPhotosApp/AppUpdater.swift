@@ -27,12 +27,19 @@ final class SparkleUpdateSession {
 
 @MainActor
 final class SparkleStandardUserDriverDelegate: NSObject, SPUStandardUserDriverDelegate {
+    var onWillShowUpdate: (() -> Void)?
+
+    func handleWillShowUpdate() {
+        SparkleUpdateSession.shared.begin()
+        onWillShowUpdate?()
+    }
+
     func standardUserDriverWillHandleShowingUpdate(
         _ handleShowingUpdate: Bool,
         forUpdate update: SUAppcastItem,
         state: SPUUserUpdateState
     ) {
-        SparkleUpdateSession.shared.begin()
+        handleWillShowUpdate()
     }
 
     func standardUserDriverWillFinishUpdateSession() {
@@ -41,14 +48,22 @@ final class SparkleStandardUserDriverDelegate: NSObject, SPUStandardUserDriverDe
 }
 
 /// Presents Sparkle's update UI when the launch-time probe finds a newer build.
+///
+/// Sparkle invokes `updater(_:didFindValidUpdate:)` while the `SPUProbingUpdateDriver` session is
+/// still in progress (`updater.sessionInProgress == true`), before `abortUpdate` clears the driver
+/// and emits `updater(_:didFinishUpdateCycleFor:error:)`. Calling `updater.checkForUpdates()`
+/// synchronously inside `didFindValidUpdate` fails Sparkle's `.sessionInProgress` guard and drops
+/// the interactive check. Recording the match in `didFindValidUpdate` and escalating inside
+/// `didFinishUpdateCycleFor` runs right after `sessionInProgress` resets to `false`.
 @MainActor
 final class SparkleUpdaterDelegate: NSObject, SPUUpdaterDelegate {
     var launchProbeActive = false
+    private(set) var launchProbeFoundUpdate = false
+    var onProbeFoundUpdate: ((SPUUpdater) -> Void)?
 
     func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
         guard launchProbeActive else { return }
-        launchProbeActive = false
-        updater.checkForUpdates()
+        launchProbeFoundUpdate = true
     }
 
     func updater(
@@ -56,11 +71,20 @@ final class SparkleUpdaterDelegate: NSObject, SPUUpdaterDelegate {
         didFinishUpdateCycleFor updateCheck: SPUUpdateCheck,
         error: (any Error)?
     ) {
+        let shouldEscalate = launchProbeActive && launchProbeFoundUpdate
         launchProbeActive = false
-        // Probe/check cycle completion is not the end of the user-facing update UI (e.g. after Install).
+        launchProbeFoundUpdate = false
+        guard shouldEscalate else { return }
+        if let onProbeFoundUpdate {
+            onProbeFoundUpdate(updater)
+        } else {
+            updater.checkForUpdates()
+        }
     }
 
     func updater(_ updater: SPUUpdater, didAbortWithError error: any Error) {
+        launchProbeActive = false
+        launchProbeFoundUpdate = false
         SparkleUpdateSession.shared.reset()
         ActivityLogStore.shared.log(error: error, category: .system, context: "Sparkle update failed")
     }
@@ -80,55 +104,76 @@ final class SparkleUpdaterDelegate: NSObject, SPUUpdaterDelegate {
 final class AppUpdaterModel: ObservableObject {
     let controller: SPUStandardUpdaterController
     @Published var canCheckForUpdates = false
-    private let isReleaseConfigured: Bool
-    private var didCheckOnLaunch = false
-    private var didScheduleLaunchCheck = false
-    private let sparkleDelegate = SparkleUpdaterDelegate()
-    private let sparkleUserDriverDelegate = SparkleStandardUserDriverDelegate()
+    let isReleaseConfigured: Bool
+    private(set) var didCheckOnLaunch = false
+    private(set) var didScheduleLaunchCheck = false
+    let sparkleDelegate = SparkleUpdaterDelegate()
+    let sparkleUserDriverDelegate = SparkleStandardUserDriverDelegate()
     private var launchCheckCancellable: AnyCancellable?
 
-    init() {
-        let feedURL = Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String
-        let publicKey = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String
+    init(
+        infoDictionary: [String: Any]? = Bundle.main.infoDictionary,
+        startingUpdater: Bool? = nil
+    ) {
+        let feedURL = infoDictionary?["SUFeedURL"] as? String
+        let publicKey = infoDictionary?["SUPublicEDKey"] as? String
         let configured = !(feedURL?.isEmpty ?? true) && !(publicKey?.isEmpty ?? true)
         isReleaseConfigured = configured
 
         // Start the updater only when release metadata is present so local/dev builds avoid Sparkle config errors.
         controller = SPUStandardUpdaterController(
-            startingUpdater: configured,
+            startingUpdater: startingUpdater ?? configured,
             updaterDelegate: sparkleDelegate,
             userDriverDelegate: sparkleUserDriverDelegate
         )
+        sparkleUserDriverDelegate.onWillShowUpdate = { [weak self] in
+            self?.didCheckOnLaunch = true
+            self?.launchCheckCancellable = nil
+        }
         controller.updater.publisher(for: \.canCheckForUpdates).assign(to: &$canCheckForUpdates)
     }
 
     func checkForUpdates() {
+        didCheckOnLaunch = true
+        launchCheckCancellable = nil
         controller.updater.checkForUpdates()
     }
 
     /// Call once the SwiftUI main window is on screen so a launch probe cannot close the last window and quit.
+    ///
+    /// `SPUUpdater.startUpdater()` sets `canCheckForUpdates = true` synchronously and then finishes
+    /// startup via `DispatchQueue.main.async` (which may immediately begin a scheduled background
+    /// check if `SUScheduledCheckInterval` has elapsed). Deferring onto `DispatchQueue.main` and
+    /// waiting for `canCheckForUpdates && !sessionInProgress` lets Sparkle's startup turn settle
+    /// first and guarantees the launch probe runs whenever Sparkle is idle.
     func mainWindowDidAppear() {
         guard isReleaseConfigured, !didScheduleLaunchCheck else { return }
         didScheduleLaunchCheck = true
 
-        if controller.updater.canCheckForUpdates {
-            checkForUpdatesOnLaunch()
-        } else {
-            launchCheckCancellable = controller.updater.publisher(for: \.canCheckForUpdates)
-                .removeDuplicates()
-                .filter { $0 }
-                .first()
-                .receive(on: RunLoop.main)
-                .sink { [weak self] _ in
-                    self?.checkForUpdatesOnLaunch()
-                }
+        launchCheckCancellable = Publishers.CombineLatest(
+            controller.updater.publisher(for: \.canCheckForUpdates),
+            controller.updater.publisher(for: \.sessionInProgress)
+        )
+        .filter { canCheck, sessionInProgress in
+            canCheck && !sessionInProgress
+        }
+        .receive(on: DispatchQueue.main)
+        .sink { [weak self] _ in
+            self?.checkForUpdatesOnLaunch()
         }
     }
 
     /// Probes the feed once per launch; Sparkle shows the update dialog only when a newer build exists.
     func checkForUpdatesOnLaunch() {
-        guard isReleaseConfigured, !didCheckOnLaunch else { return }
+        guard
+            isReleaseConfigured,
+            !didCheckOnLaunch,
+            controller.updater.canCheckForUpdates,
+            !controller.updater.sessionInProgress,
+            !SparkleUpdateSession.shared.blocksQuitOnLastWindowClosed
+        else { return }
         didCheckOnLaunch = true
+        launchCheckCancellable = nil
         sparkleDelegate.launchProbeActive = true
         controller.updater.checkForUpdateInformation()
     }
