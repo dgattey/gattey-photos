@@ -3,18 +3,19 @@
     <channel>
         <title>Gattey Photos</title>
         <item>
-            <title>1.1.4</title>
-            <pubDate>Thu, 15 Oct 2026 18:15:51 +0000</pubDate>
+            <title>1.1.5</title>
+            <pubDate>Fri, 16 Oct 2026 00:35:31 +0000</pubDate>
             <link>https://photos.gattey.com</link>
-            <sparkle:version>88</sparkle:version>
-            <sparkle:shortVersionString>1.1.4</sparkle:shortVersionString>
+            <sparkle:version>90</sparkle:version>
+            <sparkle:shortVersionString>1.1.5</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<ul>
-  <li style="margin-bottom: 6px; line-height: 1.45;">Stripped Xcode toolchain <code>LC_RPATH</code> entries before code signing so Gatekeeper assesses downloaded builds cleanly.</li>
-  <li style="margin-bottom: 6px; line-height: 1.45;">Documented <code>xattr -cr "/Applications/Gattey Photos.app"</code> for MDM-managed Macs where <strong>Open Anyway</strong> is restricted.</li>
+  <li style="margin-bottom: 6px; line-height: 1.45;">Defer calling <code>updater.checkForUpdates()</code> from <code>SparkleUpdaterDelegate.updater(_:didFindValidUpdate:)</code> until <code>updater(_:didFinishUpdateCycleFor:error:)</code> so Sparkle's <code>SPUProbingUpdateDriver</code> has finished and cleared <code>sessionInProgress</code> before presenting the interactive update sheet.</li>
+  <li style="margin-bottom: 6px; line-height: 1.45;">Wait for <code>canCheckForUpdates &amp;&amp; !sessionInProgress</code> on <code>DispatchQueue.main</code> in <code>AppUpdaterModel.mainWindowDidAppear()</code> so <code>checkForUpdatesOnLaunch()</code> neither preempts <code>SPUUpdater.startUpdater()</code>'s async startup turn nor fires mid-session during Sparkle's scheduled 24-hour background check.</li>
+  <li style="margin-bottom: 6px; line-height: 1.45;">Mark <code>didCheckOnLaunch = true</code> when Sparkle's scheduled check already shows an update or when the user manually triggers <code>Check for Updates…</code>, and add <code>GatteyPhotosAppTests</code> unit coverage.</li>
 </ul>]]></description>
-            <enclosure url="https://photos.gattey.com/Gattey-Photos-1.1.4.zip" length="4063840" type="application/octet-stream" sparkle:edSignature="613egnkKrePAShr+SH48eLlkryOfaQBoWmIyWXw2yIn+j4O3tmd5NFPc63J22fOc6A2Rb2kgxEtuEUF3IzaNDQ=="/>
+            <enclosure url="https://photos.gattey.com/Gattey-Photos-1.1.5.zip" length="4064956" type="application/octet-stream" sparkle:edSignature="sTM2CXKHY2Sz5Tn0ki+qCrw/CRn3lN9OknqDSSBZMBrEfEqgcUW2gjCavMkw6zcWwYLX6NJMkI1hJKmeo9zvCg=="/>
         </item>
     </channel>
 </rss>

@@ -71,6 +71,30 @@ let package = Package(
             exclude: ["Info.plist"],
             swiftSettings: [.unsafeFlags(["-parse-as-library"], .when(configuration: .debug))]
         ),
+        .testTarget(
+            name: "GatteyPhotosAppTests",
+            dependencies: [
+                "GatteyPhotosApp",
+                "GatteyPhotosCore",
+                .product(
+                    name: "Sparkle",
+                    package: "Sparkle",
+                    condition: .when(platforms: [.macOS])
+                ),
+            ],
+            path: "Tests/GatteyPhotosAppTests",
+            linkerSettings: [
+                .unsafeFlags(
+                    [
+                        "-Xlinker",
+                        "-rpath",
+                        "-Xlinker",
+                        "@loader_path/../../../artifacts/sparkle/Sparkle/Wrapper",
+                    ],
+                    .when(platforms: [.macOS])
+                )
+            ]
+        ),
     ],
     swiftLanguageModes: [.v5]
 )
