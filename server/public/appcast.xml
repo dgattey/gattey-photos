@@ -3,14 +3,21 @@
     <channel>
         <title>Gattey Photos</title>
         <item>
-            <title>1.1.5</title>
-            <pubDate>Fri, 16 Oct 2026 00:35:31 +0000</pubDate>
+            <title>1.1.6</title>
+            <pubDate>Fri, 16 Oct 2026 01:28:31 +0000</pubDate>
             <link>https://photos.gattey.com</link>
-            <sparkle:version>90</sparkle:version>
-            <sparkle:shortVersionString>1.1.5</sparkle:shortVersionString>
+            <sparkle:version>92</sparkle:version>
+            <sparkle:shortVersionString>1.1.6</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://photos.gattey.com/Gattey-Photos-1.1.5.zip" length="4064956" type="application/octet-stream" sparkle:edSignature="sTM2CXKHY2Sz5Tn0ki+qCrw/CRn3lN9OknqDSSBZMBrEfEqgcUW2gjCavMkw6zcWwYLX6NJMkI1hJKmeo9zvCg=="/>
+            <description><![CDATA[<p style="margin: 0 0 8px 0; line-height: 1.45;">Embed readable HTML release notes in Sparkle appcast.xml (#13)</p>
+<ul>
+  <li style="margin-bottom: 6px; line-height: 1.45;">Embed readable HTML release notes in Sparkle appcast.xml</li>
+  <li style="margin-bottom: 6px; line-height: 1.45;">Skip Vercel builds when server/ is unchanged</li>
+  <li style="margin-bottom: 6px; line-height: 1.45;">Keep appcast untouched on PR branches and sync origin/main before release packaging</li>
+</ul>
+]]></description>
+            <enclosure url="https://photos.gattey.com/Gattey-Photos-1.1.6.zip" length="4064965" type="application/octet-stream" sparkle:edSignature="Q1k9PvHC8KLM4Yws+HOHyfBs3IZLLWFhpt6FPPbJ9KTGqsEFgBrfAJxEwlcy2csDGGIfpNVe9zBPNLA2lpsQBQ=="/>
         </item>
     </channel>
 </rss>
