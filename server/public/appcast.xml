@@ -3,19 +3,19 @@
     <channel>
         <title>Gattey Photos</title>
         <item>
-            <title>1.1.7</title>
-            <pubDate>Fri, 16 Oct 2026 06:19:47 +0000</pubDate>
+            <title>1.1.8</title>
+            <pubDate>Fri, 16 Oct 2026 22:16:05 +0000</pubDate>
             <link>https://photos.gattey.com</link>
-            <sparkle:version>94</sparkle:version>
-            <sparkle:shortVersionString>1.1.7</sparkle:shortVersionString>
+            <sparkle:version>96</sparkle:version>
+            <sparkle:shortVersionString>1.1.8</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<ul>
-  <li style="margin-bottom: 6px; line-height: 1.45;">Fix macOS in-app update signature validation (<code>-67050</code>) across ad-hoc signed releases</li>
-  <li style="margin-bottom: 6px; line-height: 1.45;">Enforce and cryptographically verify Sparkle Ed25519 update signatures at build time</li>
+  <li style="margin-bottom: 6px; line-height: 1.45;">Faster startup: the gallery opens immediately from your local cache while verifying server connection and session status in the background.</li>
+  <li style="margin-bottom: 6px; line-height: 1.45;">Improved connection reliability with shared HTTP/2 connection pooling and automatic sync recovery when the server comes back online.</li>
 </ul>
 ]]></description>
-            <enclosure url="https://photos.gattey.com/Gattey-Photos-1.1.7.zip" length="4064999" type="application/octet-stream" sparkle:edSignature="/MSUqCCTxeRaTFW6L8rlPqqLqhTE3USpGk8kkOelJPq9eQCbMHYwECBXmuUJ6lVwkg8wyLJOw5/QGz53CTe8CA=="/>
+            <enclosure url="https://photos.gattey.com/Gattey-Photos-1.1.8.zip" length="4064188" type="application/octet-stream" sparkle:edSignature="rZt65rP5F+84Uuy7yjLu+YF6jsQz4aobjhQKlBdZ/hXTfh2VPral4tyBhdH2h9UCXN+EB9KX4dbyPaQ4OGLhAA=="/>
         </item>
     </channel>
 </rss>
