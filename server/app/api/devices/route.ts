@@ -4,7 +4,8 @@ import { listDevices, registerDevice } from "@/lib/devices/registry";
 export async function GET(request: Request) {
   const auth = await assertSessionToken(request);
   if (auth) return auth;
-  const devices = await listDevices();
+  const owner = new URL(request.url).searchParams.get("owner");
+  const devices = await listDevices(owner);
   return Response.json({ devices });
 }
 

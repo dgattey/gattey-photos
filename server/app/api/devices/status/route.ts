@@ -7,7 +7,8 @@ export async function GET(request: Request) {
   const auth = await assertSessionToken(request);
   if (auth) return auth;
 
-  const devices = await listDevicesDecrypted();
+  const owner = new URL(request.url).searchParams.get("owner");
+  const devices = await listDevicesDecrypted(owner);
   const statuses: DeviceLiveStatus[] = await Promise.all(
     devices.map(async (device) => {
       const pub = toPublicDevice(device);
@@ -16,6 +17,7 @@ export async function GET(request: Request) {
         return {
           id: device.id,
           displayName: device.displayName,
+          registeredBy: pub.registeredBy,
           reachable: true,
           name: live.name,
           width: live.width,
@@ -30,6 +32,7 @@ export async function GET(request: Request) {
         return {
           id: device.id,
           displayName: device.displayName,
+          registeredBy: pub.registeredBy,
           reachable: false,
           lastPushAt: pub.lastPushAt,
           lastPushError: pub.lastPushError,

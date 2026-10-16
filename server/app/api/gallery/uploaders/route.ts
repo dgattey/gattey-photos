@@ -1,6 +1,7 @@
 import { assertSessionToken } from "@/lib/auth";
 import { jsonApiError } from "@/lib/api-error";
-import { renameUploader } from "@/lib/gallery";
+import { renameDeviceOwner } from "@/lib/devices/registry";
+import { canRenameUploader, renameUploader } from "@/lib/gallery";
 import {
   parseBaseUpdatedAt,
   respondGalleryMutation,
@@ -27,11 +28,21 @@ export async function PATCH(request: Request) {
   const base = parseBaseUpdatedAt(body.baseUpdatedAt);
   if (base instanceof Response) return base;
 
-  return respondGalleryMutation(
+  let allowDeviceRename = false;
+  const response = await respondGalleryMutation(
     request,
     "[gallery uploaders]",
     base,
-    (state) => renameUploader(state, fromName, toName),
+    (state) => {
+      allowDeviceRename = canRenameUploader(state, fromName, toName);
+      return renameUploader(state, fromName, toName);
+    },
     { cacheControl: "no-store" }
   );
+
+  if (response.ok && allowDeviceRename) {
+    await renameDeviceOwner(fromName, toName);
+  }
+
+  return response;
 }

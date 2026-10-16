@@ -19,19 +19,59 @@ export function toPublicDevice(d: RegisteredDevice): RegisteredDevicePublic {
   };
 }
 
-export async function listDevices(): Promise<RegisteredDevicePublic[]> {
-  const registry = await storage.readRegistry();
-  return registry.devices.map(toPublicDevice);
+export function filterDevicesByOwner<T extends { registeredBy?: string }>(
+  devices: T[],
+  owner?: string | null
+): T[] {
+  const normalizedOwner = owner?.trim().toLowerCase() ?? "";
+  if (!normalizedOwner) return devices;
+  return devices.filter(
+    (d) => (d.registeredBy ?? "").trim().toLowerCase() === normalizedOwner
+  );
 }
 
-export async function listDevicesDecrypted(): Promise<
-  Array<RegisteredDevice & { token: string }>
-> {
+export async function listDevices(
+  owner?: string | null
+): Promise<RegisteredDevicePublic[]> {
   const registry = await storage.readRegistry();
-  return registry.devices.map((d) => ({
+  const filtered = filterDevicesByOwner(registry.devices, owner);
+  return filtered.map(toPublicDevice);
+}
+
+export async function listDevicesDecrypted(
+  owner?: string | null
+): Promise<Array<RegisteredDevice & { token: string }>> {
+  const registry = await storage.readRegistry();
+  const filtered = filterDevicesByOwner(registry.devices, owner);
+  return filtered.map((d) => ({
     ...d,
     token: decryptDeviceToken(d.tokenCiphertext),
   }));
+}
+
+export async function renameDeviceOwner(
+  fromName: string,
+  toName: string
+): Promise<boolean> {
+  const from = fromName.trim();
+  const to = toName.trim();
+  if (!from || !to || from === to) return false;
+  const fromLower = from.toLowerCase();
+
+  const registry = await storage.readRegistry();
+  let changed = false;
+  for (const device of registry.devices) {
+    if ((device.registeredBy ?? "").trim().toLowerCase() === fromLower) {
+      if (device.registeredBy !== to) {
+        device.registeredBy = to;
+        changed = true;
+      }
+    }
+  }
+  if (!changed) return false;
+  registry.version += 1;
+  await storage.writeRegistry(registry);
+  return true;
 }
 
 export async function registerDevice(input: {

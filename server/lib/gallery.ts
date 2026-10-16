@@ -213,6 +213,29 @@ export function resolveCurrentPhoto(state: GalleryState): {
   return { state: { ...state, currentPhotoId: active[0]! }, dirty: true };
 }
 
+/** True when `fromName` can be renamed to `toName` without colliding with another uploader's display name. */
+export function canRenameUploader(
+  state: GalleryState,
+  fromName: string,
+  toName: string
+): boolean {
+  const from = fromName.trim();
+  const to = toName.trim();
+  if (!from || !to || from === to) return false;
+
+  const toLower = to.toLowerCase();
+  const fromLower = from.toLowerCase();
+  if (toLower !== fromLower) {
+    const targetExistsElsewhere = Object.values(state.uploaders).some(
+      (name) =>
+        name.trim().toLowerCase() !== fromLower &&
+        name.trim().toLowerCase() === toLower
+    );
+    if (targetExistsElsewhere) return false;
+  }
+  return true;
+}
+
 /** Point every uploader id named `fromName` at `toName` (settings rename). No-op if `toName` is already used by another uploader. */
 export function renameUploader(
   state: GalleryState,
@@ -221,21 +244,13 @@ export function renameUploader(
 ): GalleryState {
   const from = fromName.trim();
   const to = toName.trim();
-  if (!from || !to || from === to) return state;
-
-  const toLower = to.toLowerCase();
+  if (!canRenameUploader(state, from, to)) return state;
   const fromLower = from.toLowerCase();
-  if (toLower !== fromLower) {
-    const targetExistsElsewhere = Object.values(state.uploaders).some(
-      (name) => name !== from && name.trim().toLowerCase() === toLower
-    );
-    if (targetExistsElsewhere) return state;
-  }
 
   let dirty = false;
   const uploaders = { ...state.uploaders };
   for (const id of Object.keys(uploaders)) {
-    if (uploaders[id] === from) {
+    if (uploaders[id]?.trim().toLowerCase() === fromLower && uploaders[id] !== to) {
       uploaders[id] = to;
       dirty = true;
     }
