@@ -10,6 +10,10 @@
             <sparkle:shortVersionString>1.1.4</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description><![CDATA[<ul>
+  <li style="margin-bottom: 6px; line-height: 1.45;">Stripped Xcode toolchain <code>LC_RPATH</code> entries before code signing so Gatekeeper assesses downloaded builds cleanly.</li>
+  <li style="margin-bottom: 6px; line-height: 1.45;">Documented <code>xattr -cr "/Applications/Gattey Photos.app"</code> for MDM-managed Macs where <strong>Open Anyway</strong> is restricted.</li>
+</ul>]]></description>
             <enclosure url="https://photos.gattey.com/Gattey-Photos-1.1.4.zip" length="4063840" type="application/octet-stream" sparkle:edSignature="613egnkKrePAShr+SH48eLlkryOfaQBoWmIyWXw2yIn+j4O3tmd5NFPc63J22fOc6A2Rb2kgxEtuEUF3IzaNDQ=="/>
         </item>
     </channel>
