@@ -46,9 +46,11 @@ ZIP="$WORK/Gattey-Photos-${VERSION}.zip"
 ditto -c -k --keepParent "$APP" "$ZIP"
 rm -rf "$STAGE"
 
+"$ROOT/scripts/release-notes.sh" --version "$VERSION" >"$WORK/Gattey-Photos-${VERSION}.html"
+
 GA="$MACOS/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
 [[ -x "$GA" ]] || { echo "package-release: generate_appcast not found — run 'cd macos && swift build'." >&2; exit 1; }
-GA_ARGS=(--download-url-prefix "https://photos.gattey.com/" --link "https://photos.gattey.com")
+GA_ARGS=(--download-url-prefix "https://photos.gattey.com/" --link "https://photos.gattey.com" --embed-release-notes)
 [[ -n "${SPARKLE_ED_KEY_FILE:-}" ]] && GA_ARGS+=(--ed-key-file "$SPARKLE_ED_KEY_FILE")
 "$GA" "${GA_ARGS[@]}" "$WORK"
 
