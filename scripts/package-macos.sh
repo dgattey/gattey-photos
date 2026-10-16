@@ -204,8 +204,6 @@ if [[ "$SPARKLE_CHANGED" == "1" ]]; then
   csign "$FW"
 fi
 
-# When ad-hoc signing ('-'), pin the outer app's designated requirement to its bundle identifier
-# rather than the default cdhash so Sparkle's SUCodeSigningVerifier matches old and new builds.
 if [[ "$SIGN_ID" == "-" ]]; then
   csign --entitlements "$SIGN_ENTITLEMENTS" -r='designated => identifier "com.gattey.photos"' "$APP"
 else

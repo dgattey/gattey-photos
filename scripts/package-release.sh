@@ -25,7 +25,6 @@ decode_secret_b64() {
   printf '%s' "$1" | tr -d '[:space:]' | base64 -D 2>/dev/null || printf '%s' "$1" | tr -d '[:space:]' | base64 -d
 }
 
-# Resolve Sparkle EdDSA private key (CI secret -> explicit file -> repo-local .cert/sparkle_ed.key)
 if [[ -z "${SPARKLE_ED_KEY_FILE:-}" && -n "${SPARKLE_ED_PRIVATE_KEY_BASE64:-}" ]]; then
   KEY_FILE="$(mktemp /tmp/gattey-photos-sparkle-ed.XXXXXX.key)"
   cleanup_files+=("$KEY_FILE")
@@ -63,6 +62,10 @@ GATTEY_OPEN_AFTER=0 \
 APP="$STAGE/Gattey Photos.app"
 [[ -d "$APP" ]] || { echo "package-release: missing $APP" >&2; exit 1; }
 codesign --verify --deep --strict "$APP"
+if [[ "$SIGN_ID" == "-" ]] && ! codesign -d -r- "$APP" 2>&1 | grep -Fq 'designated => identifier "com.gattey.photos"'; then
+  echo "package-release: ad-hoc signed $APP is missing identifier-based designated requirement" >&2
+  exit 1
+fi
 
 INFO_PLIST="$APP/Contents/Info.plist"
 PUB_KEY=""
@@ -93,7 +96,6 @@ if [[ "${REQUIRE_SPARKLE_SIGNATURE:-1}" == "1" && -z "$ED_SIG" ]]; then
   exit 1
 fi
 
-# Verify the generated Ed25519 signature against SUPublicEDKey in Info.plist when OpenSSL 3+ is available
 if [[ -n "$ED_SIG" && -n "$PUB_KEY" ]] && openssl version 2>/dev/null | grep -q '^OpenSSL'; then
   TMP_PUB="$(mktemp /tmp/gattey-photos-sparkle-pub.XXXXXX.pem)"
   TMP_SIG="$(mktemp /tmp/gattey-photos-sparkle-sig.XXXXXX.bin)"
