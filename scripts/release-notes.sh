@@ -42,9 +42,16 @@ done
 fetch_merged_pr_body() {
   [[ -n "${GITHUB_REPOSITORY:-}" && -n "${GITHUB_SHA:-}" ]] || return 0
   local token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
-  local pulls
-  if ! pulls="$(curl -fsS -H "Accept: application/vnd.github+json" ${token:+-H "Authorization: Bearer $token"} \
-    "${GITHUB_API_URL:-https://api.github.com}/repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls")"; then
+  local pulls=""
+  local attempt
+  for attempt in 1 2 3; do
+    if pulls="$(curl -fsS --connect-timeout 10 --max-time 20 -H "Accept: application/vnd.github+json" ${token:+-H "Authorization: Bearer $token"} \
+      "${GITHUB_API_URL:-https://api.github.com}/repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" 2>/dev/null)"; then
+      break
+    fi
+    sleep 2
+  done
+  if [[ -z "$pulls" ]]; then
     echo "release-notes: could not list pull requests for $GITHUB_SHA" >&2
     return 0
   fi
