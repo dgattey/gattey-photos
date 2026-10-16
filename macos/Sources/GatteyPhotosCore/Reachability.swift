@@ -1,20 +1,14 @@
 import Foundation
 
 public enum Reachability {
-    private static let session: URLSession = {
-        let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 2
-        config.timeoutIntervalForResource = 2
-        config.waitsForConnectivity = false
-        return URLSession(configuration: config)
-    }()
+    public static let probeTimeout: TimeInterval = 2
 
-    public static func pingServer(baseURL: String) async -> Bool {
+    public static func pingServer(baseURL: String, session: URLSession = SyncURLSession.shared) async -> Bool {
         let trimmed = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let parsed = URL(string: trimmed) else { return false }
-        if await probeHealth(base: parsed) { return true }
+        if await probeHealth(base: parsed, session: session) { return true }
         if let alt = alternateLoopbackURL(from: parsed) {
-            return await probeHealth(base: alt)
+            return await probeHealth(base: alt, session: session)
         }
         return false
     }
@@ -29,11 +23,12 @@ public enum Reachability {
         return parts.url
     }
 
-    private static func probeHealth(base: URL) async -> Bool {
+    private static func probeHealth(base: URL, session: URLSession) async -> Bool {
         guard let url = healthURL(base: base) else { return false }
         var req = URLRequest(url: url)
         req.httpMethod = "GET"
-        req.timeoutInterval = 2
+        req.cachePolicy = .reloadIgnoringLocalCacheData
+        req.timeoutInterval = probeTimeout
         do {
             let (data, res) = try await session.data(for: req)
             guard let http = res as? HTTPURLResponse, http.statusCode == 200,

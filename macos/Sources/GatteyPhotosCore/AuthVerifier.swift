@@ -7,16 +7,15 @@ public enum AuthVerifyOutcome: Sendable {
 }
 
 public enum AuthVerifier {
-    private static let session: URLSession = {
-        let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 8
-        config.timeoutIntervalForResource = 12
-        config.waitsForConnectivity = false
-        return URLSession(configuration: config)
-    }()
+    public static let verifyTimeout: TimeInterval = 8
+    public static let createSessionTimeout: TimeInterval = 12
 
     /// Verifies Bearer auth against `GET /api/auth/verify`. Uses `bearer` when set, else `settings.syncSessionToken`.
-    public static func verify(settings: AppSettings, bearer: String? = nil) async -> AuthVerifyOutcome {
+    public static func verify(
+        settings: AppSettings,
+        bearer: String? = nil,
+        session: URLSession = SyncURLSession.shared
+    ) async -> AuthVerifyOutcome {
         let trimmedURL = settings.serverBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let token = (bearer ?? settings.syncBearer)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !trimmedURL.isEmpty, !token.isEmpty else {
@@ -25,25 +24,29 @@ public enum AuthVerifier {
         guard let base = URL(string: trimmedURL) else {
             return .unreachable
         }
-        if let outcome = await probeVerify(base: base, bearer: token) {
+        if let outcome = await probeVerify(base: base, bearer: token, session: session) {
             return outcome
         }
         if let alt = alternateLoopbackURL(from: base),
-            let outcome = await probeVerify(base: alt, bearer: token)
+            let outcome = await probeVerify(base: alt, bearer: token, session: session)
         {
             return outcome
         }
         return .unreachable
     }
 
-    public enum CreateSessionOutcome: Sendable {
+    public enum CreateSessionOutcome: Sendable, Equatable {
         case success(String)
         case wrongPassword
         case unreachable
     }
 
     /// `POST /api/auth/session` with password Bearer; returns opaque session token on success.
-    public static func createSession(password: String, settings: AppSettings) async -> CreateSessionOutcome {
+    public static func createSession(
+        password: String,
+        settings: AppSettings,
+        session: URLSession = SyncURLSession.shared
+    ) async -> CreateSessionOutcome {
         let trimmedURL = settings.serverBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedPassword = password.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedURL.isEmpty, !trimmedPassword.isEmpty,
@@ -51,7 +54,7 @@ public enum AuthVerifier {
         else {
             return .unreachable
         }
-        switch await probeCreateSession(base: base, password: trimmedPassword) {
+        switch await probeCreateSession(base: base, password: trimmedPassword, session: session) {
         case .success(let token):
             return .success(token)
         case .wrongPassword:
@@ -60,7 +63,7 @@ public enum AuthVerifier {
             break
         }
         if let alt = alternateLoopbackURL(from: base) {
-            switch await probeCreateSession(base: alt, password: trimmedPassword) {
+            switch await probeCreateSession(base: alt, password: trimmedPassword, session: session) {
             case .success(let token):
                 return .success(token)
             case .wrongPassword:
@@ -92,10 +95,12 @@ public enum AuthVerifier {
         return parts.url
     }
 
-    private static func probeVerify(base: URL, bearer: String) async -> AuthVerifyOutcome? {
+    private static func probeVerify(base: URL, bearer: String, session: URLSession) async -> AuthVerifyOutcome? {
         guard let url = verifyURL(base: base) else { return nil }
         var req = URLRequest(url: url)
         req.httpMethod = "GET"
+        req.cachePolicy = .reloadIgnoringLocalCacheData
+        req.timeoutInterval = verifyTimeout
         req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
         do {
             let (data, res) = try await session.data(for: req)
@@ -128,10 +133,16 @@ public enum AuthVerifier {
         case unreachable
     }
 
-    private static func probeCreateSession(base: URL, password: String) async -> ProbeCreateSessionResult {
+    private static func probeCreateSession(
+        base: URL,
+        password: String,
+        session: URLSession
+    ) async -> ProbeCreateSessionResult {
         guard let url = sessionURL(base: base) else { return .unreachable }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
+        req.cachePolicy = .reloadIgnoringLocalCacheData
+        req.timeoutInterval = createSessionTimeout
         req.setValue("Bearer \(password)", forHTTPHeaderField: "Authorization")
         do {
             let (data, res) = try await session.data(for: req)

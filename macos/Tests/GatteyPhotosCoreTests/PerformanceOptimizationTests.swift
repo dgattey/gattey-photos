@@ -52,14 +52,13 @@ final class PerformanceOptimizationTests: XCTestCase {
 
     @MainActor
     func testGalleryStoreBootstrapRespectsInMemoryEditsBeforeDiskLoadCompletes() async throws {
-        let savedLocalState = try? Data(contentsOf: AppConfig.localStateURL)
+        let tempSupport = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gp-support-\(UUID().uuidString)", isDirectory: true)
+        AppConfig.setSupportFolderForTesting(tempSupport)
         defer {
             AppConfig.flushPersistence()
-            if let savedLocalState {
-                try? savedLocalState.write(to: AppConfig.localStateURL, options: .atomic)
-            } else {
-                try? FileManager.default.removeItem(at: AppConfig.localStateURL)
-            }
+            AppConfig.setSupportFolderForTesting(nil)
+            try? FileManager.default.removeItem(at: tempSupport)
         }
 
         let diskState = GalleryState(
