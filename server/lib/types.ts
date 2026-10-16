@@ -87,6 +87,7 @@ export interface DeviceRegistry {
 export interface DeviceLiveStatus {
   id: string;
   displayName: string;
+  registeredBy?: string;
   reachable: boolean;
   name?: string;
   width?: number;

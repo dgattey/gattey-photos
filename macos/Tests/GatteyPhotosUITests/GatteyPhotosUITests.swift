@@ -166,4 +166,114 @@ struct GatteyPhotosUITests {
                 == "Date unknown"
         )
     }
+
+    @Test("DeviceOwnerFilter and GalleryStore filter devices and statuses by owner case-insensitively")
+    @MainActor
+    func deviceOwnerFilteringInspection() throws {
+        let bedroom = RegisteredDevicePublic(
+            id: "cac2aed6-0d27-46e1-b021-cd837d312776",
+            displayName: "Bedroom",
+            registeredBy: "Dylan",
+            registeredAt: "2026-06-02T03:18:40.054Z"
+        )
+        let casaLapa = RegisteredDevicePublic(
+            id: "bfbe51b6-b476-4ed6-b005-1857fed3a93f",
+            displayName: "Casa lapa",
+            registeredBy: "Becca",
+            registeredAt: "2026-08-30T18:29:56.431Z"
+        )
+        let allDevices = [bedroom, casaLapa]
+
+        #expect(DeviceOwnerFilter.filterDevices(allDevices, owner: nil) == allDevices)
+        #expect(DeviceOwnerFilter.filterDevices(allDevices, owner: "   ") == allDevices)
+        #expect(DeviceOwnerFilter.filterDevices(allDevices, owner: "  dylan ") == [bedroom])
+        #expect(DeviceOwnerFilter.filterDevices(allDevices, owner: "BECCA") == [casaLapa])
+
+        let bedroomStatus = DeviceLiveStatus(
+            id: bedroom.id,
+            displayName: bedroom.displayName,
+            registeredBy: "Dylan",
+            reachable: true,
+            width: 1200,
+            height: 1600
+        )
+        let casaStatusWithoutRegistrant = DeviceLiveStatus(
+            id: casaLapa.id,
+            displayName: casaLapa.displayName,
+            registeredBy: nil,
+            reachable: true,
+            width: 1600,
+            height: 1200
+        )
+        let allStatuses = [bedroomStatus, casaStatusWithoutRegistrant]
+
+        #expect(
+            DeviceOwnerFilter.filterStatuses(
+                allStatuses,
+                owner: "Dylan",
+                knownDevices: allDevices
+            ) == [bedroomStatus]
+        )
+        #expect(
+            DeviceOwnerFilter.filterStatuses(
+                allStatuses,
+                owner: "Becca",
+                knownDevices: allDevices
+            ) == [casaStatusWithoutRegistrant]
+        )
+
+        let store = GalleryStore()
+        store.settings.displayName = "Dylan"
+        store.replaceFetchedRegisteredFrames(allDevices)
+        #expect(store.registeredFrames == [bedroom])
+
+        store.settings.displayName = "Becca"
+        #expect(store.registeredFrames == [casaLapa])
+
+        store.settings.displayName = ""
+        #expect(store.registeredFrames == allDevices)
+
+        store.settings.displayName = "Dylan"
+        store.applyDeviceStatusStatuses([bedroomStatus, casaStatusWithoutRegistrant])
+        #expect(store.deviceLinkStatus == .up)
+        #expect(!store.deviceScreenIsLandscape)
+
+        let offlineBedroom = DeviceLiveStatus(
+            id: bedroom.id,
+            displayName: bedroom.displayName,
+            registeredBy: "Dylan",
+            reachable: false
+        )
+        store.applyDeviceStatusStatuses([offlineBedroom, casaStatusWithoutRegistrant])
+        #expect(store.deviceLinkStatus == .down)
+        #expect(!store.deviceScreenIsLandscape)
+    }
+
+    @Test("FramesSettingsSection renders only the current owner's registered frames")
+    @MainActor
+    func framesSettingsSectionOwnerFiltering() throws {
+        let bedroom = RegisteredDevicePublic(
+            id: "cac2aed6-0d27-46e1-b021-cd837d312776",
+            displayName: "Bedroom",
+            registeredBy: "Dylan",
+            registeredAt: "2026-06-02T03:18:40.054Z"
+        )
+        let casaLapa = RegisteredDevicePublic(
+            id: "bfbe51b6-b476-4ed6-b005-1857fed3a93f",
+            displayName: "Casa lapa",
+            registeredBy: "Becca",
+            registeredAt: "2026-08-30T18:29:56.431Z"
+        )
+
+        let store = GalleryStore()
+        store.settings.displayName = "Dylan"
+        store.replaceFetchedRegisteredFrames([bedroom, casaLapa])
+
+        let section = FramesSettingsSection().environmentObject(store)
+        let inspected = try section.inspect()
+        #expect(try inspected.find(text: "Bedroom").string() == "Bedroom")
+        #expect(throws: (any Error).self) {
+            _ = try inspected.find(text: "Casa lapa")
+        }
+    }
 }
