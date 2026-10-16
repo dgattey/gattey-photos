@@ -6,12 +6,31 @@ public enum AppConfig {
         qos: .utility
     )
 
-    public static let supportFolder: URL = {
+    private static let defaultSupportFolder: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let dir = base.appendingPathComponent("GatteyPhotos", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }()
+
+    private nonisolated(unsafe) static var supportFolderOverride: URL?
+
+    public static var supportFolder: URL {
+        if let override = supportFolderOverride {
+            try? FileManager.default.createDirectory(at: override, withIntermediateDirectories: true)
+            return override
+        }
+        return defaultSupportFolder
+    }
+
+    public static func setSupportFolderForTesting(_ url: URL?) {
+        persistenceQueue.sync {
+            supportFolderOverride = url
+            if let url {
+                try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            }
+        }
+    }
 
     public static var settingsURL: URL {
         supportFolder.appendingPathComponent("config.json")

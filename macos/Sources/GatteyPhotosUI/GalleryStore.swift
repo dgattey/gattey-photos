@@ -15,7 +15,8 @@ private actor GalleryMutationSerial {
 
 @MainActor
 public final class GalleryStore: ObservableObject {
-    public init() {
+    public init(urlSession: URLSession = SyncURLSession.shared) {
+        self.urlSession = urlSession
         let initialSettings = AppSettings.defaults
         settings = initialSettings
         lastPersistedDisplayName = initialSettings.displayName
@@ -29,6 +30,7 @@ public final class GalleryStore: ObservableObject {
         }
     }
 
+    private let urlSession: URLSession
     public weak var session: AppSession?
 
     public let selection = GallerySelectionStore()
@@ -65,7 +67,7 @@ public final class GalleryStore: ObservableObject {
     #endif
 
     private let log = ActivityLogStore.shared
-    private var lastServerOK: Date?
+    private(set) var hasCompletedInitialConnectionCheck = false
     /// While `setAsCurrent` is in flight, skip pull logging for that id (avoids duplicate with "Show for today").
     private var setAsCurrentInFlight: PhotoID?
     private var periodicPullTask: Task<Void, Never>?
@@ -268,7 +270,7 @@ public final class GalleryStore: ObservableObject {
     }
 
     private func makeSyncClient() throws -> SyncClient {
-        try SyncClient(settings: settings)
+        try SyncClient(settings: settings, session: urlSession)
     }
 
     private func commit(
@@ -395,7 +397,10 @@ public final class GalleryStore: ObservableObject {
         selection.closeLightbox()
         AppConfig.saveLocalStateAsync(.empty)
         AppConfig.clearPhotoCacheAsync()
-        lastServerOK = nil
+        registeredFrames = []
+        resetDeviceScreenGeometry()
+        isAwaitingInitialGalleryPull = false
+        hasCompletedInitialConnectionCheck = false
         serverLinkStatus = .down
         deviceLinkStatus = .down
         pullRetryNotBefore = nil
@@ -461,7 +466,9 @@ public final class GalleryStore: ObservableObject {
         guard session?.isUnlocked == true else { return }
         do {
             let client = try makeSyncClient()
-            registeredFrames = try await client.listDevices()
+            let frames = try await client.listDevices()
+            guard session?.isUnlocked == true else { return }
+            registeredFrames = frames
         } catch {
             registeredFrames = []
         }
@@ -520,14 +527,13 @@ public final class GalleryStore: ObservableObject {
     }
 
     func noteServerOK() {
-        lastServerOK = Date()
         serverLinkStatus = .up
     }
 
     /// Marks sync server down without locking (e.g. local server stopped or unreachable).
     func markServerUnreachable() {
-        lastServerOK = nil
         serverLinkStatus = .down
+        hasCompletedInitialConnectionCheck = true
     }
 
     func markAwaitingInitialGalleryPull() {
@@ -619,9 +625,11 @@ public final class GalleryStore: ObservableObject {
                 // One blob read: the sync token tells us the catalog version + current photo. Only
                 // do a full catalog pull when the version actually changed.
                 let token = try await client.fetchCurrentPhoto()
+                guard session?.isUnlocked == true else { return }
                 if token.galleryVersion != state.updatedAt,
                     case .modified(let response) = try await client.fetchGallery()
                 {
+                    guard session?.isUnlocked == true else { return }
                     try await commit(response, client: client, downloadMissing: true)
                 }
                 applyCurrentPhoto(token)
@@ -631,13 +639,16 @@ public final class GalleryStore: ObservableObject {
                 let conditionalETag = activePhotos.isEmpty ? nil : state.updatedAt
                 switch try await client.fetchGallery(ifNoneMatch: conditionalETag) {
                 case .modified(let response):
+                    guard session?.isUnlocked == true else { return }
                     try await commit(response, client: client, downloadMissing: true)
                 case .notModified:
                     if let token = try? await client.fetchCurrentPhoto() {
+                        guard session?.isUnlocked == true else { return }
                         applyCurrentPhoto(token)
                     }
                 }
             }
+            guard session?.isUnlocked == true else { return }
             notePullSuccess()
             noteServerOK()
             logPulledCurrentPhotoChange(
@@ -721,6 +732,10 @@ public final class GalleryStore: ObservableObject {
         do {
             let client = try existing ?? makeSyncClient()
             let statuses = try await client.fetchDeviceStatus()
+            guard session?.isUnlocked == true else {
+                deviceLinkStatus = .down
+                return
+            }
             applyDeviceScreenGeometryIfReachable(from: statuses)
             let anyReachable = statuses.contains(where: \.reachable)
             deviceLinkStatus = statuses.isEmpty ? .down : (anyReachable ? .up : .down)
@@ -741,46 +756,46 @@ public final class GalleryStore: ObservableObject {
 
     /// Refreshes server + frame reachability. Pass `showCheckingUI: true` when opening Settings so pills can show "Connecting"; background calls keep the last status until the check finishes.
     func updateConnectionStatus(showCheckingUI: Bool = false) async {
-        let serverWasDown = serverLinkStatus == .down
-        isCheckingConnection = true
-        defer { isCheckingConnection = false }
-        if showCheckingUI {
-            serverLinkStatus = .checking
-            deviceLinkStatus = .checking
-        }
-        log.log(.system, level: .info, "Checking server and frames")
-        let server = await Reachability.pingServer(baseURL: settings.serverBaseURL)
-        applyServerStatus(pingSucceeded: server)
-        if server, session?.isUnlocked == true {
-            await reloadRegisteredFrames()
-            await updateDeviceStatus()
-        } else if !server {
-            deviceLinkStatus = .down
-        }
-        log.log(
-            .server,
-            level: server ? .success : .error,
-            server ? "Server reachable" : "Server unreachable",
-            detail: "\(settings.serverBaseURL)/api/health"
-        )
-        if session?.isUnlocked == true, server {
-            await session?.revalidateIfUnlocked(store: self)
-            if serverWasDown {
-                Task { await self.pullFromServer(kind: .foreground) }
+        let serverWasDown = hasCompletedInitialConnectionCheck && serverLinkStatus == .down
+        let server: Bool
+        do {
+            isCheckingConnection = true
+            defer { isCheckingConnection = false }
+            if showCheckingUI {
+                serverLinkStatus = .checking
+                deviceLinkStatus = .checking
             }
+            log.log(.system, level: .info, "Checking server and frames")
+            server = await Reachability.pingServer(baseURL: settings.serverBaseURL, session: urlSession)
+            applyServerStatus(pingSucceeded: server)
+            hasCompletedInitialConnectionCheck = true
+            if server, let session, session.isUnlocked {
+                async let frames: Void = reloadRegisteredFrames()
+                async let devices: Void = updateDeviceStatus()
+                async let auth: Void = session.revalidateIfUnlocked(store: self, urlSession: urlSession)
+                _ = await (frames, devices, auth)
+            } else if !server {
+                deviceLinkStatus = .down
+                finishOfflineBootstrap()
+            }
+            log.log(
+                .server,
+                level: server ? .success : .error,
+                server ? "Server reachable" : "Server unreachable",
+                detail: "\(settings.serverBaseURL)/api/health"
+            )
+        }
+        if server, serverWasDown, session?.isUnlocked == true {
+            await pullFromServer(kind: .foreground)
         }
     }
 
     private func applyServerStatus(pingSucceeded: Bool) {
         if pingSucceeded {
             noteServerOK()
-            return
+        } else {
+            markServerUnreachable()
         }
-        if let lastServerOK, Date().timeIntervalSince(lastServerOK) < 600 {
-            serverLinkStatus = .up
-            return
-        }
-        serverLinkStatus = .down
     }
 
     #if os(macOS)

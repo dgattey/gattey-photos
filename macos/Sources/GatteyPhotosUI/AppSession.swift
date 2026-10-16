@@ -36,43 +36,25 @@ public final class AppSession: ObservableObject {
     func tryAutoUnlock(store: GalleryStore) async {
         guard sessionPhase == .checking else { return }
         await store.bootstrapFromDiskIfNeeded()
-        await store.reloadSettingsAsync()
         let url = Self.canonicalServerBaseURL(store.settings.serverBaseURL)
         let hasDisplayName = !store.settings.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         guard !url.isEmpty, hasDisplayName, store.settings.syncBearer != nil else {
             lock(store: store)
             return
         }
-        guard await Reachability.pingServer(baseURL: url) else {
-            unlockOffline(store: store, serverURL: url)
-            return
-        }
-        switch await AuthVerifier.verify(settings: store.settings) {
-        case .ok:
-            unlockedServerBaseURL = Self.canonicalServerBaseURL(url)
-            isUnlocked = true
-            sessionPhase = .unlocked
-            unlockError = nil
-            resumePeriodicPull(store: store)
-        case .unauthorized:
-            lock(store: store)
-        case .unreachable:
-            unlockOffline(store: store, serverURL: url)
-        }
-    }
-
-    private func unlockOffline(store: GalleryStore, serverURL: String) {
-        unlockedServerBaseURL = Self.canonicalServerBaseURL(serverURL)
+        unlockedServerBaseURL = url
         isUnlocked = true
         sessionPhase = .unlocked
         unlockError = nil
-        store.markServerUnreachable()
-        store.finishOfflineBootstrap()
         resumePeriodicPull(store: store)
     }
 
     @discardableResult
-    func unlock(password: String, store: GalleryStore) async -> Bool {
+    func unlock(
+        password: String,
+        store: GalleryStore,
+        urlSession: URLSession = SyncURLSession.shared
+    ) async -> Bool {
         unlockError = nil
         let trimmed = password.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -80,7 +62,11 @@ public final class AppSession: ObservableObject {
             return false
         }
         let sessionToken: String
-        switch await AuthVerifier.createSession(password: trimmed, settings: store.settings) {
+        switch await AuthVerifier.createSession(
+            password: trimmed,
+            settings: store.settings,
+            session: urlSession
+        ) {
         case .success(let token):
             sessionToken = token
         case .wrongPassword:
@@ -138,23 +124,23 @@ public final class AppSession: ObservableObject {
         Task {
             store.markServerUnreachable()
             await store.updateConnectionStatus()
-            await revalidateIfUnlocked(store: store)
         }
     }
 
-    func revalidateIfUnlocked(store: GalleryStore) async {
+    func revalidateIfUnlocked(store: GalleryStore, urlSession: URLSession = SyncURLSession.shared) async {
         guard isUnlocked else { return }
         let url = Self.canonicalServerBaseURL(store.settings.serverBaseURL)
         if let unlocked = unlockedServerBaseURL, unlocked != url {
             unlockedServerBaseURL = url
         }
-        switch await AuthVerifier.verify(settings: store.settings) {
+        switch await AuthVerifier.verify(settings: store.settings, session: urlSession) {
         case .ok:
             unlockedServerBaseURL = url
         case .unauthorized:
             lockAndClearCaches(store: store)
         case .unreachable:
             store.markServerUnreachable()
+            store.finishOfflineBootstrap()
         }
     }
 }
