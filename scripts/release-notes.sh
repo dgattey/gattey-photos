@@ -10,6 +10,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 version="${GATTEY_RELEASE_VERSION:-1.0.0}"
+existing_appcast="${GATTEY_EXISTING_APPCAST:-}"
+max_versions="${GATTEY_MAX_RELEASE_NOTES_VERSIONS:-10}"
 has_pr_body=0
 pr_body=""
 if [[ -n "${GATTEY_RELEASE_NOTES+x}" && -n "${GATTEY_RELEASE_NOTES}" ]]; then
@@ -27,11 +29,13 @@ fail() {
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --version | --pr-body)
-      [[ $# -ge 2 ]] || fail "usage: release-notes.sh [--version <version>] [--pr-body <text>]"
+    --version | --pr-body | --existing-appcast | --max-versions)
+      [[ $# -ge 2 ]] || fail "usage: release-notes.sh [--version <version>] [--pr-body <text>] [--existing-appcast <path>] [--max-versions <count>]"
       case "$1" in
         --version) version="$2" ;;
         --pr-body) pr_body="$2"; has_pr_body=1 ;;
+        --existing-appcast) existing_appcast="$2" ;;
+        --max-versions) max_versions="$2" ;;
       esac
       shift 2
       ;;
@@ -80,13 +84,22 @@ else
   fi
 fi
 
-GATTEY_RAW_NOTES="$raw_body" python3 - "$version" <<'PY'
+GATTEY_RAW_NOTES="$raw_body" \
+GATTEY_EXISTING_APPCAST_PATH="$existing_appcast" \
+GATTEY_MAX_VERSIONS="$max_versions" \
+python3 - "$version" <<'PY'
 import html
 import os
 import re
+import subprocess
 import sys
 
-version = sys.argv[1]
+version = sys.argv[1].strip()
+existing_appcast = os.environ.get("GATTEY_EXISTING_APPCAST_PATH", "").strip()
+try:
+    max_versions = max(1, int(os.environ.get("GATTEY_MAX_VERSIONS", "10")))
+except ValueError:
+    max_versions = 10
 raw = os.environ.get("GATTEY_RAW_NOTES", "").replace("\r\n", "\n").replace("\r", "\n").strip()
 
 # Truncate at CURSOR_AGENT_PR_BODY_END if present before stripping comments
@@ -153,10 +166,6 @@ if not selected and not re.search(r"^#+\s+\S", raw, re.MULTILINE):
 
 raw = selected
 
-if re.search(r"<(ul|ol|li|p)\b", raw, re.IGNORECASE):
-    print(raw)
-    sys.exit(0)
-
 PATH_EXT_RE = re.compile(
     r"^("
     r"[/\.]\S+|"
@@ -205,56 +214,188 @@ def render_inline(text: str) -> str:
     return escaped
 
 
-lines = raw.splitlines()
-bullets = []
-paragraphs = []
-current_bullet = None
+def render_current_body(raw_text: str) -> str:
+    if re.search(r"<(ul|ol|li|p)\b", raw_text, re.IGNORECASE):
+        h3_stripped = re.sub(r"^\s*<h3\b[^>]*>[\s\S]*?</h3>\s*", "", raw_text, count=1, flags=re.IGNORECASE)
+        return h3_stripped.strip() or raw_text.strip()
 
-for line in lines:
-    stripped = line.strip()
-    if not stripped:
-        if current_bullet is not None:
-            bullets.append(current_bullet)
-            current_bullet = None
-        continue
-    if re.match(r"^!\[[^\]]*\]\([^)]+\)$", stripped) or re.match(
-        r"^<(?:img|video)\b", stripped, re.IGNORECASE
-    ):
-        continue
-    if re.match(r"^#+\s+", stripped):
-        continue
-    bullet_match = re.match(r"^[-*]\s+(.+)$", stripped)
-    if bullet_match:
-        if current_bullet is not None:
-            bullets.append(current_bullet)
-        current_bullet = bullet_match.group(1).strip()
-    elif current_bullet is not None:
-        current_bullet = f"{current_bullet} {stripped}"
-    else:
-        paragraphs.append(stripped)
+    lines = raw_text.splitlines()
+    bullets = []
+    paragraphs = []
+    current_bullet = None
 
-if current_bullet is not None:
-    bullets.append(current_bullet)
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            if current_bullet is not None:
+                bullets.append(current_bullet)
+                current_bullet = None
+            continue
+        if re.match(r"^!\[[^\]]*\]\([^)]+\)$", stripped) or re.match(
+            r"^<(?:img|video)\b", stripped, re.IGNORECASE
+        ):
+            continue
+        if re.match(r"^#+\s+", stripped):
+            continue
+        bullet_match = re.match(r"^[-*]\s+(.+)$", stripped)
+        if bullet_match:
+            if current_bullet is not None:
+                bullets.append(current_bullet)
+            current_bullet = bullet_match.group(1).strip()
+        elif current_bullet is not None:
+            current_bullet = f"{current_bullet} {stripped}"
+        else:
+            paragraphs.append(stripped)
 
-out_parts = []
-if paragraphs:
-    for p in paragraphs:
-        rendered_p = render_inline(p)
-        if rendered_p:
-            out_parts.append(
-                f'<p style="margin: 0 0 8px 0; line-height: 1.45;">{rendered_p}</p>'
+    if current_bullet is not None:
+        bullets.append(current_bullet)
+
+    out_parts = []
+    if paragraphs:
+        for p in paragraphs:
+            rendered_p = render_inline(p)
+            if rendered_p:
+                out_parts.append(
+                    f'<p style="margin: 0 0 8px 0; line-height: 1.45;">{rendered_p}</p>'
+                )
+    if bullets:
+        rendered_bullets = [render_inline(b) for b in bullets]
+        rendered_bullets = [b for b in rendered_bullets if b]
+        if rendered_bullets:
+            out_parts.append("<ul>")
+            for b in rendered_bullets:
+                out_parts.append(f'  <li style="margin-bottom: 6px; line-height: 1.45;">{b}</li>')
+            out_parts.append("</ul>")
+
+    if not out_parts:
+        out_parts.append(f'<p style="margin: 0; line-height: 1.45;">Release v{html.escape(version)}</p>')
+
+    return "\n".join(out_parts)
+
+
+def extract_sections_from_appcast_xml(xml_text: str) -> list[tuple[str, str]]:
+    sections: list[tuple[str, str]] = []
+    item_blocks = re.findall(r"<item\b[^>]*>([\s\S]*?)</item>", xml_text, flags=re.IGNORECASE)
+    if not item_blocks:
+        item_blocks = [xml_text]
+
+    for item in item_blocks:
+        desc_match = re.search(r"<description\b[^>]*>([\s\S]*?)</description>", item, flags=re.IGNORECASE)
+        if not desc_match:
+            continue
+        raw_desc = desc_match.group(1).strip()
+        cdata_match = re.search(r"<!\[CDATA\[([\s\S]*?)\]\]>", raw_desc)
+        if cdata_match:
+            desc = cdata_match.group(1).strip()
+        else:
+            desc = html.unescape(raw_desc).strip()
+        if not desc:
+            continue
+
+        h3_matches = list(re.finditer(r"<h3\b[^>]*>([\s\S]*?)</h3>", desc, flags=re.IGNORECASE))
+        if h3_matches:
+            for idx, match in enumerate(h3_matches):
+                ver_text = html.unescape(re.sub(r"<[^>]+>", "", match.group(1))).strip()
+                start = match.end()
+                end = h3_matches[idx + 1].start() if idx + 1 < len(h3_matches) else len(desc)
+                body_html = desc[start:end].strip()
+                if ver_text and body_html:
+                    sections.append((ver_text, body_html))
+        else:
+            ver_match = re.search(
+                r"<sparkle:shortVersionString>\s*([^<\s]+)\s*</sparkle:shortVersionString>",
+                item,
+                flags=re.IGNORECASE,
+            ) or re.search(r"<title>\s*([^<\s]+)\s*</title>", item, flags=re.IGNORECASE)
+            if ver_match:
+                ver_text = html.unescape(ver_match.group(1)).strip()
+                if ver_text:
+                    sections.append((ver_text, desc))
+
+    return sections
+
+
+def load_prior_sections(appcast_path: str) -> list[tuple[str, str]]:
+    if not appcast_path:
+        return []
+    collected: list[tuple[str, str]] = []
+    if os.path.isfile(appcast_path):
+        try:
+            with open(appcast_path, "r", encoding="utf-8") as f:
+                collected.extend(extract_sections_from_appcast_xml(f.read()))
+        except OSError:
+            pass
+
+    appcast_abs = os.path.abspath(appcast_path)
+    appcast_dir = os.path.dirname(appcast_abs)
+    appcast_name = os.path.basename(appcast_abs)
+    if os.path.isdir(appcast_dir):
+        rel_proc = subprocess.run(
+            ["git", "-C", appcast_dir, "ls-files", "--full-name", "--error-unmatch", appcast_name],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if rel_proc.returncode == 0:
+            rel_path = rel_proc.stdout.strip()
+            log_proc = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    appcast_dir,
+                    "log",
+                    f"-n{max_versions * 2}",
+                    "--format=%H",
+                    "--",
+                    appcast_name,
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
             )
-if bullets:
-    rendered_bullets = [render_inline(b) for b in bullets]
-    rendered_bullets = [b for b in rendered_bullets if b]
-    if rendered_bullets:
-        out_parts.append("<ul>")
-        for b in rendered_bullets:
-            out_parts.append(f'  <li style="margin-bottom: 6px; line-height: 1.45;">{b}</li>')
-        out_parts.append("</ul>")
+            if log_proc.returncode == 0:
+                for sha in log_proc.stdout.splitlines():
+                    sha = sha.strip()
+                    if not sha:
+                        continue
+                    show_proc = subprocess.run(
+                        ["git", "-C", appcast_dir, "show", f"{sha}:{rel_path}"],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    if show_proc.returncode == 0 and show_proc.stdout:
+                        collected.extend(extract_sections_from_appcast_xml(show_proc.stdout))
 
-if not out_parts:
-    out_parts.append(f'<p style="margin: 0; line-height: 1.45;">Release v{html.escape(version)}</p>')
+    return collected
 
-print("\n".join(out_parts))
+
+def normalize_version_key(ver: str) -> str:
+    return ver.strip().lstrip("vV")
+
+
+all_sections: list[tuple[str, str]] = [(version, render_current_body(raw))]
+all_sections.extend(load_prior_sections(existing_appcast))
+
+deduped: list[tuple[str, str]] = []
+seen_versions: set[str] = set()
+for ver_label, body_html in all_sections:
+    key = normalize_version_key(ver_label)
+    if not key or key in seen_versions:
+        continue
+    seen_versions.add(key)
+    deduped.append((key, body_html))
+    if len(deduped) >= max_versions:
+        break
+
+rendered_sections: list[str] = []
+for idx, (ver_label, body_html) in enumerate(deduped):
+    escaped_ver = html.escape(ver_label)
+    if idx == 0:
+        heading = f'<h3 style="margin: 0 0 6px 0; font-size: 13px;">{escaped_ver}</h3>'
+    else:
+        heading = f'<h3 style="margin: 14px 0 6px 0; font-size: 13px; opacity: 0.75;">{escaped_ver}</h3>'
+    rendered_sections.append(f"{heading}\n{body_html}")
+
+print("\n".join(rendered_sections))
 PY

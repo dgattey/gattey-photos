@@ -1,9 +1,11 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingHttpHeaders } from "node:http";
 import type { AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoFile = (path: string) => fileURLToPath(new URL(`../../${path}`, import.meta.url));
@@ -58,6 +60,7 @@ describe("release-notes.sh section extraction and Markdown-to-HTML formatting", 
     assert.equal(
       html,
       [
+        '<h3 style="margin: 0 0 6px 0; font-size: 13px;">1.2.3</h3>',
         "<ul>",
         '  <li style="margin-bottom: 6px; line-height: 1.45;">Check for updates automatically on launch.</li>',
         '  <li style="margin-bottom: 6px; line-height: 1.45;">Render <strong>Sparkle</strong> release notes as clean bullet lists.</li>',
@@ -76,6 +79,7 @@ describe("release-notes.sh section extraction and Markdown-to-HTML formatting", 
     assert.equal(
       html,
       [
+        '<h3 style="margin: 0 0 6px 0; font-size: 13px;">1.2.3</h3>',
         "<ul>",
         '  <li style="margin-bottom: 6px; line-height: 1.45;">Added <code>xattr -cr</code> instructions for <strong>Open Anyway</strong>.</li>',
         '  <li style="margin-bottom: 6px; line-height: 1.45;">Fixed <a href="https://photos.gattey.com/download/macos">download redirect</a>.</li>',
@@ -100,6 +104,7 @@ describe("release-notes.sh section extraction and Markdown-to-HTML formatting", 
     assert.equal(
       html,
       [
+        '<h3 style="margin: 0 0 6px 0; font-size: 13px;">1.2.3</h3>',
         "<ul>",
         '  <li style="margin-bottom: 6px; line-height: 1.45;">Improved gallery grid scrolling.</li>',
         "</ul>",
@@ -109,7 +114,13 @@ describe("release-notes.sh section extraction and Markdown-to-HTML formatting", 
 
   it("falls back to Release v<version> when the template is unedited", async () => {
     const html = await formatNotes(["--pr-body", TEMPLATE]);
-    assert.equal(html, '<p style="margin: 0; line-height: 1.45;">Release v1.2.3</p>');
+    assert.equal(
+      html,
+      [
+        '<h3 style="margin: 0 0 6px 0; font-size: 13px;">1.2.3</h3>',
+        '<p style="margin: 0; line-height: 1.45;">Release v1.2.3</p>',
+      ].join("\n"),
+    );
   });
 
   it("formats plain commit messages without markdown headings", async () => {
@@ -119,12 +130,206 @@ describe("release-notes.sh section extraction and Markdown-to-HTML formatting", 
     assert.equal(
       html,
       [
+        '<h3 style="margin: 0 0 6px 0; font-size: 13px;">1.2.3</h3>',
         '<p style="margin: 0 0 8px 0; line-height: 1.45;">Fix Sparkle launch update check (#12)</p>',
         "<ul>",
         '  <li style="margin-bottom: 6px; line-height: 1.45;">Defer checkForUpdates until probing cycle finishes.</li>',
         "</ul>",
       ].join("\n"),
     );
+  });
+});
+
+describe("release-notes.sh cumulative version history", () => {
+  let tempDir = "";
+  before(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "gattey-release-notes-test-"));
+  });
+  after(() => {
+    if (tempDir) {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("migrates an un-headed <description> from --existing-appcast using <sparkle:shortVersionString>", async () => {
+    const appcastPath = join(tempDir, "unheaded-appcast.xml");
+    writeFileSync(
+      appcastPath,
+      [
+        '<?xml version="1.0" standalone="yes"?>',
+        '<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">',
+        "  <channel>",
+        "    <item>",
+        "      <title>1.1.9</title>",
+        "      <sparkle:shortVersionString>1.1.9</sparkle:shortVersionString>",
+        "      <description><![CDATA[<ul>",
+        '  <li style="margin-bottom: 6px; line-height: 1.45;">Only show frames registered to your display name.</li>',
+        "</ul>]]></description>",
+        "    </item>",
+        "  </channel>",
+        "</rss>",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const res = await run([
+      "--version",
+      "1.1.10",
+      "--pr-body",
+      "# Release notes\n\n- Show cumulative release notes across updates.",
+      "--existing-appcast",
+      appcastPath,
+    ]);
+    assert.equal(res.status, 0, res.stderr);
+    assert.equal(
+      res.stdout.trimEnd(),
+      [
+        '<h3 style="margin: 0 0 6px 0; font-size: 13px;">1.1.10</h3>',
+        "<ul>",
+        '  <li style="margin-bottom: 6px; line-height: 1.45;">Show cumulative release notes across updates.</li>',
+        "</ul>",
+        '<h3 style="margin: 14px 0 6px 0; font-size: 13px; opacity: 0.75;">1.1.9</h3>',
+        "<ul>",
+        '  <li style="margin-bottom: 6px; line-height: 1.45;">Only show frames registered to your display name.</li>',
+        "</ul>",
+      ].join("\n"),
+    );
+  });
+
+  it("carries forward already-headed <h3> sections and deduplicates when re-running the same version", async () => {
+    const appcastPath = join(tempDir, "headed-appcast.xml");
+    writeFileSync(
+      appcastPath,
+      [
+        '<?xml version="1.0" standalone="yes"?>',
+        '<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">',
+        "  <channel>",
+        "    <item>",
+        "      <sparkle:shortVersionString>1.2.2</sparkle:shortVersionString>",
+        "      <description><![CDATA[",
+        '<h3 style="margin: 0 0 6px 0; font-size: 13px;">1.2.2</h3>',
+        "<ul>",
+        '  <li style="margin-bottom: 6px; line-height: 1.45;">Old 1.2.2 note.</li>',
+        "</ul>",
+        '<h3 style="margin: 14px 0 6px 0; font-size: 13px; opacity: 0.75;">1.2.1</h3>',
+        "<ul>",
+        '  <li style="margin-bottom: 6px; line-height: 1.45;">Note from 1.2.1.</li>',
+        "</ul>",
+        "]]></description>",
+        "    </item>",
+        "  </channel>",
+        "</rss>",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const nextRes = await run([
+      "--version",
+      "1.2.3",
+      "--pr-body",
+      "# Release notes\n\n- Note from 1.2.3.",
+      "--existing-appcast",
+      appcastPath,
+    ]);
+    assert.equal(nextRes.status, 0, nextRes.stderr);
+    assert.equal(
+      nextRes.stdout.trimEnd(),
+      [
+        '<h3 style="margin: 0 0 6px 0; font-size: 13px;">1.2.3</h3>',
+        "<ul>",
+        '  <li style="margin-bottom: 6px; line-height: 1.45;">Note from 1.2.3.</li>',
+        "</ul>",
+        '<h3 style="margin: 14px 0 6px 0; font-size: 13px; opacity: 0.75;">1.2.2</h3>',
+        "<ul>",
+        '  <li style="margin-bottom: 6px; line-height: 1.45;">Old 1.2.2 note.</li>',
+        "</ul>",
+        '<h3 style="margin: 14px 0 6px 0; font-size: 13px; opacity: 0.75;">1.2.1</h3>',
+        "<ul>",
+        '  <li style="margin-bottom: 6px; line-height: 1.45;">Note from 1.2.1.</li>',
+        "</ul>",
+      ].join("\n"),
+    );
+
+    const rerunRes = await run([
+      "--version",
+      "1.2.2",
+      "--pr-body",
+      "# Release notes\n\n- Updated 1.2.2 note.",
+      "--existing-appcast",
+      appcastPath,
+    ]);
+    assert.equal(rerunRes.status, 0, rerunRes.stderr);
+    assert.equal(
+      rerunRes.stdout.trimEnd(),
+      [
+        '<h3 style="margin: 0 0 6px 0; font-size: 13px;">1.2.2</h3>',
+        "<ul>",
+        '  <li style="margin-bottom: 6px; line-height: 1.45;">Updated 1.2.2 note.</li>',
+        "</ul>",
+        '<h3 style="margin: 14px 0 6px 0; font-size: 13px; opacity: 0.75;">1.2.1</h3>',
+        "<ul>",
+        '  <li style="margin-bottom: 6px; line-height: 1.45;">Note from 1.2.1.</li>',
+        "</ul>",
+      ].join("\n"),
+    );
+  });
+
+  it("caps cumulative release notes at 10 versions and drops the 11th oldest version", async () => {
+    const appcastPath = join(tempDir, "ten-versions-appcast.xml");
+    const existingSections: string[] = [];
+    for (let patch = 10; patch >= 1; patch--) {
+      const style =
+        patch === 10
+          ? "margin: 0 0 6px 0; font-size: 13px;"
+          : "margin: 14px 0 6px 0; font-size: 13px; opacity: 0.75;";
+      existingSections.push(
+        `<h3 style="${style}">1.0.${patch}</h3>`,
+        "<ul>",
+        `  <li style="margin-bottom: 6px; line-height: 1.45;">Note for 1.0.${patch}.</li>`,
+        "</ul>",
+      );
+    }
+    writeFileSync(
+      appcastPath,
+      [
+        '<?xml version="1.0" standalone="yes"?>',
+        '<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">',
+        "  <channel>",
+        "    <item>",
+        "      <sparkle:shortVersionString>1.0.10</sparkle:shortVersionString>",
+        `      <description><![CDATA[${existingSections.join("\n")}]]></description>`,
+        "    </item>",
+        "  </channel>",
+        "</rss>",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const res = await run([
+      "--version",
+      "1.0.11",
+      "--pr-body",
+      "# Release notes\n\n- Note for 1.0.11.",
+      "--existing-appcast",
+      appcastPath,
+    ]);
+    assert.equal(res.status, 0, res.stderr);
+    const headings = Array.from(res.stdout.matchAll(/<h3[^>]*>([^<]+)<\/h3>/g), (m) => m[1]);
+    assert.equal(headings.length, 10);
+    assert.deepEqual(headings, [
+      "1.0.11",
+      "1.0.10",
+      "1.0.9",
+      "1.0.8",
+      "1.0.7",
+      "1.0.6",
+      "1.0.5",
+      "1.0.4",
+      "1.0.3",
+      "1.0.2",
+    ]);
+    assert.ok(!res.stdout.includes("1.0.1<"));
+    assert.ok(!res.stdout.includes("Note for 1.0.1."));
   });
 });
 
@@ -170,6 +375,7 @@ describe("release-notes.sh GitHub PR lookup", () => {
     assert.equal(
       html,
       [
+        '<h3 style="margin: 0 0 6px 0; font-size: 13px;">1.2.3</h3>',
         "<ul>",
         '  <li style="margin-bottom: 6px; line-height: 1.45;">Stripped Xcode toolchain <code>LC_RPATH</code> entries.</li>',
         "</ul>",
