@@ -204,7 +204,11 @@ if [[ "$SPARKLE_CHANGED" == "1" ]]; then
   csign "$FW"
 fi
 
-csign --entitlements "$SIGN_ENTITLEMENTS" "$APP"
+if [[ "$SIGN_ID" == "-" ]]; then
+  csign --entitlements "$SIGN_ENTITLEMENTS" -r='designated => identifier "com.gattey.photos"' "$APP"
+else
+  csign --entitlements "$SIGN_ENTITLEMENTS" "$APP"
+fi
 
 APP_SIZE="$(du -sh "$APP" | cut -f1)"
 echo "Packaged: $APP ($APP_SIZE)"
