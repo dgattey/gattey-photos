@@ -38,6 +38,9 @@ public final class GalleryStore: ObservableObject {
     @Published public var settings: AppSettings {
         didSet {
             settingsRevision &+= 1
+            if oldValue.displayName != settings.displayName {
+                applyOwnerFilterToRegisteredFrames()
+            }
         }
     }
     @Published var state: GalleryState {
@@ -393,11 +396,12 @@ public final class GalleryStore: ObservableObject {
     /// Clears in-memory gallery state, local manifest, and JPEG disk cache (used when locking).
     func clearLockedGalleryData() {
         state = .empty
+        allFetchedRegisteredFrames = []
+        registeredFrames = []
         selection.clearSelection()
         selection.closeLightbox()
         AppConfig.saveLocalStateAsync(.empty)
         AppConfig.clearPhotoCacheAsync()
-        registeredFrames = []
         resetDeviceScreenGeometry()
         isAwaitingInitialGalleryPull = false
         hasCompletedInitialConnectionCheck = false
@@ -428,16 +432,31 @@ public final class GalleryStore: ObservableObject {
             !newDisplayName.isEmpty,
             session?.isUnlocked == true
         {
-            Task { await propagateDisplayNameChange(from: previousDisplayName, to: newDisplayName) }
+            renameOwnedRegisteredFramesLocally(from: previousDisplayName, to: newDisplayName)
+            Task {
+                await propagateDisplayNameChange(from: previousDisplayName, to: newDisplayName)
+                await updateConnectionStatus()
+            }
+        } else {
+            applyOwnerFilterToRegisteredFrames()
+            Task { await updateConnectionStatus() }
         }
-        Task { await updateConnectionStatus() }
     }
 
     private func propagateDisplayNameChange(from oldName: String, to newName: String) async {
-        guard state.uploaders.values.contains(oldName) else { return }
+        let hasUploaderMatch = state.uploaders.values.contains {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                .caseInsensitiveCompare(oldName) == .orderedSame
+        }
+        let hasOwnedFrames = registeredFrames.contains {
+            DeviceOwnerFilter.matches(registeredBy: $0.registeredBy, owner: newName)
+                || DeviceOwnerFilter.matches(registeredBy: $0.registeredBy, owner: oldName)
+        }
+        guard hasUploaderMatch || hasOwnedFrames else { return }
         if oldName.caseInsensitiveCompare(newName) != .orderedSame {
             let collidesWithAnotherUploader = state.uploaders.values.contains { mapped in
-                mapped != oldName
+                mapped.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .caseInsensitiveCompare(oldName) != .orderedSame
                     && mapped.trimmingCharacters(in: .whitespacesAndNewlines)
                         .caseInsensitiveCompare(newName) == .orderedSame
             }
@@ -462,15 +481,51 @@ public final class GalleryStore: ObservableObject {
         }
     }
 
+    private var allFetchedRegisteredFrames: [RegisteredDevicePublic] = []
+
+    func applyOwnerFilterToRegisteredFrames() {
+        registeredFrames = DeviceOwnerFilter.filterDevices(
+            allFetchedRegisteredFrames,
+            owner: settings.displayName
+        )
+    }
+
+    private func renameOwnedRegisteredFramesLocally(from oldName: String, to newName: String) {
+        let collides = state.uploaders.values.contains { mapped in
+            mapped.trimmingCharacters(in: .whitespacesAndNewlines)
+                .caseInsensitiveCompare(oldName) != .orderedSame
+                && mapped.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .caseInsensitiveCompare(newName) == .orderedSame
+        }
+        guard !collides else {
+            applyOwnerFilterToRegisteredFrames()
+            return
+        }
+        for index in allFetchedRegisteredFrames.indices {
+            if DeviceOwnerFilter.matches(
+                registeredBy: allFetchedRegisteredFrames[index].registeredBy,
+                owner: oldName
+            ) {
+                allFetchedRegisteredFrames[index].registeredBy = newName
+            }
+        }
+        applyOwnerFilterToRegisteredFrames()
+    }
+
+    func replaceFetchedRegisteredFrames(_ devices: [RegisteredDevicePublic]) {
+        allFetchedRegisteredFrames = devices
+        applyOwnerFilterToRegisteredFrames()
+    }
+
     public func reloadRegisteredFrames() async {
         guard session?.isUnlocked == true else { return }
         do {
             let client = try makeSyncClient()
-            let frames = try await client.listDevices()
+            let devices = try await client.listDevices(owner: settings.displayName)
             guard session?.isUnlocked == true else { return }
-            registeredFrames = frames
+            replaceFetchedRegisteredFrames(devices)
         } catch {
-            registeredFrames = []
+            replaceFetchedRegisteredFrames([])
         }
     }
 
@@ -489,24 +544,27 @@ public final class GalleryStore: ObservableObject {
 
     public func unregisterFrame(id: String) async throws {
         let client = try makeSyncClient()
-        let snapshot = registeredFrames
-        registeredFrames.removeAll { $0.id == id }
+        let allSnapshot = allFetchedRegisteredFrames
+        allFetchedRegisteredFrames.removeAll { $0.id == id }
+        applyOwnerFilterToRegisteredFrames()
         do {
             try await client.deleteDevice(id: id)
             log.log(.device, level: .info, "Frame removed")
             Task { await updateDeviceStatus(using: client) }
         } catch {
-            registeredFrames = snapshot
+            allFetchedRegisteredFrames = allSnapshot
+            applyOwnerFilterToRegisteredFrames()
             throw error
         }
     }
 
     private func upsertRegisteredFrame(_ device: RegisteredDevicePublic) {
-        if let index = registeredFrames.firstIndex(where: { $0.id == device.id }) {
-            registeredFrames[index] = device
+        if let index = allFetchedRegisteredFrames.firstIndex(where: { $0.id == device.id }) {
+            allFetchedRegisteredFrames[index] = device
         } else {
-            registeredFrames.append(device)
+            allFetchedRegisteredFrames.append(device)
         }
+        applyOwnerFilterToRegisteredFrames()
     }
 
     private func applyDeviceScreenGeometry(from status: DeviceLiveStatus) {
@@ -724,6 +782,27 @@ public final class GalleryStore: ObservableObject {
         deviceScreenIsLandscape = false
     }
 
+    func applyDeviceStatusStatuses(_ fetchedStatuses: [DeviceLiveStatus]) {
+        let statuses = DeviceOwnerFilter.filterStatuses(
+            fetchedStatuses,
+            owner: settings.displayName,
+            knownDevices: allFetchedRegisteredFrames
+        )
+        applyDeviceScreenGeometryIfReachable(from: statuses)
+        let anyReachable = statuses.contains(where: \.reachable)
+        deviceLinkStatus = statuses.isEmpty ? .down : (anyReachable ? .up : .down)
+        if !anyReachable, !statuses.isEmpty {
+            for item in statuses where !item.reachable {
+                log.log(
+                    .device,
+                    level: .warning,
+                    "Frame offline",
+                    detail: "\(item.displayName): \(item.lastPushError ?? "unreachable")"
+                )
+            }
+        }
+    }
+
     func updateDeviceStatus(using existing: SyncClient? = nil) async {
         guard session?.isUnlocked == true else {
             deviceLinkStatus = .down
@@ -731,24 +810,12 @@ public final class GalleryStore: ObservableObject {
         }
         do {
             let client = try existing ?? makeSyncClient()
-            let statuses = try await client.fetchDeviceStatus()
+            let fetchedStatuses = try await client.fetchDevicesStatus(owner: settings.displayName)
             guard session?.isUnlocked == true else {
                 deviceLinkStatus = .down
                 return
             }
-            applyDeviceScreenGeometryIfReachable(from: statuses)
-            let anyReachable = statuses.contains(where: \.reachable)
-            deviceLinkStatus = statuses.isEmpty ? .down : (anyReachable ? .up : .down)
-            if !anyReachable, !statuses.isEmpty {
-                for item in statuses where !item.reachable {
-                    log.log(
-                        .device,
-                        level: .warning,
-                        "Frame offline",
-                        detail: "\(item.displayName): \(item.lastPushError ?? "unreachable")"
-                    )
-                }
-            }
+            applyDeviceStatusStatuses(fetchedStatuses)
         } catch {
             deviceLinkStatus = .down
         }

@@ -127,12 +127,13 @@ public struct SyncClient: Sendable {
 
     private func request(
         path: String,
+        queryItems: [URLQueryItem] = [],
         method: String,
         body: Data? = nil,
         contentType: String? = nil,
         context: String? = nil
     ) async throws -> Data {
-        var req = makeRequest(path: path, method: method, contentType: contentType)
+        var req = makeRequest(path: path, queryItems: queryItems, method: method, contentType: contentType)
         if let body { req.httpBody = body }
         let url = req.url ?? baseURL
         let (data, res) = try await session.data(for: req)
@@ -169,11 +170,15 @@ public struct SyncClient: Sendable {
 
     private func makeRequest(
         path: String,
+        queryItems: [URLQueryItem] = [],
         method: String,
         contentType: String? = nil
     ) -> URLRequest {
         var url = baseURL
         url.append(path: path.hasPrefix("/") ? String(path.dropFirst()) : path)
+        if !queryItems.isEmpty {
+            url.append(queryItems: queryItems)
+        }
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.timeoutInterval = SyncURLSession.requestTimeout
@@ -317,8 +322,19 @@ public struct SyncClient: Sendable {
         return url
     }
 
-    public func listDevices() async throws -> [RegisteredDevicePublic] {
-        let data = try await request(path: "/api/devices", method: "GET")
+    private static func ownerQueryItems(_ owner: String?) -> [URLQueryItem] {
+        guard let trimmed = owner?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return []
+        }
+        return [URLQueryItem(name: "owner", value: trimmed)]
+    }
+
+    public func listDevices(owner: String? = nil) async throws -> [RegisteredDevicePublic] {
+        let data = try await request(
+            path: "/api/devices",
+            queryItems: Self.ownerQueryItems(owner),
+            method: "GET"
+        )
         let decoded = try await BackgroundJSONCodec.decode(DeviceListResponse.self, from: data)
         return decoded.devices
     }
@@ -348,10 +364,18 @@ public struct SyncClient: Sendable {
         _ = try await request(path: "/api/devices/\(id)", method: "DELETE")
     }
 
-    public func fetchDeviceStatus() async throws -> [DeviceLiveStatus] {
-        let data = try await request(path: "/api/devices/status", method: "GET")
+    public func fetchDevicesStatus(owner: String? = nil) async throws -> [DeviceLiveStatus] {
+        let data = try await request(
+            path: "/api/devices/status",
+            queryItems: Self.ownerQueryItems(owner),
+            method: "GET"
+        )
         let decoded = try await BackgroundJSONCodec.decode(DeviceStatusResponse.self, from: data)
         return decoded.devices
+    }
+
+    public func fetchDeviceStatus(owner: String? = nil) async throws -> [DeviceLiveStatus] {
+        try await fetchDevicesStatus(owner: owner)
     }
 
     public func cachePhotoIfMissing(_ photo: PhotoEntry) async throws {
