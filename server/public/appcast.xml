@@ -3,21 +3,19 @@
     <channel>
         <title>Gattey Photos</title>
         <item>
-            <title>1.1.6</title>
-            <pubDate>Fri, 16 Oct 2026 01:28:31 +0000</pubDate>
+            <title>1.1.7</title>
+            <pubDate>Fri, 16 Oct 2026 06:19:47 +0000</pubDate>
             <link>https://photos.gattey.com</link>
-            <sparkle:version>92</sparkle:version>
-            <sparkle:shortVersionString>1.1.6</sparkle:shortVersionString>
+            <sparkle:version>94</sparkle:version>
+            <sparkle:shortVersionString>1.1.7</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<p style="margin: 0 0 8px 0; line-height: 1.45;">Embed readable HTML release notes in Sparkle appcast.xml (#13)</p>
-<ul>
-  <li style="margin-bottom: 6px; line-height: 1.45;">Embed readable HTML release notes in Sparkle appcast.xml</li>
-  <li style="margin-bottom: 6px; line-height: 1.45;">Skip Vercel builds when server/ is unchanged</li>
-  <li style="margin-bottom: 6px; line-height: 1.45;">Keep appcast untouched on PR branches and sync origin/main before release packaging</li>
+            <description><![CDATA[<ul>
+  <li style="margin-bottom: 6px; line-height: 1.45;">Fix macOS in-app update signature validation (<code>-67050</code>) across ad-hoc signed releases</li>
+  <li style="margin-bottom: 6px; line-height: 1.45;">Enforce and cryptographically verify Sparkle Ed25519 update signatures at build time</li>
 </ul>
 ]]></description>
-            <enclosure url="https://photos.gattey.com/Gattey-Photos-1.1.6.zip" length="4064965" type="application/octet-stream" sparkle:edSignature="Q1k9PvHC8KLM4Yws+HOHyfBs3IZLLWFhpt6FPPbJ9KTGqsEFgBrfAJxEwlcy2csDGGIfpNVe9zBPNLA2lpsQBQ=="/>
+            <enclosure url="https://photos.gattey.com/Gattey-Photos-1.1.7.zip" length="4064999" type="application/octet-stream" sparkle:edSignature="/MSUqCCTxeRaTFW6L8rlPqqLqhTE3USpGk8kkOelJPq9eQCbMHYwECBXmuUJ6lVwkg8wyLJOw5/QGz53CTe8CA=="/>
         </item>
     </channel>
 </rss>
