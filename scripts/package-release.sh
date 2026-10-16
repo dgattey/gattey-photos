@@ -80,7 +80,7 @@ ZIP="$WORK/Gattey-Photos-${VERSION}.zip"
 ditto -c -k --keepParent "$APP" "$ZIP"
 rm -rf "$STAGE"
 
-"$ROOT/scripts/release-notes.sh" --version "$VERSION" >"$WORK/Gattey-Photos-${VERSION}.html"
+"$ROOT/scripts/release-notes.sh" --version "$VERSION" --existing-appcast "$PUBLIC_DIR/appcast.xml" >"$WORK/Gattey-Photos-${VERSION}.html"
 
 GA="$MACOS/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
 [[ -x "$GA" ]] || { echo "package-release: generate_appcast not found — run 'cd macos && swift build'." >&2; exit 1; }
