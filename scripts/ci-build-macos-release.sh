@@ -20,8 +20,19 @@ SIGN_ID="$(resolve_sign_identity)"
 echo "ci-build-macos-release: signing identity=${SIGN_ID}" >&2
 export GATTEY_SIGN_IDENTITY="$SIGN_ID"
 
+sync_origin_main() {
+  if [[ "${GITHUB_ACTIONS:-}" == "true" && "${GITHUB_REF:-}" == "refs/heads/main" ]]; then
+    git -C "$ROOT" fetch origin main
+    git -C "$ROOT" rebase origin/main
+  fi
+}
+
+sync_origin_main
+
 cd "$ROOT/macos"
 swift build --build-system native -c release --product GatteyPhotos
+
+sync_origin_main
 
 VERSION="$("$ROOT/scripts/next-release-version.sh")"
 echo "ci-build-macos-release: packaging v${VERSION}"
