@@ -1,6 +1,6 @@
 import Foundation
-import Observation
 import GatteyPhotosCore
+import Observation
 
 public enum SessionPhase {
     case checking
