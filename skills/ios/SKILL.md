@@ -13,7 +13,7 @@ The iOS app shares **GatteyPhotosCore** (sync, manifest, auth) and **GatteyPhoto
 |--------|----------|------|
 | `GatteyPhotosCore` | macOS + iOS | Models, `SyncClient`, `AppConfig`; macOS-only helpers behind `#if os(macOS)` |
 | `GatteyPhotosUI` | macOS + iOS | Shared SwiftUI (`AppRootContainer`, `GalleryStore`, grid, lightbox) |
-| `GatteyPhotosIOS` | iOS | `@main` — wires environment objects |
+| `GatteyPhotosIOS` | iOS | `@main` — injects the `@Observable` stores with `.environment` |
 | `GatteyPhotosApp` | macOS | `@main` + `AppDelegate` |
 Bundle ID: `com.gattey.photos`.
 
@@ -31,11 +31,7 @@ From repo root:
 ./scripts/build-ios.sh
 ```
 
-Defaults to iPhone 17 simulator. Override:
-
-```bash
-IOS_SIM_DEST='platform=iOS Simulator,name=iPad Pro 13-inch (M5)' ./scripts/build-ios.sh
-```
+Compiles `GatteyPhotosCore`, `GatteyPhotosUI`, and `GatteyPhotosIOS` with `swiftc` against the iOS Simulator SDK (no Xcode project, no `xcodebuild`) and prints the path of `macos/.build/ios-sim/Gattey Photos.app`. `Info.plist` comes from `macos/Sources/GatteyPhotosIOS/Info.plist`.
 
 ## Build + install + launch (iPad or iPhone)
 
@@ -55,16 +51,9 @@ iPhone:
 ./scripts/launch.sh ios
 ```
 
-Uses derived data under `macos/.derivedData-ios` and `simctl install` / `launch`.
+Runs `./scripts/build-ios.sh`, then `simctl install` / `launch`.
 
 In Simulator, choose **Device → iPad** (or iPhone) so the app is full-screen—not the tiny iPhone-compat window; use **⌘1** for the app switcher if the app is behind Simulator chrome.
-
-## Run in Xcode
-
-1. `open macos/Package.swift`
-2. Scheme **GatteyPhotosIOS**
-3. Destination: **iPad** or **iPhone** simulator
-4. Run (⌘R)
 
 ## macOS dev loop unchanged
 

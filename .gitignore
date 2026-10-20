@@ -7,10 +7,6 @@ node_modules/
 .env
 .env*.local
 server/.data/
-*.xcuserstate
-xcuserdata/
-DerivedData/
-macos/.derivedData-ios/
 .build/
 .build-ios-check/
 .swiftpm/
