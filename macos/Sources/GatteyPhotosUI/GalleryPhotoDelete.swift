@@ -76,7 +76,7 @@ extension EnvironmentValues {
 
 /// Handles Backspace (`.delete`) and forward-delete (`.deleteForward`) with a confirmation step.
 struct GalleryDeleteHandling: ViewModifier {
-    @EnvironmentObject private var store: GalleryStore
+    @Environment(GalleryStore.self) private var store
     @Environment(GallerySelectionStore.self) private var selection
     let photoIDs: Set<PhotoID>
 
@@ -297,7 +297,7 @@ extension View {
 // MARK: - Grid arrow selection (lightbox closed)
 
 private struct GalleryArrowSelectionKeyboardHandling: ViewModifier {
-    @EnvironmentObject private var store: GalleryStore
+    @Environment(GalleryStore.self) private var store
     @Environment(GallerySelectionStore.self) private var selection
     let isEnabled: Bool
 
@@ -335,7 +335,7 @@ extension View {
 // MARK: - Lightbox left/right arrows
 
 private struct GalleryLightboxArrowKeyboardHandling: ViewModifier {
-    @EnvironmentObject private var store: GalleryStore
+    @Environment(GalleryStore.self) private var store
     @Environment(GallerySelectionStore.self) private var selection
 
     func body(content: Content) -> some View {

@@ -4,7 +4,7 @@ import SwiftUI
 /// Left column: large preview of the photo on the Bloomin8 device; drop target to set current.
 struct DeviceCurrentPreview: View {
     @Environment(AppChromeState.self) private var chrome
-    @EnvironmentObject private var store: GalleryStore
+    @Environment(GalleryStore.self) private var store
     @State private var isDropTargeted = false
     #if os(macOS)
     @State private var isPreviewHovered = false

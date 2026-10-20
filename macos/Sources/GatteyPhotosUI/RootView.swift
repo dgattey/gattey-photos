@@ -6,12 +6,13 @@ import AppKit
 #endif
 
 struct RootView: View {
-    @EnvironmentObject private var store: GalleryStore
+    @Environment(GalleryStore.self) private var store
     @Environment(\.scenePhase) private var scenePhase
     @State private var resignedActiveAt: Date?
     @State private var navigationPath = NavigationPath()
 
     var body: some View {
+        @Bindable var store = store
         NavigationStack(path: $navigationPath) {
             galleryRoot
                 .navigationDestination(for: PhotoID.self) { photoID in

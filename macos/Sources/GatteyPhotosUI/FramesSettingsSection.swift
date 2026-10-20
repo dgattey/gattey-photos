@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Family frames registered on the server (any member can add/remove). Tokens stay on the server.
 struct FramesSettingsSection: View {
-    @EnvironmentObject private var store: GalleryStore
+    @Environment(GalleryStore.self) private var store
     @Environment(\.colorScheme) private var colorScheme
     @State private var setupPasteText = ""
     @State private var showBloomin8Help = false

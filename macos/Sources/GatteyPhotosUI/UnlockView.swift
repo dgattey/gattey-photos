@@ -2,8 +2,8 @@ import GatteyPhotosCore
 import SwiftUI
 
 struct UnlockView: View {
-    @EnvironmentObject private var store: GalleryStore
-    @EnvironmentObject private var session: AppSession
+    @Environment(GalleryStore.self) private var store
+    @Environment(AppSession.self) private var session
     @State private var displayName = AppSettings.defaultDisplayName
     @State private var password = ""
     @State private var bloomin8SetupText = ""

@@ -2,7 +2,7 @@ import GatteyPhotosCore
 import SwiftUI
 
 struct GallerySelectionBar: View {
-    @EnvironmentObject private var store: GalleryStore
+    @Environment(GalleryStore.self) private var store
     @Environment(GallerySelectionStore.self) private var selection
     @Environment(\.galleryDeleteRequest) private var galleryDeleteRequest
 

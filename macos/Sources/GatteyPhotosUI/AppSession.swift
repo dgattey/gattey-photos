@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import GatteyPhotosCore
 
 public enum SessionPhase {
@@ -8,12 +9,13 @@ public enum SessionPhase {
 }
 
 @MainActor
-public final class AppSession: ObservableObject {
+@Observable
+public final class AppSession {
     public init() {}
 
-    @Published public private(set) var sessionPhase: SessionPhase = .checking
-    @Published public private(set) var isUnlocked = false
-    @Published var unlockError: String?
+    public private(set) var sessionPhase: SessionPhase = .checking
+    public private(set) var isUnlocked = false
+    var unlockError: String?
 
     private var unlockedServerBaseURL: String?
 

@@ -11,7 +11,7 @@ private enum PreviewGallerySplitLayout {
 
 /// Resizable split on iPad; stacked preview + grid on iPhone.
 struct PreviewGallerySplit<Right: View>: View {
-    @EnvironmentObject private var store: GalleryStore
+    @Environment(GalleryStore.self) private var store
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @ViewBuilder var right: () -> Right
 

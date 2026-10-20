@@ -8,10 +8,11 @@ import UIKit
 #endif
 
 @MainActor
-final class PhotoImageModel: ObservableObject {
-    @Published private(set) var image: PlatformThumbnailImage?
-    @Published private(set) var isLoading = false
-    @Published private(set) var loadFailed = false
+@Observable
+final class PhotoImageModel {
+    private(set) var image: PlatformThumbnailImage?
+    private(set) var isLoading = false
+    private(set) var loadFailed = false
     private var loadTask: Task<Void, Never>?
     private var loadedPhotoID: PhotoID?
     private var loadedMaxPixelSize: Int?
@@ -103,8 +104,8 @@ struct CachedPhotoImage: View {
     /// When set, loads a server-resized thumbnail of this width (grid) instead of the full image.
     var thumbnailWidth: Int? = nil
 
-    @EnvironmentObject private var store: GalleryStore
-    @StateObject private var model = PhotoImageModel()
+    @Environment(GalleryStore.self) private var store
+    @State private var model = PhotoImageModel()
 
     private func ensureCached(_ id: PhotoID) async {
         if let thumbnailWidth {

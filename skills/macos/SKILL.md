@@ -16,15 +16,11 @@ The sync API is **not** bundled in the app. Run the server separately (`./script
 - `GatteyPhotosApp` — `@main` macOS shell (`AppDelegate`, Debug menu)
 Gallery pull while unlocked matches iOS: `AppSession` starts `GalleryStore.startPeriodicPullWhileUnlocked()` (15 min, same code path as refresh and ⌘R Sync). No LaunchAgent or bundled helper binary.
 
-Open `macos/Package.swift` in Xcode for debugging UI.
-
 iOS/iPad app (shared `GatteyPhotosUI` + `GatteyPhotosCore`): see **`skills/ios/SKILL.md`**.
 
 ## App icon
 
-**What a fresh Xcode app target does:** add `AppIcon.icon` to the project; Xcode compiles it to `Assets.car` at build time (`CFBundleIconName` = `AppIcon`). Author in **Icon Composer** (layer fills, glass on/off), not hand-wavy JSON.
-
-**This repo (SwiftPM, no `.xcodeproj`):** same bundle at `macos/AppIcon.icon/`; `./scripts/generate-app-icon.sh` runs `actool` → `macos/Assets.car`; packaging copies only `Assets.car`.
+Author `macos/AppIcon.icon/` in **Icon Composer** (layer fills, glass on/off), not hand-wavy JSON. There is no Xcode project: `./scripts/generate-app-icon.sh` runs `actool` → `macos/Assets.car` (`CFBundleIconName` = `AppIcon`), and packaging copies only `Assets.car`.
 
 **Canvas gradient (root fill in `icon.json`):** vertical linear gradient only (two stops). Top RGB **94, 159, 125** → `srgb:0.368627,0.623529,0.490196,1.000000`. Bottom RGB **46, 92, 69** → `srgb:0.180392,0.360784,0.270588,1.000000`. Orientation `start` (0.5, 0) → `stop` (0.5, 1). Edit in Icon Composer: select **AppIcon** in the sidebar → Fill → Gradient.
 
@@ -38,7 +34,7 @@ The app self-updates via Sparkle 2 (SPM dep in `Package.swift`, linked into `Gat
 
 ## State
 
-- `GalleryStore` (`GalleryStore.swift`) — UI-facing `ObservableObject`
+- `GalleryStore` (`GalleryStore.swift`) — UI-facing `@Observable` store, read with `@Environment(GalleryStore.self)`
 - `AppConfig` — `config.json` and `local-gallery.json` under Application Support
 
 ## UI layout

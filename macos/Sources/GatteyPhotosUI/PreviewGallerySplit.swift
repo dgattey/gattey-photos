@@ -6,7 +6,7 @@ import SwiftUI
 struct PreviewGallerySplit<Right: View>: View {
     @Environment(AppChromeState.self) private var chrome
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
-    @EnvironmentObject private var store: GalleryStore
+    @Environment(GalleryStore.self) private var store
     @ViewBuilder var right: () -> Right
 
     var body: some View {

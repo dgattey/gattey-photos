@@ -101,15 +101,17 @@ final class SparkleUpdaterDelegate: NSObject, SPUUpdaterDelegate {
 }
 
 @MainActor
-final class AppUpdaterModel: ObservableObject {
+@Observable
+final class AppUpdaterModel {
     let controller: SPUStandardUpdaterController
-    @Published var canCheckForUpdates = false
+    var canCheckForUpdates = false
     let isReleaseConfigured: Bool
     private(set) var didCheckOnLaunch = false
     private(set) var didScheduleLaunchCheck = false
     let sparkleDelegate = SparkleUpdaterDelegate()
     let sparkleUserDriverDelegate = SparkleStandardUserDriverDelegate()
-    private var launchCheckCancellable: AnyCancellable?
+    @ObservationIgnored private var canCheckCancellable: AnyCancellable?
+    @ObservationIgnored private var launchCheckCancellable: AnyCancellable?
 
     init(
         infoDictionary: [String: Any]? = Bundle.main.infoDictionary,
@@ -130,7 +132,8 @@ final class AppUpdaterModel: ObservableObject {
             self?.didCheckOnLaunch = true
             self?.launchCheckCancellable = nil
         }
-        controller.updater.publisher(for: \.canCheckForUpdates).assign(to: &$canCheckForUpdates)
+        canCheckCancellable = controller.updater.publisher(for: \.canCheckForUpdates)
+            .sink { [weak self] in self?.canCheckForUpdates = $0 }
     }
 
     func checkForUpdates() {
@@ -180,7 +183,7 @@ final class AppUpdaterModel: ObservableObject {
 }
 
 struct CheckForUpdatesMenuItem: View {
-    @ObservedObject var updater: AppUpdaterModel
+    let updater: AppUpdaterModel
 
     var body: some View {
         Button("Check for Updates…") {
