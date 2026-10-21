@@ -1,5 +1,8 @@
 import type { NextConfig } from "next";
-import { LATEST_APPCAST_URL } from "./lib/macos-release";
+
+/** Sparkle feed of the newest GitHub release; installed apps' SUFeedURL is photos.gattey.com/appcast.xml. */
+export const LATEST_APPCAST_URL =
+  "https://github.com/dgattey/gattey-photos/releases/latest/download/appcast.xml";
 
 /** Icon URLs dyl-kit and dylangattey.com fetch cross-origin from every <app>.gattey.com site. */
 const SHARED_ICON_PATHS = ["/icon.png", "/apple-touch-icon.png"] as const;
@@ -10,6 +13,7 @@ const SHARED_ICON_HEADERS = [
 ];
 
 const nextConfig: NextConfig = {
+  transpilePackages: ["@dylkit/web"],
   experimental: {
     serverActions: {
       bodySizeLimit: "12mb",

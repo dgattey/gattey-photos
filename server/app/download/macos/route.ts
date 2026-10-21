@@ -1,16 +1,8 @@
-import { getMacOSRelease } from "@/lib/macos-release";
-import { NextResponse } from "next/server";
+import { downloadResponse, loadSite } from "@dylkit/web";
 
-export const revalidate = 60;
+// Runs during `next build`, while the zip is on disk; Vercel leaves large `public/` files out of function bundles.
+export const dynamic = "force-static";
 
-/** Redirects to the zip named in the latest GitHub release's appcast. */
-export async function GET() {
-  const release = await getMacOSRelease();
-  if (!release) {
-    return NextResponse.json(
-      { error: "No macOS release is published yet." },
-      { status: 404 },
-    );
-  }
-  return NextResponse.redirect(release.downloadUrl, { status: 302 });
+export function GET() {
+  return downloadResponse(loadSite());
 }
