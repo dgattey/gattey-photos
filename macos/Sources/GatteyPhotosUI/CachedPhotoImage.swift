@@ -55,6 +55,13 @@ final class PhotoImageModel {
                 await ensureCached()
                 loaded = await Self.readThumbnail(from: url, maxPixelSize: maxPixelSize)
             }
+            if loaded == nil {
+                loaded = await Self.readFallbackThumbnail(
+                    photoID: requestedID,
+                    excluding: url,
+                    maxPixelSize: maxPixelSize
+                )
+            }
             guard !Task.isCancelled,
                 self.loadedPhotoID == requestedID,
                 self.loadedMaxPixelSize == requestedSize
@@ -93,6 +100,24 @@ final class PhotoImageModel {
             ImageDownsampler.loadThumbnail(from: url, maxPixelSize: maxPixelSize)
         }.value
     }
+
+    private static func readFallbackThumbnail(
+        photoID: PhotoID,
+        excluding preferredURL: URL,
+        maxPixelSize: Int
+    ) async -> PlatformThumbnailImage? {
+        let candidates = [
+            AppConfig.cacheURL(for: photoID),
+            AppConfig.thumbnailCacheURL(for: photoID, width: 768),
+            AppConfig.thumbnailCacheURL(for: photoID, width: 512),
+        ]
+        for candidate in candidates where candidate != preferredURL {
+            if let image = await readThumbnail(from: candidate, maxPixelSize: maxPixelSize) {
+                return image
+            }
+        }
+        return nil
+    }
 }
 
 struct CachedPhotoImage: View {
@@ -125,12 +150,22 @@ struct CachedPhotoImage: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if model.loadFailed {
-                ContentUnavailableView {
-                    Label("Image not in cache", systemImage: "photo")
-                } description: {
-                    Text("Sync or download this photo, then reopen.")
+                if thumbnailWidth != nil {
+                    ZStack {
+                        Color.gray.opacity(0.15)
+                        Image(systemName: "photo")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ContentUnavailableView {
+                        Label("Image not in cache", systemImage: "photo")
+                    } description: {
+                        Text("Sync or download this photo, then reopen.")
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 Color.gray.opacity(0.2)
             }
