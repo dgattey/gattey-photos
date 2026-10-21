@@ -2,18 +2,17 @@
 # One-time: create the EdDSA key pair Sparkle uses to sign app updates.
 #
 # The PRIVATE key is stored in your login keychain (never leaves this machine, never committed).
-# The PUBLIC key is written to macos/sparkle-public-key.txt, which IS committed and gets baked
-# into the app's Info.plist (SUPublicEDKey) by package-macos.sh so the updater can verify downloads.
+# The PUBLIC key is written to sparkle-public-key.txt, which IS committed and gets baked
+# into the app's Info.plist (SUPublicEDKey) by release-kit so the updater can verify downloads.
 #
 # Export/back up the private key with:  generate_keys -x sparkle_private.key  (keep it somewhere safe)
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-MACOS="$ROOT/macos"
-OUT="$MACOS/sparkle-public-key.txt"
+OUT="$ROOT/sparkle-public-key.txt"
 
-GK="$MACOS/.build/artifacts/sparkle/Sparkle/bin/generate_keys"
+GK="$ROOT/.build/artifacts/sparkle/Sparkle/bin/generate_keys"
 if [[ ! -x "$GK" ]]; then
-  echo "generate-sparkle-key: $GK not found. Run 'cd macos && swift build' first." >&2
+  echo "generate-sparkle-key: $GK not found. Run 'swift build' first." >&2
   exit 1
 fi
 
@@ -30,4 +29,4 @@ printf '%s\n' "$PUB" >"$OUT"
 echo "Wrote public key -> $OUT"
 echo "  $PUB"
 echo
-echo "Next: commit macos/sparkle-public-key.txt, then cut a release with scripts/package-release.sh."
+echo "Next: commit sparkle-public-key.txt, then build with ./run dev build release."

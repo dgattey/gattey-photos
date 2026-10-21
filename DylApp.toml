@@ -1,0 +1,40 @@
+# Gattey Photos app manifest, read by devkit, release-kit and @dylkit/web.
+# Schema: DylKit's Sources/DylManifest/DylAppManifest.swift. `./run dev checks` validates it.
+
+[app]
+name = "Gattey Photos"
+bundle-id = "com.gattey.photos"
+platforms = { macos = "14.0", ios = "17.0" }
+category = "public.app-category.photography"
+
+[build]
+product = "GatteyPhotos"
+entitlements = "GatteyPhotos.local.entitlements"
+icon-generator = "scripts/link-app-icon.swift"
+
+[ios]
+simulator = "iPhone 17"
+
+[release]
+sparkle-public-key = "sparkle-public-key.txt"
+site-url = "https://photos.gattey.com"
+artifacts-dir = "server/public"
+# Only what ships in the app. Test release-kit or workflow changes with a manual workflow_dispatch run.
+inputs = [
+    "Sources/**",
+    "Package.swift",
+    "Package.resolved",
+    "DylApp.toml",
+    "GatteyPhotos.local.entitlements",
+    "sparkle-public-key.txt",
+    "AppIcon.icon/**",
+    "scripts/link-app-icon.swift",
+]
+
+# Read by @dylkit/web for photos.gattey.com. Screenshot paths are under release.artifacts-dir.
+[site]
+tagline = "The macOS app for your family gallery: upload photos, manage frames, and keep Bloomin8 displays in sync."
+accent = { light = "#467e61", dark = "#6fae8c" }
+screenshots = [
+    { src = "unlock-welcome.png", alt = "A family photo on the Gattey Photos welcome screen" },
+]

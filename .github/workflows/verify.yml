@@ -1,134 +1,32 @@
 name: verify
 
 on:
-  push:
-    branches: [main]
   pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'server/**'
+      - 'skills/**'
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      server: ${{ steps.filter.outputs.server }}
-      macos: ${{ steps.filter.outputs.macos }}
-      icons: ${{ steps.filter.outputs.icons }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Detect changed paths
-        id: filter
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_REF: ${{ github.base_ref }}
-          BEFORE_SHA: ${{ github.event.before }}
-        run: |
-          if [[ "$EVENT_NAME" == "pull_request" && -n "$BASE_REF" ]]; then
-            CHANGED="$(git diff --name-only "origin/${BASE_REF}...HEAD")"
-          elif [[ -n "$BEFORE_SHA" && "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]] && git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
-            CHANGED="$(git diff --name-only "$BEFORE_SHA" HEAD)"
-          else
-            CHANGED="$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git ls-files)"
-          fi
-          echo "Changed files:"
-          echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^(server/|scripts/next-release-version\.sh$|\.github/pull_request_template\.md$)'; then
-            echo "server=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "server=false" >> "$GITHUB_OUTPUT"
-          fi
-          if echo "$CHANGED" | grep -qE '^(macos/|scripts/(verify|package-macos|package-release|ci-build-macos-release|fetch-previous-appcast|launch|generate-app-icon|macos-release-inputs-changed|next-release-version)\.sh$|\.github/workflows/(verify|release-macos)\.yml$|\.swift-format$|skills/macos/)'; then
-            echo "macos=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "macos=false" >> "$GITHUB_OUTPUT"
-          fi
-          if echo "$CHANGED" | grep -qE '^(macos/AppIcon\.icon/|scripts/generate-app-icon\.sh$|server/app/(icon\.png|apple-icon\.png|favicon\.ico)$|server/public/(icon|apple-touch-icon)\.png$|server/lib/app-icon-source\.sha256$|\.github/workflows/verify\.yml$)'; then
-            echo "icons=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "icons=false" >> "$GITHUB_OUTPUT"
-          fi
-
-  verify-server:
-    needs: changes
-    if: needs.changes.outputs.server == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: jdx/mise-action@v2
-
-      - name: Install server dependencies
-        working-directory: server
-        run: npm ci
-
-      - name: Server typecheck, tests, and production build
-        working-directory: server
-        run: |
-          npm run typecheck
-          npm run test
-          npm run build
-
-  verify-web-icons:
-    needs: changes
-    if: needs.changes.outputs.icons == 'true'
+  verify:
     runs-on: macos-26
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-
-      - name: Use Xcode 26.5
+      - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_26.5.app/Contents/Developer
-
-      - uses: jdx/mise-action@v2
-
-      - name: Install server dependencies
-        working-directory: server
-        run: npm ci
-
-      - name: Regenerate web icons from macos/AppIcon.icon
-        run: ./scripts/generate-app-icon.sh
-
-      - name: Upload regenerated web icons
-        if: always()
-        uses: actions/upload-artifact@v4
+      - uses: actions/cache@v4
         with:
-          name: web-icons
-          path: |
-            server/public/icon.png
-            server/public/apple-touch-icon.png
-            server/app/apple-icon.png
-            server/app/favicon.ico
-            server/lib/app-icon-source.sha256
-
-      # Rendered pixels vary slightly between runner images, so compare the source stamp
-      # and file presence rather than PNG bytes.
-      - name: Fail when committed web icons are stale
-        run: |
-          stale="$(git status --porcelain -- server/lib/app-icon-source.sha256; git status --porcelain --untracked-files=all -- server/public server/app | grep '^??' || true)"
-          if [[ -n "$stale" ]]; then
-            echo "$stale"
-            echo "::error::Web icons differ from macos/AppIcon.icon. Run ./scripts/generate-app-icon.sh on a Mac, or commit the web-icons artifact from this run."
-            exit 1
-          fi
-
-  verify-macos:
-    needs: changes
-    if: needs.changes.outputs.macos == 'true'
-    runs-on: macos-26
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Use Xcode 26.5
-        run: sudo xcode-select -s /Applications/Xcode_26.5.app/Contents/Developer
-
+          path: .build
+          key: swiftpm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: swiftpm-${{ runner.os }}-
       - uses: jdx/mise-action@v2
-
-      # release-macos.yml packages the app without server/node_modules, so package it here before npm ci.
-      - name: Package the macOS app like the release job
-        run: GATTEY_OPEN_AFTER=0 GATTEY_FORCE_RESIGN=1 ./scripts/package-macos.sh
-
-      - name: Install server dependencies
-        working-directory: server
-        run: npm ci
-
-      - name: Run macOS and full-stack pre-push checks
-        run: ./scripts/verify.sh
+        with:
+          install_args: swiftlint
+      - name: Verify
+        run: ./run dev verify
