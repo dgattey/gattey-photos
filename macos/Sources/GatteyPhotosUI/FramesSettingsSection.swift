@@ -25,9 +25,15 @@ struct FramesSettingsSection: View {
                 }
                 .buttonStyle(.borderless)
                 .help("How to register a Bloomin8 frame")
+                #if os(macOS)
                 .popover(isPresented: $showBloomin8Help, arrowEdge: .top) {
                     Bloomin8TokenHelpPopover()
                 }
+                #else
+                .unlockHelpSheet(isPresented: $showBloomin8Help, title: "Device setup") {
+                    Bloomin8TokenHelpPopover(showsInlineTitle: false)
+                }
+                #endif
             }
 
             framesStatusGroup
@@ -134,8 +140,12 @@ struct FramesSettingsSection: View {
     private func addDeviceRow(isLast: Bool) -> some View {
         attachedRow(isLast: isLast) {
             Button {
+                let willExpand = !isAddingDeviceExpanded
                 withAnimation(.snappy(duration: 0.2)) {
-                    isAddingDeviceExpanded.toggle()
+                    isAddingDeviceExpanded = willExpand
+                }
+                if willExpand {
+                    isPasteFieldFocused = true
                 }
             } label: {
                 HStack(spacing: 8) {
@@ -188,9 +198,6 @@ struct FramesSettingsSection: View {
                         .foregroundStyle(.red)
                 }
             }
-        }
-        .onAppear {
-            isPasteFieldFocused = true
         }
     }
 

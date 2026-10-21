@@ -1,6 +1,7 @@
 import SwiftUI
 
 public struct AppRootContainer: View {
+    @Environment(AppChromeState.self) private var chrome
     @Environment(AppSession.self) private var session
     @Environment(GalleryStore.self) private var store
 
@@ -20,7 +21,11 @@ public struct AppRootContainer: View {
         .tint(AppBrandColor.accentGreen)
         .background(WindowChromeConfigurator(unlocked: session.sessionPhase == .unlocked))
         .task {
-            await session.tryAutoUnlock(store: store)
+            if chrome.initialView == .unlock || chrome.initialView == .unlockHelp {
+                session.showUnlockForPreview()
+            } else {
+                await session.tryAutoUnlock(store: store)
+            }
         }
 
         #if os(macOS)

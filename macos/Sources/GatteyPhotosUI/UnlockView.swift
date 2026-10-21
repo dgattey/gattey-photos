@@ -2,6 +2,7 @@ import GatteyPhotosCore
 import SwiftUI
 
 struct UnlockView: View {
+    @Environment(AppChromeState.self) private var chrome
     @Environment(GalleryStore.self) private var store
     @Environment(AppSession.self) private var session
     @State private var displayName = AppSettings.defaultDisplayName
@@ -39,6 +40,9 @@ struct UnlockView: View {
             if !savedName.isEmpty {
                 displayName = savedName
             }
+            if chrome.initialView == .unlockHelp {
+                showBloomin8Help = true
+            }
         }
     }
 
@@ -46,21 +50,18 @@ struct UnlockView: View {
     private var unlockScrollContent: some View {
         #if os(iOS)
         GeometryReader { geo in
-            let scrollBottomInset = geo.safeAreaInsets.bottom
             ScrollView {
                 unlockBody
                     .frame(maxWidth: unlockContentMaxWidth)
                     .frame(maxWidth: .infinity)
+                    .padding(.vertical, horizontalSizeClass == .regular ? 40 : 16)
                     .frame(
                         minHeight: horizontalSizeClass == .regular ? geo.size.height : nil,
                         alignment: .center
                     )
-                    .padding(.top, horizontalSizeClass == .regular ? 40 : 16)
-                    .padding(.bottom, (horizontalSizeClass == .regular ? 40 : 16) + scrollBottomInset)
             }
-            .ignoresSafeArea(edges: [.top, .bottom])
+            .scrollBounceBehavior(.basedOnSize)
         }
-        .ignoresSafeArea(edges: [.top, .bottom])
         #else
         Group {
             if horizontalSizeClass == .regular {
@@ -405,7 +406,7 @@ struct Bloomin8TokenHelpPopover: View {
 
 #if os(iOS)
 extension View {
-    fileprivate func unlockHelpSheet<Content: View>(
+    func unlockHelpSheet<Content: View>(
         isPresented: Binding<Bool>,
         title: String,
         @ViewBuilder content: @escaping () -> Content

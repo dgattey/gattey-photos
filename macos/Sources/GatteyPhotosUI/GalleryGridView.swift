@@ -13,6 +13,7 @@ struct GalleryGridView: View {
     @Environment(GalleryStore.self) private var store
     @FocusState private var gridDeleteKeyFocus: Bool
     @State private var showSettings = false
+    @State private var didApplyInitialView = false
     @State private var isFileDropTargeted = false
     @State private var dropInsertionIndex: Int?
     @State private var pickerItems: [PhotosPickerItem] = []
@@ -22,11 +23,7 @@ struct GalleryGridView: View {
     #endif
 
     var body: some View {
-        @Bindable var chrome = chrome
         galleryShell
-            .inspector(isPresented: $chrome.showActivityInspector) {
-                ActivityLogPaneView()
-            }
     }
 
     private var galleryShell: some View {
@@ -107,8 +104,39 @@ struct GalleryGridView: View {
         .onChange(of: showSettings) { _, _ in
             syncGridKeyboardFocus()
         }
+        .onChange(of: store.activePhotoIDs) { _, _ in
+            applyInitialViewIfNeeded()
+        }
         .onAppear {
             syncGridKeyboardFocus()
+            applyInitialViewIfNeeded()
+        }
+    }
+
+    private func applyInitialViewIfNeeded() {
+        guard !didApplyInitialView, let initialView = chrome.initialView else { return }
+        switch initialView {
+        case .settings:
+            didApplyInitialView = true
+            showSettings = true
+        case .activity:
+            didApplyInitialView = true
+            chrome.showActivityInspector = true
+        case .lightbox:
+            guard let firstID = store.currentPhoto?.id ?? store.activePhotoIDs.first else { return }
+            didApplyInitialView = true
+            Task { @MainActor in
+                selection.openLightbox(firstID)
+            }
+        case .select:
+            let ids = Array(store.activePhotoIDs.prefix(2))
+            guard !ids.isEmpty else { return }
+            didApplyInitialView = true
+            for id in ids {
+                selection.selectPhoto(id, append: true)
+            }
+        case .unlock, .unlockHelp:
+            didApplyInitialView = true
         }
     }
 
@@ -350,7 +378,14 @@ private struct GalleryPhotoGrid: View {
     @State private var gridWidthDebounceTask: Task<Void, Never>?
 
     private var columnCount: Int {
+        #if os(iOS)
+        let preferred = store.settings.galleryGridColumnCount
+        guard layoutGridWidth > 0 else { return min(preferred, 4) }
+        let maxFitting = max(3, Int(layoutGridWidth / 95))
+        return min(preferred, maxFitting)
+        #else
         store.settings.galleryGridColumnCount
+        #endif
     }
 
     private var gridColumns: [GridItem] {
@@ -1024,14 +1059,17 @@ private struct GalleryMainToolbar: ToolbarContent {
             .help("Settings")
             .sheet(isPresented: $showSettings) {
                 NavigationStack {
-                    SettingsPopover()
-                        .navigationTitle("Settings")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("Done") { showSettings = false }
-                            }
+                    ScrollView {
+                        SettingsPopover()
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .navigationTitle("Settings")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { showSettings = false }
                         }
+                    }
                 }
             }
         }
@@ -1139,6 +1177,8 @@ struct PhotoThumb: View {
                     Text(cornerTag)
                         .font(AppTypography.thumbBadge)
                         .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 4)
                         .background(

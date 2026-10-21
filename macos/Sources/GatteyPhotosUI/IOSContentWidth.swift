@@ -7,6 +7,7 @@ enum IOSContentWidth {
     static let unlockCompactHorizontalPadding: CGFloat = 20
     /// Welcome device preview on iPhone (compact) so the form stays visible with less scroll.
     static let unlockCompactWelcomePhotoMaxHeight: CGFloat = 220
+    static let compactDevicePreviewMaxHeight: CGFloat = 280
     static let previewPaneMax: CGFloat = 440
 }
 #endif

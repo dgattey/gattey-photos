@@ -5,7 +5,10 @@ import SwiftUI
 @main
 struct GatteyPhotosApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @State private var chrome = AppChromeState()
+    @State private var chrome = AppChromeState(
+        initialViewRawValue: ProcessInfo.processInfo.environment["GATTEYPHOTOS_INITIAL_VIEW"]?.lowercased(),
+        initialOrientationRawValue: ProcessInfo.processInfo.environment["GATTEYPHOTOS_ORIENTATION"]?.lowercased()
+    )
     @State private var session = AppSession()
     @State private var store = GalleryStore()
     @State private var updater = AppUpdaterModel()

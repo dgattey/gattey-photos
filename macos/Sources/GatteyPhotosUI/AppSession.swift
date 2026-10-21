@@ -88,6 +88,13 @@ public final class AppSession {
         return true
     }
 
+    func showUnlockForPreview() {
+        isUnlocked = false
+        sessionPhase = .locked
+        unlockedServerBaseURL = nil
+        unlockError = nil
+    }
+
     func lock(store: GalleryStore) {
         isUnlocked = false
         sessionPhase = .locked

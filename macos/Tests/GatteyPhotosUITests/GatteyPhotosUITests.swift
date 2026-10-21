@@ -276,4 +276,14 @@ struct GatteyPhotosUITests {
             _ = try inspected.find(text: "Casa lapa")
         }
     }
+
+    @Test("PhotoLightboxView scales side-by-side column width and spacing for compact and regular widths")
+    @MainActor
+    func photoLightboxSideColumnSizing() {
+        #expect(PhotoLightboxView.sideBySideSpacing(forContainerWidth: 750) == 24)
+        #expect(PhotoLightboxView.sideBySideSpacing(forContainerWidth: 1032) == 44)
+        #expect(PhotoLightboxView.sideColumnWidth(forContainerWidth: 750) == 275)
+        #expect(PhotoLightboxView.sideColumnWidth(forContainerWidth: 1032) == 375)
+        #expect(PhotoLightboxView.sideColumnWidth(forContainerWidth: 1376) == 400)
+    }
 }

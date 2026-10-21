@@ -9,7 +9,6 @@ private enum PreviewGallerySplitLayout {
     static let maxFraction: CGFloat = 0.72
 }
 
-/// Resizable split on iPad; stacked preview + grid on iPhone.
 struct PreviewGallerySplit<Right: View>: View {
     @Environment(GalleryStore.self) private var store
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -19,12 +18,19 @@ struct PreviewGallerySplit<Right: View>: View {
 
     var body: some View {
         GeometryReader { geo in
-            if horizontalSizeClass == .regular, geo.size.width > 600 {
+            if (horizontalSizeClass == .regular && geo.size.width > 600)
+                || geo.size.width > geo.size.height
+            {
                 horizontalSplit(totalSize: geo.size)
             } else {
+                let compactPreviewHeight = min(
+                    IOSContentWidth.compactDevicePreviewMaxHeight,
+                    max(220, geo.size.height * 0.36)
+                )
                 VStack(alignment: .leading, spacing: 16) {
                     DeviceCurrentPreview()
                         .frame(maxWidth: .infinity)
+                        .frame(height: compactPreviewHeight)
                     right()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }

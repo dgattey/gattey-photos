@@ -257,8 +257,22 @@ struct SoftColumnSeparator: View {
 }
 
 struct WindowChromeConfigurator: View {
+    @Environment(AppChromeState.self) private var chrome
     var unlocked: Bool
-    var body: some View { EmptyView() }
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .task(id: chrome.initialOrientation) {
+                guard let orientation = chrome.initialOrientation else { return }
+                let mask: UIInterfaceOrientationMask =
+                    orientation == .landscape ? .landscapeRight : .portrait
+                for scene in UIApplication.shared.connectedScenes {
+                    guard let windowScene = scene as? UIWindowScene else { continue }
+                    windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: mask))
+                }
+            }
+    }
 }
 
 struct TransparentWindowConfigurator: View {

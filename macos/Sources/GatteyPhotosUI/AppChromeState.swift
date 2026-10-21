@@ -4,16 +4,44 @@ import SwiftUI
 @MainActor
 @Observable
 public final class AppChromeState {
+    public enum InitialViewOverride: String, Sendable {
+        case unlock
+        case unlockHelp = "unlock-help"
+        case settings
+        case activity
+        case lightbox
+        case select
+    }
+
+    public enum InitialOrientationOverride: String, Sendable {
+        case portrait
+        case landscape
+    }
+
     public var showActivityInspector = false
-    /// Leading device preview column in the gallery split (session chrome; not persisted).
     public var showDevicePreview = true
+    public var initialView: InitialViewOverride?
+    public var initialOrientation: InitialOrientationOverride?
 
-    public init() {}
+    public init(
+        initialView: InitialViewOverride? = nil,
+        initialOrientation: InitialOrientationOverride? = nil
+    ) {
+        self.initialView = initialView
+        self.initialOrientation = initialOrientation
+    }
 
-    /// Trailing inspector toggle (toolbar + View menu). Same symbol for show and hide.
+    public convenience init(
+        initialViewRawValue: String?,
+        initialOrientationRawValue: String?
+    ) {
+        self.init(
+            initialView: initialViewRawValue.flatMap(InitialViewOverride.init(rawValue:)),
+            initialOrientation: initialOrientationRawValue.flatMap(InitialOrientationOverride.init(rawValue:))
+        )
+    }
+
     public static let activityInspectorSymbolName = "sidebar.trailing"
-
-    /// Leading preview toggle (`Toggle` + `.toggleStyle(.button)` in toolbar).
     public static let devicePreviewToggleSymbolName = "sidebar.left"
 
     #if os(macOS)

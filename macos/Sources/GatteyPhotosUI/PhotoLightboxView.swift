@@ -115,24 +115,30 @@ struct PhotoLightboxView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
         #else
-        HStack(alignment: .center, spacing: 0) {
-            Spacer(minLength: 0)
-            HStack(alignment: .center, spacing: Self.sideBySideClusterSpacing) {
-                lightboxDetailsColumn(
-                    photo: photo,
-                    sideBySide: true,
-                    clusterHeight: heroMaxHeight
-                )
-                .frame(width: Self.sideColumnPreferredWidth)
+        let clusterSpacing = Self.sideBySideSpacing(forContainerWidth: geo.size.width)
+        let sideColumnWidth = Self.sideColumnWidth(forContainerWidth: geo.size.width)
+        HStack(alignment: .center, spacing: clusterSpacing) {
+            lightboxDetailsColumn(
+                photo: photo,
+                sideBySide: true,
+                clusterHeight: heroMaxHeight
+            )
+            .frame(width: sideColumnWidth)
+            .frame(maxHeight: heroMaxHeight, alignment: .center)
+            lightboxHeroImage(photo: photo, sideBySide: true)
                 .frame(maxHeight: heroMaxHeight, alignment: .center)
-                lightboxHeroImage(photo: photo, sideBySide: true)
-                    .frame(maxHeight: heroMaxHeight, alignment: .center)
-            }
-            .fixedSize(horizontal: true, vertical: true)
-            Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         #endif
+    }
+
+    static func sideBySideSpacing(forContainerWidth width: CGFloat) -> CGFloat {
+        width < 900 ? 24 : sideBySideClusterSpacing
+    }
+
+    static func sideColumnWidth(forContainerWidth width: CGFloat) -> CGFloat {
+        let spacing = sideBySideSpacing(forContainerWidth: width)
+        return min(sideColumnPreferredWidth, max(260, floor((width - spacing) * 0.38)))
     }
 
     /// Max hero height for side-by-side; width follows photo aspect ratio inside the hero container.
@@ -153,7 +159,7 @@ struct PhotoLightboxView: View {
         #if os(macOS)
         return width >= Self.macOSSideColumnMinWidth
         #else
-        return horizontalSizeClass == .regular
+        return horizontalSizeClass == .regular || width >= Self.macOSSideColumnMinWidth
         #endif
     }
 
@@ -194,7 +200,7 @@ struct PhotoLightboxView: View {
         #if os(macOS)
         EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
         #else
-        EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 40)
+        EdgeInsets(top: 16, leading: 0, bottom: 16, trailing: 24)
         #endif
     }
 
@@ -202,7 +208,7 @@ struct PhotoLightboxView: View {
         #if os(macOS)
         EdgeInsets(top: 0, leading: 20, bottom: 12, trailing: 20)
         #else
-        EdgeInsets(top: 48, leading: 20, bottom: 12, trailing: 20)
+        EdgeInsets(top: 16, leading: 20, bottom: 12, trailing: 20)
         #endif
     }
 
