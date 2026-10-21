@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Dev: local sync API, then build and open build/Gattey Photos.app in the background.
+# Dev: local sync API, then build and open build/Gattey Photos Dev.app in the background.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-CONFIG_DIR="$HOME/Library/Application Support/GatteyPhotos"
+CONFIG_DIR="$HOME/Library/Application Support/GatteyPhotos Dev"
 mkdir -p "$CONFIG_DIR"
 if [[ ! -f "$CONFIG_DIR/config.json" ]]; then
   cat >"$CONFIG_DIR/config.json" <<EOF

@@ -8,7 +8,7 @@ Use these skills when editing this repo (copy into `.cursor/skills/` or referenc
 - `skills/macos/SKILL.md` — Swift app
 - `skills/ios/SKILL.md` — iOS/iPad build of the same app target; `./run dev ios --run --capture`
 
-DylKit owns building, launching, testing and releasing: its `apple-dev-loop` and `apple-release` skills are the reference, and `DylApp.toml` holds the bundle, signing, release and site settings. Architecture: `docs/ARCHITECTURE.md`.
+DylKit ([`dgattey/dyl-kit`](https://github.com/dgattey/dyl-kit)) owns building, launching, testing and releasing: its `apple-dev-loop` and `apple-release` skills are the reference, and `DylApp.toml` holds the bundle, signing, release and site settings. The skills ship in the DylKit Cursor plugin; if they aren't loaded, see that repo's README. Architecture: `docs/ARCHITECTURE.md`.
 
 **Design sync (agents):** The app and its two web pages move together. When a change touches the app UI design, brand colors (`AppBrandColor.swift`), or app icon (`AppIcon.icon`), the same PR must:
 
@@ -18,6 +18,6 @@ DylKit owns building, launching, testing and releasing: its `apple-dev-loop` and
 
 `server/lib/site-assets.test.ts` (run by `npm test` and the `site` CI job) fails when the shared icons or their headers break that contract.
 
-**Swift UI changes (agents):** Rebuild with `./run dev build` and verify on the iOS Simulator (`./run dev ios --run --capture`) or, on a Mac without Gattey Photos installed, `./run dev relaunch`. Never launch a macOS build on a Mac where `com.gattey.photos` is installed; say what's unverified instead.
+**Swift UI changes (agents):** Run `./run dev relaunch`, which opens `build/Gattey Photos Dev.app` (`com.gattey.photos.dev`) in the background, and check shared UI on the iOS Simulator (`./run dev ios --run --capture`). Never launch the staged release, which carries `com.gattey.photos`.
 
 Before `git push`, run `./run dev verify` (checks, build, Swift tests) and `npm run typecheck && npm run test && npm run build` in `server/`.

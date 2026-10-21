@@ -5,7 +5,7 @@ description: Change the Gattey Photos macOS SwiftUI app. Use for UI, SyncClient,
 
 # Gattey Photos macOS
 
-After **each** Swift edit session, rebuild and verify per **`skills/dev-loop/SKILL.md`** before considering the task done; `swift build` alone does not refresh `build/Gattey Photos.app`. Never launch a macOS build on a Mac where Gattey Photos is installed. If you also changed runtime `server/` code, restart the local server per dev-loop first.
+After **each** Swift edit session, rebuild and verify per **`skills/dev-loop/SKILL.md`** before considering the task done; `swift build` alone does not refresh `build/Gattey Photos Dev.app`. If you also changed runtime `server/` code, restart the local server per dev-loop first.
 
 The sync API is **not** bundled in the app. Run the server separately (`./scripts/start-server.sh` or `./scripts/dev.sh`). Sync server URL is `http://127.0.0.1:3000` in **Debug** mode and `https://photos.gattey.com` in production (read-only in Settings; toggle via **Debug → Toggle Debug Mode**).
 

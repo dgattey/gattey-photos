@@ -8,9 +8,12 @@ public enum AppConfig {
         qos: .utility
     )
 
+    /// The macOS app isn't sandboxed, so the `.dev` build needs its own folder to stay off the installed app's
+    /// session token, gallery state and activity log.
     private static let defaultSupportFolder: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let dir = base.appendingPathComponent("GatteyPhotos", isDirectory: true)
+        let isDevBuild = Bundle.main.bundleIdentifier?.hasSuffix(".dev") == true
+        let dir = base.appendingPathComponent(isDevBuild ? "GatteyPhotos Dev" : "GatteyPhotos", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }()

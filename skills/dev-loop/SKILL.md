@@ -19,16 +19,16 @@ Building, launching, capturing and testing follow DylKit's **`apple-dev-loop`** 
 
 | Task | Command |
 |------|---------|
-| Build `build/Gattey Photos.app` | `./run dev build` |
+| Build `build/Gattey Photos Dev.app` | `./run dev build` |
 | Rebuild and reopen in the background | `./run dev relaunch` |
 | iPhone Simulator, headless, with a screenshot | `./run dev ios --run --capture` |
 | iPad Simulator | `./run dev ios --run --capture --simulator "iPad Pro 13-inch (M5)"` |
 | Lint tiers 1–3 | `./run dev checks` |
 | What macOS CI runs | `./run dev verify` |
 
-After each Swift edit session, rebuild and verify in the same turn; a successful `swift build` alone doesn't refresh `build/Gattey Photos.app`. Never ask the user to relaunch as the main verification step.
+After each Swift edit session, rebuild and verify in the same turn; a successful `swift build` alone doesn't refresh `build/Gattey Photos Dev.app`. Never ask the user to relaunch as the main verification step.
 
-`build/Gattey Photos.app` is signed with the release bundle ID `com.gattey.photos`, so it shares the installed app's preferences, Sparkle state and activity log. On a Mac where Gattey Photos is installed (`mdfind "kMDItemCFBundleIdentifier == 'com.gattey.photos'"`), don't `relaunch` or `capture`: verify shared `GatteyPhotosUI` changes on the iOS Simulator and say which macOS-only behavior is unverified.
+The dev app is `com.gattey.photos.dev` with no Sparkle keys, and keeps its config, cache and activity log in `~/Library/Application Support/GatteyPhotos Dev`, so `relaunch` and `capture` are safe on a Mac with Gattey Photos installed. Never launch the staged release in `build/release/stage/`: it carries `com.gattey.photos`.
 
 The icon comes from `AppIcon.icon/` through `scripts/link-app-icon.swift`; editing it only needs a rebuild.
 
@@ -87,7 +87,7 @@ First-time or “run everything”:
 ./scripts/dev.sh
 ```
 
-Starts the server (`start-server.sh`), then `./run dev relaunch`. Not for a Mac with Gattey Photos installed.
+Starts the server (`start-server.sh`), then `./run dev relaunch`.
 
 ## When both Swift and `server/` change
 
@@ -107,7 +107,7 @@ cd server && npm run typecheck && npm run test && npm run build
 
 | Touched | Before task end (this turn) |
 |---------|-----------------------------|
-| Swift only | `./run dev build`, then the iOS Simulator or `./run dev relaunch` per the bundle ID rule above |
+| Swift only | `./run dev relaunch`, plus the iOS Simulator for shared `GatteyPhotosUI` changes |
 | `server/` only (runtime) | `stop-server.sh` + `start-server.sh`, then `cd server && npm run typecheck` |
 | Both | Server restart, then rebuild and verify the app |
 | Before push | `./run dev verify` and the server checks — required; do not claim deploy-safe without a green build |
