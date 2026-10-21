@@ -80,6 +80,7 @@ struct GatteyPhotosApp: App {
             .environment(store)
             .environment(store.selection)
             .environment(ActivityLogStore.shared)
+            .preferredColorScheme(LaunchOverrides.gatteyPhotos.appearance.map { $0 == .dark ? .dark : .light })
             .onAppear {
                 store.session = session
                 AppUpdater.shared.mainWindowDidAppear(launch: .gatteyPhotos)
