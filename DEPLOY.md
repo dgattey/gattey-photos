@@ -9,7 +9,7 @@
 
 Vercel only deploys `server/` when root directory is set. No monorepo rewrite is needed.
 
-macOS releases are GitHub Releases published by `.github/workflows/release-macos.yml`, not files in `server/public/`. The site redirects `/appcast.xml` to the latest release's appcast and reads it for the download page, so a release needs no redeploy. See `docs/DISTRIBUTION.md`.
+macOS Sparkle files in `server/public/` are committed by `.github/workflows/release.yml` (DylKit's `release-kit`) when the app changes. `server/vercel.json`'s `ignoreCommand` also redeploys when `DylApp.toml` changes, since the download page reads it. Vercel’s normal Git Production deploy serves them; no extra Vercel settings required. See `docs/DISTRIBUTION.md`.
 
 ## Environment variables (Production)
 
@@ -56,6 +56,6 @@ curl -s -H "Authorization: Bearer $CRON_SECRET" http://127.0.0.1:3000/api/cron/a
 ./scripts/dev.sh
 ```
 
-Seeds macOS settings (first run), builds and opens the app. Start the sync API with `./scripts/start-server.sh` (`GATTEY_LOCAL_STORAGE=1`, data in `server/.data/`). When `CRON_SECRET` is in `server/.env.local`, `start-server.sh` also starts `./scripts/local-advance-cron.sh` in the background (default **3600s** / 1 hour; override with `ADVANCE_CURRENT_INTERVAL_SECONDS`). `stop-server.sh` stops that loop too.
+Starts the sync API, then builds and opens the app with `./run dev relaunch`. Start the sync API with `./scripts/start-server.sh` (`GATTEY_LOCAL_STORAGE=1`, data in `server/.data/`). When `CRON_SECRET` is in `server/.env.local`, `start-server.sh` also starts `./scripts/local-advance-cron.sh` in the background (default **3600s** / 1 hour; override with `ADVANCE_CURRENT_INTERVAL_SECONDS`). `stop-server.sh` stops that loop too.
 
 The Mac app only shows a new current photo after it syncs; the cron updates the manifest on the server.

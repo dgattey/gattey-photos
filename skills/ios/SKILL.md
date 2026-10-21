@@ -1,20 +1,19 @@
 ---
 name: ios
-description: Build and run the Gattey Photos iOS/iPad app. Use when changing GatteyPhotosIOS, GatteyPhotosUI, or GatteyPhotosCore on iOS.
+description: Build and run the Gattey Photos iOS/iPad app. Use when changing GatteyPhotosApp, GatteyPhotosUI, or GatteyPhotosCore on iOS.
 ---
 
 # Gattey Photos iOS / iPad
 
 The iOS app shares **GatteyPhotosCore** (sync, manifest, auth) and **GatteyPhotosUI** (unlock, gallery, lightbox, settings) with macOS. Client pull is identical on all platforms (`GalleryStore`); there is no local Node server or macOS LaunchAgent helper.
 
-## Package layout (`macos/Package.swift`)
+## Package layout (`Package.swift`)
 
 | Target | Platform | Role |
 |--------|----------|------|
 | `GatteyPhotosCore` | macOS + iOS | Models, `SyncClient`, `AppConfig`; macOS-only helpers behind `#if os(macOS)` |
 | `GatteyPhotosUI` | macOS + iOS | Shared SwiftUI (`AppRootContainer`, `GalleryStore`, grid, lightbox) |
-| `GatteyPhotosIOS` | iOS | `@main` — injects the `@Observable` stores with `.environment` |
-| `GatteyPhotosApp` | macOS | `@main` + `AppDelegate` |
+| `GatteyPhotosApp` | macOS + iOS | `@main` — injects the `@Observable` stores with `.environment`; macOS adds `AppDelegate` and menus |
 Bundle ID: `com.gattey.photos`.
 
 Production sync URL: `https://photos.gattey.com`. **Debug mode** (Settings toggle on iOS; Debug menu on macOS) switches to local dev URL only — it does **not** start `scripts/start-server.sh` on iOS.
@@ -23,45 +22,24 @@ While unlocked: `GalleryStore` runs the same 15-minute periodic pull as macOS (s
 
 Frames: same **Settings → Frames** UI as macOS — register Bloomin8 tokens on the server; server pushes to devices.
 
-## Build (Simulator)
+## Build and run (Simulator)
 
-From repo root:
-
-```bash
-./scripts/build-ios.sh
-```
-
-Compiles `GatteyPhotosCore`, `GatteyPhotosUI`, and `GatteyPhotosIOS` with `swiftc` against the iOS Simulator SDK (no Xcode project, no `xcodebuild`) and prints the path of `macos/.build/ios-sim/Gattey Photos.app`. `Info.plist` comes from `macos/Sources/GatteyPhotosIOS/Info.plist`.
-
-## Build + install + launch (iPad or iPhone)
+DylKit's `apple-dev-loop` owns this. From repo root:
 
 ```bash
-./scripts/launch.sh ipad
+./run dev ios --run --capture
+./run dev ios --run --capture --simulator "iPad Pro 13-inch (M5)"
 ```
 
-iPad (default):
-
-```bash
-IOS_DEVICE_NAME='iPad Pro 13-inch (M5)' ./scripts/launch.sh ipad
-```
-
-iPhone:
-
-```bash
-./scripts/launch.sh ios
-```
-
-Runs `./scripts/build-ios.sh`, then `simctl install` / `launch`.
-
-In Simulator, choose **Device → iPad** (or iPhone) so the app is full-screen—not the tiny iPhone-compat window; use **⌘1** for the app switcher if the app is behind Simulator chrome.
+devkit builds the `GatteyPhotos` product for the iOS Simulator, wraps it into `build/Gattey Photos-iOS.app` with the `[ios]` settings from `DylApp.toml`, installs and launches it headlessly with `simctl`, and saves a screenshot under `build/captures/`. The default simulator is `[ios] simulator`.
 
 ## Design sync
 
-iOS and macOS share `GatteyPhotosUI`, so an iOS redesign is an app redesign. Update photos.gattey.com (`server/app/page.tsx`, showcase images in `server/lib/site-media.ts`) and ask the `dg` project to update dylangattey.com in the same PR. See **Design sync** in `AGENTS.md`.
+iOS and macOS share `GatteyPhotosUI`, so an iOS redesign is an app redesign. Update photos.gattey.com (screenshots under `[site]` in `DylApp.toml`) and ask the `dg` project to update dylangattey.com in the same PR. See **Design sync** in `AGENTS.md`.
 
-## macOS dev loop unchanged
+## macOS still needs its own check
 
-After `macos/` edits that affect the shipping macOS app (including shared `GatteyPhotosUI`), run **`./scripts/launch.sh macos`** per **`skills/dev-loop/SKILL.md`**. iOS-only testing does not replace relaunch when mac UI behavior may have changed.
+iOS testing covers shared `GatteyPhotosUI` behavior but not macOS-only chrome. After changes that affect the macOS app, follow **`skills/dev-loop/SKILL.md`** and say which macOS behavior is unverified when the bundle ID rule blocks a launch.
 
 ## macOS-only (not on iOS)
 

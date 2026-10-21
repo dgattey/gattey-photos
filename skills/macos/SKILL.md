@@ -5,7 +5,7 @@ description: Change the Gattey Photos macOS SwiftUI app. Use for UI, SyncClient,
 
 # Gattey Photos macOS
 
-After **each** `macos/` edit session: from repo root run **`./scripts/launch.sh macos`** before considering the task done. See **`skills/dev-loop/SKILL.md`**. Do not skip relaunch; do not batch multiple UI changes without relaunch between them when the user is iterating; `swift build` alone does not refresh `dist/Gattey Photos.app`. If you also changed runtime `server/` code, restart the local server per dev-loop first, then relaunch.
+After **each** Swift edit session, rebuild and verify per **`skills/dev-loop/SKILL.md`** before considering the task done; `swift build` alone does not refresh `build/Gattey Photos.app`. Never launch a macOS build on a Mac where Gattey Photos is installed. If you also changed runtime `server/` code, restart the local server per dev-loop first.
 
 The sync API is **not** bundled in the app. Run the server separately (`./scripts/start-server.sh` or `./scripts/dev.sh`). Sync server URL is `http://127.0.0.1:3000` in **Debug** mode and `https://photos.gattey.com` in production (read-only in Settings; toggle via **Debug → Toggle Debug Mode**).
 
@@ -13,26 +13,26 @@ The sync API is **not** bundled in the app. Run the server separately (`./script
 
 - `GatteyPhotosCore` — networking and merge; no SwiftUI
 - `GatteyPhotosUI` — shared SwiftUI (gallery, unlock, settings); used by macOS and iOS
-- `GatteyPhotosApp` — `@main` macOS shell (`AppDelegate`, Debug menu)
+- `GatteyPhotosApp` — `@main` for macOS and iOS (macOS `AppDelegate`, Debug menu); the one executable DylKit bundles
 Gallery pull while unlocked matches iOS: `AppSession` starts `GalleryStore.startPeriodicPullWhileUnlocked()` (15 min, same code path as refresh and ⌘R Sync). No LaunchAgent or bundled helper binary.
 
 iOS/iPad app (shared `GatteyPhotosUI` + `GatteyPhotosCore`): see **`skills/ios/SKILL.md`**.
 
 ## App icon
 
-Author `macos/AppIcon.icon/` in **Icon Composer** (layer fills, glass on/off), not hand-wavy JSON. There is no Xcode project: `./scripts/generate-app-icon.sh` runs `actool` → `macos/Assets.car` (`CFBundleIconName` = `AppIcon`), and packaging copies only `Assets.car`.
+Author `AppIcon.icon/` in **Icon Composer** (layer fills, glass on/off), not hand-wavy JSON. There is no Xcode project: `scripts/link-app-icon.swift` (the `[build] icon-generator` in `DylApp.toml`) hands it to devkit, which runs `actool` into the bundle's `Assets.car`.
 
 **Canvas gradient (root fill in `icon.json`):** vertical linear gradient only (two stops). Top RGB **94, 159, 125** → `srgb:0.368627,0.623529,0.490196,1.000000`. Bottom RGB **46, 92, 69** → `srgb:0.180392,0.360784,0.270588,1.000000`. Orientation `start` (0.5, 0) → `stop` (0.5, 1). Edit in Icon Composer: select **AppIcon** in the sidebar → Fill → Gradient.
 
-**Letter G:** `Assets/Letter-G.svg` (Georgia “G” as paths, not live text). Icon Composer’s public `icon.json` schema uses `image-name` layers; Apple’s docs say to convert text to outlines in SVG. Tweak glass/position in Icon Composer on that image layer, or regenerate paths: `GATTEY_REGENERATE_LETTER_G=1 ./scripts/generate-app-icon.sh` (`macos/scripts/ExportLetterG.swift`). Do not expect a separate “Text layer” type in Icon Composer for actool.
+**Letter G:** `Assets/Letter-G.svg` (Georgia “G” as paths, not live text). Icon Composer’s public `icon.json` schema uses `image-name` layers; Apple’s docs say to convert text to outlines in SVG. Tweak glass/position in Icon Composer on that image layer, or regenerate paths: `swift scripts/ExportLetterG.swift`. Do not expect a separate “Text layer” type in Icon Composer for actool.
 
-Single **G** group: `glass: true`, solid white layer fill, translucency/specular on the group. Rebuild: `./scripts/generate-app-icon.sh` then relaunch.
+Single **G** group: `glass: true`, solid white layer fill, translucency/specular on the group. Rebuild with `./run dev build`.
 
-**Design sync.** The icon script also rewrites the web icons (`server/public/icon.png` at 1024 px, `server/public/apple-touch-icon.png` and `server/app/apple-icon.png` at 180 px, `server/app/favicon.ico`) and `server/lib/app-icon-source.sha256`; commit them with the icon. The `verify-web-icons` CI job regenerates them on macOS and fails when the committed files are stale. Any icon, brand color, or UI redesign also updates photos.gattey.com and dylangattey.com (see **Design sync** in `AGENTS.md`). `server/lib/site-assets.test.ts` fails in `./scripts/verify.sh` until the web side matches.
+**Design sync.** An icon change also needs new web icons in `server/public/` (`icon.png` at 1024 px, `apple-touch-icon.png` and `apple-icon.png` at 180 px, `app-icon.png`) and `server/app/favicon.ico`. Export them from Icon Composer by hand until DylKit v0.2.1's `site-icons` generates them. Any icon, brand color, or UI redesign also updates photos.gattey.com and dylangattey.com (see **Design sync** in `AGENTS.md`). `server/lib/site-assets.test.ts` checks the shared icon URL contract in `npm test`.
 
 ## Auto-update (Sparkle)
 
-The app self-updates via Sparkle 2 (SPM dep in `Package.swift`, linked into `GatteyPhotosApp` only). Family distribution uses **ad-hoc** signing (`-`) with `com.apple.security.cs.disable-library-validation` (`macos/GatteyPhotos.local.entitlements`) plus EdDSA (`scripts/generate-sparkle-key.sh`). Push to **`main`** with `macos/` changes → `.github/workflows/release-macos.yml` publishes a GitHub Release with the zip and `appcast.xml`; photos.gattey.com redirects `/appcast.xml` to the latest one. Each release bumps the patch version unless the merged PR checks **Minor** or **Major** under **Release info** (`scripts/next-release-version.sh`). See **`docs/DISTRIBUTION.md`**.
+The app self-updates through DylKit's `DylUpdates` (`AppUpdater.shared`, Sparkle 2 underneath). Family distribution uses **ad-hoc** signing (`-`) with `com.apple.security.cs.disable-library-validation` (`GatteyPhotos.local.entitlements`) plus EdDSA (`scripts/generate-sparkle-key.sh`). A push to **`main`** touching the `[release] inputs` in `DylApp.toml` runs `.github/workflows/release.yml`, which uses `release-kit` to commit `server/public/` once; Vercel Git deploys it. Each release bumps the version the merged PR checks under **Release info**. See DylKit's **`apple-release`** and **`docs/DISTRIBUTION.md`**.
 
 ## State
 

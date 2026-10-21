@@ -1,58 +1,36 @@
 ---
 name: dev-loop
-description: Rebuild, restart, and verify the Gattey Photos local stack after edits. Use when changing macos/, server/, or before ending an agent task that touched either; covers launch.sh, server supervisor, typecheck, and dev.sh.
+description: Rebuild, restart, and verify the Gattey Photos local stack after edits. Use when changing Sources/, server/, or before ending an agent task that touched either; covers ./run dev, the server supervisor, typecheck, and dev.sh.
 ---
 
 # Gattey Photos dev loop
 
 Canonical rebuild/restart steps for agents. Domain skills (`macos`, `server`) describe code layout; this skill owns **how to refresh running processes**.
 
-Node: **mise** (`mise.toml`). If `npm` is missing, prepend shims:
+Tools: **mise** (`mise.toml`) pins Node and SwiftLint. Run `mise install` once. If `npm` is missing, prepend shims:
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
 ```
 
-## macOS / frontend (Swift UI)
+## Swift app
 
-After **each** edit session that touches `macos/` (every agent turn with macOS code changes), from repo root:
+Building, launching, capturing and testing follow DylKit's **`apple-dev-loop`** skill. Everything runs from the repo root through `./run dev …`:
 
-```bash
-./scripts/launch.sh macos
-```
+| Task | Command |
+|------|---------|
+| Build `build/Gattey Photos.app` | `./run dev build` |
+| Rebuild and reopen in the background | `./run dev relaunch` |
+| iPhone Simulator, headless, with a screenshot | `./run dev ios --run --capture` |
+| iPad Simulator | `./run dev ios --run --capture --simulator "iPad Pro 13-inch (M5)"` |
+| Lint tiers 1–3 | `./run dev checks` |
+| What macOS CI runs | `./run dev verify` |
 
-**Never end a macOS UI task without running this.** Do **not** treat the task as done until `launch.sh macos` has run in the same turn for that session’s macOS edits. Agents must not skip relaunch.
+After each Swift edit session, rebuild and verify in the same turn; a successful `swift build` alone doesn't refresh `build/Gattey Photos.app`. Never ask the user to relaunch as the main verification step.
 
-**Never ask the user to relaunch as primary verification.** Do not end with “run `./scripts/launch.sh macos` when you can” or “please rebuild to check the UI” instead of running the script yourself. Manual relaunch is only for when the user is driving iteration outside an agent turn.
+`build/Gattey Photos.app` is signed with the release bundle ID `com.gattey.photos`, so it shares the installed app's preferences, Sparkle state and activity log. On a Mac where Gattey Photos is installed (`mdfind "kMDItemCFBundleIdentifier == 'com.gattey.photos'"`), don't `relaunch` or `capture`: verify shared `GatteyPhotosUI` changes on the iOS Simulator and say which macOS-only behavior is unverified.
 
-- **One relaunch per macOS change batch** — if you edited `macos/` in this turn, relaunch before ending the turn.
-- **Active UI iteration** — when the user is tuning SwiftUI or visual behavior, do **not** stack multiple macOS edits and relaunch once at the end. Relaunch after each logical UI change so they can verify in a fresh process.
-- **`swift build` / compile success is not enough** — the running UI loads `dist/Gattey Photos.app` from `package-macos.sh`. A successful compile alone leaves a stale bundle in `dist/`.
-
-Prefer `launch.sh macos` (quit + rebuild + background open via `open -g -j`). Pass `--foreground` (`./scripts/launch.sh --foreground macos` or `GATTEY_OPEN_BACKGROUND=0`) only when explicitly asked to bring the window to the front. Use `./scripts/package-macos.sh` only when no copy is running; `open` alone reuses the old process.
-
-Both paths regenerate `macos/Assets.car` via `generate-app-icon.sh` automatically whenever `macos/AppIcon.icon/` is newer than `macos/Assets.car`. After editing `macos/AppIcon.icon/`, relaunch is enough; no separate icon step.
-
-- Entry point: `./scripts/dev.sh` or `npm run dev` (no separate Make wrapper); no install to `/Applications`
-- `repo-root.txt` under Application Support is optional legacy from `dev.sh` / `package-macos.sh` (not used by the app)
-
-### Changes not showing in the UI?
-
-1. **Use `launch.sh macos`, not `package-macos.sh` alone** if the app is already running. `open dist/Gattey Photos.app` only focuses the existing process; Swift/UI code stays in memory until quit.
-2. **Run only from `dist/Gattey Photos.app`**. An old copy in `/Applications` or a Dock alias to it will not pick up repo builds.
-3. **Do not stop after `swift build`**. The running `.app` is assembled by `package-macos.sh` (copy into `dist/`). `.build/debug/GatteyPhotos` alone is not what `open` uses.
-4. Check the script prints a new `CFBundleVersion` and timestamp after package; if unsure, run `./scripts/launch.sh macos` again.
-
-### Verifying a transient or non-frontmost macOS window (without stealing focus)
-
-`launch.sh macos` opens the app hidden in the background (`open -g -j`) so agent runs do not steal focus from the user. Do **not** activate the app or use screen-rect `screencapture -R` (which captures whatever window is on top). Instead, look up the `CGWindowID` for `Gattey Photos` via `[.excludeDesktopElements]` (since `-j` launches hidden offscreen) and capture its window backing store directly with `screencapture -x -l`:
-
-```bash
-WID="$(swift -e 'import CoreGraphics; let list = CGWindowListCopyWindowInfo([.excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []; if let w = list.first(where: { ($0[kCGWindowOwnerName as String] as? String) == "Gattey Photos" && (($0[kCGWindowBounds as String] as? [String: Any])?["Height"] as? Double ?? 0) > 200 }), let id = w[kCGWindowNumber as String] as? Int { print(id) }')"
-screencapture -x -l "$WID" /tmp/gattey-photos-win.png
-```
-
-For iOS/iPad simulators (`./scripts/launch.sh ios` or `ipad`), the simulator boots and launches headlessly without foregrounding `Simulator.app`; capture screenshots via `xcrun simctl io booted screenshot /tmp/gattey-photos-ios.png`.
+The icon comes from `AppIcon.icon/` through `scripts/link-app-icon.swift`; editing it only needs a rebuild.
 
 ## Backend / server (Next.js under `server/`)
 
@@ -109,36 +87,27 @@ First-time or “run everything”:
 ./scripts/dev.sh
 ```
 
-Starts the server (`start-server.sh`), packages the app, writes `repo-root.txt`, and opens `dist/Gattey Photos.app`.
+Starts the server (`start-server.sh`), then `./run dev relaunch`. Not for a Mac with Gattey Photos installed.
 
-## When both `macos/` and `server/` change
+## When both Swift and `server/` change
 
 1. Restart server first (`stop-server.sh` then `start-server.sh`)
-2. Relaunch app (`launch.sh macos` or `package-macos.sh`)
+2. Rebuild and verify the app as above
 
 ## Before `git push`
 
-Run the full gate (same as GitHub Actions `verify` workflow):
+Run the same gates as CI (`verify.yml` on macOS, `site.yml` on ubuntu):
 
 ```bash
-./scripts/verify.sh
+./run dev verify
+cd server && npm run typecheck && npm run test && npm run build
 ```
-
-One-time hook install (blocks push when checks fail):
-
-```bash
-./scripts/install-git-hooks.sh
-```
-
-`verify.sh` runs: `swift test` (macos), `npm run typecheck`, `npm run test`, `npm run build` (server).
 
 ## Agent checklist
 
 | Touched | Before task end (this turn) |
 |---------|-----------------------------|
-| `macos/` only | `./scripts/launch.sh macos` from repo root — required even if build succeeded; run it yourself, never delegate relaunch to the user |
+| Swift only | `./run dev build`, then the iOS Simulator or `./run dev relaunch` per the bundle ID rule above |
 | `server/` only (runtime) | `stop-server.sh` + `start-server.sh`, then `cd server && npm run typecheck` |
-| Both | Server restart, then `./scripts/launch.sh macos` |
-| Before push | `./scripts/verify.sh` — required; do not claim deploy-safe without a green build |
-
-Never batch several macOS UI tweaks without a relaunch between them when the user is actively iterating.
+| Both | Server restart, then rebuild and verify the app |
+| Before push | `./run dev verify` and the server checks — required; do not claim deploy-safe without a green build |

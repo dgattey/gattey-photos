@@ -3,21 +3,21 @@
 Use these skills when editing this repo (copy into `.cursor/skills/` or reference by path):
 
 - `skills/SKILL.md` — whole project
-- `skills/dev-loop/SKILL.md` — after each `macos/` edit: agents run `./scripts/launch.sh macos` before ending the turn (required; no batching UI tweaks without relaunch); never end a macOS UI task without relaunching; never tell the user to relaunch manually as the main verification step; server restart + typecheck when runtime `server/` changes
-- `skills/server/SKILL.md` — Next.js API only
-- `skills/macos/SKILL.md` — Swift app and daemon
-- `skills/ios/SKILL.md` — iOS/iPad app (`GatteyPhotosIOS` + shared `GatteyPhotosUI`); `./scripts/launch.sh (macos | ios | ipad)`
+- `skills/dev-loop/SKILL.md` — after each Swift edit: rebuild and verify per DylKit's `apple-dev-loop`; server restart + typecheck when runtime `server/` changes
+- `skills/server/SKILL.md` — Next.js API and download site
+- `skills/macos/SKILL.md` — Swift app
+- `skills/ios/SKILL.md` — iOS/iPad build of the same app target; `./run dev ios --run --capture`
 
-Architecture: `docs/ARCHITECTURE.md`.
+DylKit owns building, launching, testing and releasing: its `apple-dev-loop` and `apple-release` skills are the reference, and `DylApp.toml` holds the bundle, signing, release and site settings. Architecture: `docs/ARCHITECTURE.md`.
 
-**Design sync (agents):** The app and its two web pages move together. When a change touches the app UI design, brand colors (`AppBrandColor.swift`), or app icon (`macos/AppIcon.icon`), the same PR must:
+**Design sync (agents):** The app and its two web pages move together. When a change touches the app UI design, brand colors (`AppBrandColor.swift`), or app icon (`AppIcon.icon`), the same PR must:
 
-1. Run `./scripts/generate-app-icon.sh` on a Mac after an icon change, or commit the `web-icons` artifact from the `verify-web-icons` CI job. It rewrites the web icons and `server/lib/app-icon-source.sha256`. dyl-kit and dylangattey.com read a fixed URL contract from every `<app>.gattey.com`: `/icon.png` at 1024×1024 (`server/public/icon.png`), `/apple-touch-icon.png` at 180×180 (`server/public/apple-touch-icon.png`, same bytes as `server/app/apple-icon.png`), and `/favicon.ico` with 16 and 32 px frames (`server/app/favicon.ico`).
-2. Update the photos.gattey.com landing page (`server/app/page.tsx`, `server/app/page.module.css`, `server/lib/brand.ts`, `server/lib/site-media.ts`) and refresh its showcase screenshots.
+1. Refresh the web icons after an icon change. Until DylKit v0.2.1's `site-icons` generates them, export them from Icon Composer by hand. dyl-kit and dylangattey.com read a fixed URL contract from every `<app>.gattey.com`: `/icon.png` at 1024×1024 (`server/public/icon.png`), `/apple-touch-icon.png` at 180×180 (`server/public/apple-touch-icon.png`, same bytes as `server/public/apple-icon.png`), and `/favicon.ico` with 16 and 32 px frames (`server/app/favicon.ico`). `server/next.config.ts` serves the first two cross-origin with an hour of caching.
+2. Update photos.gattey.com. `@dylkit/web` renders it from `[site]` in `DylApp.toml` (tagline, accent colors, screenshots) and `server/public/app-icon.png`.
 3. Ask the `dg` project (`dgattey/dg`, Contentful) to update the Gattey Photos entry on dylangattey.com, and tick both boxes under **Design sync** in the PR template.
 
-`server/lib/site-assets.test.ts` (run by `npm test`, `./scripts/verify.sh`, and CI) fails when the web icons, brand colors, or landing images drift from the app. Example failure it catches: a PR recolors `AppBrandColor.accentGreen` and ships while the site keeps the old green. Do not silence the test by editing the hash or colors alone; update the page.
+`server/lib/site-assets.test.ts` (run by `npm test` and the `site` CI job) fails when the shared icons or their headers break that contract.
 
-**macOS UI (agents):** Run `./scripts/launch.sh macos` from repo root after every turn that changes `macos/`; do not finish without relaunching; do not ask the user to relaunch instead.
+**Swift UI changes (agents):** Rebuild with `./run dev build` and verify on the iOS Simulator (`./run dev ios --run --capture`) or, on a Mac without Gattey Photos installed, `./run dev relaunch`. Never launch a macOS build on a Mac where `com.gattey.photos` is installed; say what's unverified instead.
 
-Before `git push`, run `./scripts/verify.sh` (Swift tests, server typecheck, unit tests, production build). Install the hook once: `./scripts/install-git-hooks.sh`.
+Before `git push`, run `./run dev verify` (checks, build, Swift tests) and `npm run typecheck && npm run test && npm run build` in `server/`.

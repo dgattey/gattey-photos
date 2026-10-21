@@ -10,9 +10,9 @@ Closes
 
 # Design sync
 
-If this PR changes the app UI, brand colors, or `macos/AppIcon.icon`:
+If this PR changes the app UI, brand colors, or `AppIcon.icon`:
 
-- [ ] photos.gattey.com (`server/app/`) matches the new design and icons
+- [ ] photos.gattey.com (`[site]` in `DylApp.toml`, icons in `server/public/`) matches the new design and icons
 - [ ] dylangattey.com (dg project, Contentful) has been asked to update
 
 # Release info
