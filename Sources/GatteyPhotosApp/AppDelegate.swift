@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import DylCore
 import DylUpdates
 import GatteyPhotosCore
 import GatteyPhotosUI
@@ -25,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        guard !LaunchOverrides.gatteyPhotos.staysInBackground else { return false }
         if let main = Self.preferredMainWindow {
             main.makeKeyAndOrderFront(nil)
         }

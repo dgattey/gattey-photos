@@ -82,7 +82,11 @@ struct GatteyPhotosApp: App {
             .environment(ActivityLogStore.shared)
             .onAppear {
                 store.session = session
-                AppUpdater.shared.mainWindowDidAppear(launch: LaunchOverrides(prefix: "GATTEYPHOTOS"))
+                AppUpdater.shared.mainWindowDidAppear(launch: .gatteyPhotos)
             }
     }
+}
+
+extension LaunchOverrides {
+    static let gatteyPhotos = LaunchOverrides(prefix: "GATTEYPHOTOS")
 }
