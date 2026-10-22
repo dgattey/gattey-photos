@@ -13,33 +13,29 @@ struct GalleryGridView: View {
     @Environment(GalleryStore.self) private var store
     @FocusState private var gridDeleteKeyFocus: Bool
     @State private var showSettings = false
+    @State private var didApplyInitialView = false
     @State private var isFileDropTargeted = false
     @State private var dropInsertionIndex: Int?
     @State private var pickerItems: [PhotosPickerItem] = []
 
     #if os(macOS)
     private let fileDropTypes: [UTType] = [.jpeg, .image, .fileURL]
+    #else
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
 
     var body: some View {
-        @Bindable var chrome = chrome
         galleryShell
-            .inspector(isPresented: $chrome.showActivityInspector) {
-                ActivityLogPaneView()
-            }
     }
 
-    private var galleryShell: some View {
+    @ViewBuilder
+    private var platformShell: some View {
+        #if os(macOS)
         PreviewGallerySplit {
             thumbnailGridColumn
         }
-        #if os(macOS)
         .navigationTitle("")
-        #else
-        .navigationTitle("Gattey Photos")
-        #endif
         .toolbar {
-            #if os(macOS)
             // Unified toolbar: hide SwiftUI/.navigationTitle duplicate (see `.toolbar(removing: .title)`)
             // and `WindowChromeConfigurator` title visibility. Leading title via `.navigation` only;
             // gallery actions follow a flexible spacer — `.primaryAction` is leading on macOS.
@@ -48,80 +44,152 @@ struct GalleryGridView: View {
                 isBootstrapping: store.isBootstrappingGallery
             )
             GalleryMacOSToolbarFlexSpacer()
-            #else
-            ToolbarItem(placement: .principal) {
-                Text(
-                    GalleryToolbarLeadingTitle.photoCountLabel(
-                        store.activePhotos.count,
-                        isBootstrapping: store.isBootstrappingGallery
-                    )
-                )
-                .font(AppTypography.toolbarTitle)
-            }
-            #endif
             GalleryMainToolbar(
                 showSettings: $showSettings,
                 pickerItems: $pickerItems
             )
         }
-        #if os(macOS)
         .modifier(GalleryMacOSToolbarTitleRemoval())
         .overlay(alignment: .top) {
             VariableBlurView(maxBlurRadius: 4, direction: .blurredTopClearBottom)
-            .frame(height: 68)
-            .frame(maxWidth: .infinity)
-            .ignoresSafeArea(edges: .top)
-            .allowsHitTesting(false)
+                .frame(height: 68)
+                .frame(maxWidth: .infinity)
+                .ignoresSafeArea(edges: .top)
+                .allowsHitTesting(false)
         }
-        #endif
-        #if os(macOS)
         // Fallback for chrome outside the grid; populated grids use AppKit targets (see thumbnailGridColumn).
         .onDrop(of: fileDropTypes, isTargeted: $isFileDropTargeted) { providers, _ in
             handleFileDrop(providers: providers)
         }
+        #else
+        thumbnailGridColumn
+            .navigationTitle("Gattey Photos")
+            .toolbar {
+                GalleryMainToolbar(
+                    showSettings: $showSettings,
+                    pickerItems: $pickerItems
+                )
+            }
+            .sheet(isPresented: $showSettings) {
+                SettingsSheet(isPresented: $showSettings)
+            }
+            .onChange(of: pickerItems) { _, items in
+                guard !items.isEmpty else { return }
+                let batch = items
+                pickerItems = []
+                Task { await uploadPickedItems(batch) }
+            }
         #endif
-        #if os(iOS)
-        .onChange(of: pickerItems) { _, items in
-            guard !items.isEmpty else { return }
-            let batch = items
-            pickerItems = []
-            Task { await uploadPickedItems(batch) }
-        }
-        #endif
-        .focusable()
-        .focusEffectDisabled()
-        .focused($gridDeleteKeyFocus)
-        .galleryDeleteKeyboard(photoIDs: gridDeleteKeyPhotoIDs)
-        .galleryOpenLightboxKeyboard(
-            isEnabled: galleryGridKeyboardEnabled,
-            photoOrder: store.activePhotoIDs
-        )
-        .galleryClearSelectionKeyboard(isEnabled: galleryGridKeyboardEnabled)
-        .galleryArrowSelectionKeyboard(isEnabled: galleryGridKeyboardEnabled)
-        .onChange(of: gridDeleteKeyPhotoIDs) { _, _ in
-            syncGridKeyboardFocus()
-        }
-        .onChange(of: selection.isLightboxOpen) { _, _ in
-            syncGridKeyboardFocus()
-        }
-        .onChange(of: showSettings) { _, _ in
-            syncGridKeyboardFocus()
-        }
-        .onAppear {
-            syncGridKeyboardFocus()
+    }
+
+    private var galleryShell: some View {
+        platformShell
+            .focusable()
+            .focusEffectDisabled()
+            .focused($gridDeleteKeyFocus)
+            .galleryDeleteKeyboard(photoIDs: gridDeleteKeyPhotoIDs)
+            .galleryOpenLightboxKeyboard(
+                isEnabled: galleryGridKeyboardEnabled,
+                photoOrder: store.activePhotoIDs
+            )
+            .galleryClearSelectionKeyboard(isEnabled: galleryGridKeyboardEnabled)
+            .galleryArrowSelectionKeyboard(isEnabled: galleryGridKeyboardEnabled, columnCount: gridColumnCount)
+            .onChange(of: gridDeleteKeyPhotoIDs) { _, _ in
+                syncGridKeyboardFocus()
+            }
+            .onChange(of: selection.isLightboxOpen) { _, _ in
+                syncGridKeyboardFocus()
+            }
+            .onChange(of: showSettings) { _, _ in
+                syncGridKeyboardFocus()
+            }
+            .onChange(of: store.activePhotoIDs) { _, _ in
+                applyInitialViewIfNeeded()
+            }
+            .onAppear {
+                syncGridKeyboardFocus()
+                applyInitialViewIfNeeded()
+            }
+    }
+
+    private func applyInitialViewIfNeeded() {
+        guard !didApplyInitialView, let initialView = chrome.initialView else { return }
+        switch initialView {
+        case .settings:
+            didApplyInitialView = true
+            // Presenting during the first appear pass drops the iOS sheet; wait for the next run loop.
+            Task { @MainActor in
+                showSettings = true
+            }
+        case .activity:
+            didApplyInitialView = true
+            chrome.showActivityInspector = true
+        case .lightbox:
+            guard let firstID = store.currentPhoto?.id ?? store.activePhotoIDs.first else { return }
+            didApplyInitialView = true
+            Task { @MainActor in
+                selection.openLightbox(firstID)
+            }
+        case .select:
+            let ids = Array(store.activePhotoIDs.prefix(2))
+            guard !ids.isEmpty else { return }
+            didApplyInitialView = true
+            #if os(iOS)
+            selection.beginSelecting()
+            #endif
+            for id in ids {
+                selection.selectPhoto(id, append: true)
+            }
+        case .unlock, .unlockHelp:
+            didApplyInitialView = true
         }
     }
+
+    #if os(iOS)
+    private var photoCountLabel: String {
+        GalleryPhotoCount.label(
+            store.activePhotos.count,
+            isBootstrapping: store.isBootstrappingGallery
+        )
+    }
+    #endif
 
     private var galleryGridKeyboardEnabled: Bool {
         !selection.isLightboxOpen && !showSettings
     }
 
-    private var gridLayoutWidth: CGFloat {
-        max(gridViewportWidth, 1)
+    /// macOS insets the grid from the window edge and the toolbar; iOS runs edge to edge like Photos.
+    private static var gridInsets: EdgeInsets {
+        #if os(macOS)
+        EdgeInsets(top: 8, leading: 8, bottom: 20, trailing: 20)
+        #else
+        EdgeInsets()
+        #endif
     }
 
-    private var gridViewportMinHeight: CGFloat {
+    private var gridLayoutWidth: CGFloat {
+        max(gridViewportWidth - Self.gridInsets.leading - Self.gridInsets.trailing, 1)
+    }
+
+    /// iOS has no thumbnail-size control, so columns follow the width: ~100pt cells on iPhone, ~150pt on iPad.
+    private var gridColumnCount: Int {
+        #if os(iOS)
+        let targetCellWidth: CGFloat = horizontalSizeClass == .regular ? 150 : 100
+        guard gridViewportWidth > 0 else { return 4 }
+        return max(3, Int((gridViewportWidth / targetCellWidth).rounded()))
+        #else
+        store.settings.galleryGridColumnCount
+        #endif
+    }
+
+    /// macOS fills the viewport so empty space below the grid stays a click and drop target; iOS lets the
+    /// Now Showing card and grid size to content so a short gallery doesn't scroll.
+    private var gridContentMinHeight: CGFloat {
+        #if os(macOS)
         max(gridViewportHeight > 0 ? gridViewportHeight : 600, 280)
+        #else
+        280
+        #endif
     }
 
     private var gridDeleteKeyPhotoIDs: Set<PhotoID> {
@@ -136,66 +204,86 @@ struct GalleryGridView: View {
     private var thumbnailGridColumn: some View {
         ZStack {
             ScrollView {
-                ZStack(alignment: .top) {
-                    #if os(macOS)
-                    GalleryFileDropTarget(
-                        onDrop: handleFileURLDrop,
-                        isTargeted: $isFileDropTargeted
-                    )
-                    .frame(maxWidth: .infinity, minHeight: gridViewportMinHeight)
+                VStack(spacing: 0) {
+                    #if os(iOS)
+                    NowShowingCard()
+                        .padding(.horizontal, 16)
+                        .padding(.top, 4)
+                        .padding(.bottom, 16)
                     #endif
-
-                    Color.clear
-                        .frame(maxWidth: .infinity, minHeight: gridViewportMinHeight)
-                        .contentShape(Rectangle())
-                        .onTapGesture { clearSelectionFromBackgroundTap() }
-
-                    if store.isBootstrappingGallery {
-                        VStack(spacing: 12) {
-                            ProgressView()
-                                .controlSize(.large)
-                            Text("Loading photos from server…")
-                                .font(AppTypography.secondary)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 280)
-                    } else if store.activePhotos.isEmpty {
-                        ContentUnavailableView {
-                            Label("Drop photos to upload", systemImage: "photo.badge.plus")
-                        } description: {
-                            Text("JPEG images from Finder, or use Add in the toolbar.")
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 280)
-                    } else {
+                    ZStack(alignment: .top) {
                         #if os(macOS)
-                        GalleryPhotoGrid(
-                            gridContainerWidth: gridLayoutWidth,
-                            currentPhotoID: store.state.currentPhotoId,
-                            deviceScreenAspectRatio: store.deviceScreenAspectRatio,
-                            dropInsertionIndex: $dropInsertionIndex,
-                            onSelectPhoto: handleGridPhotoTap,
-                            onOpenLightbox: { store.selection.openLightbox($0) },
-                            onReorderDrop: handleReorderDrop,
-                            onFileDrop: handleFileURLDrop,
-                            onFileDropTargeted: { isFileDropTargeted = $0 }
+                        GalleryFileDropTarget(
+                            onDrop: handleFileURLDrop,
+                            isTargeted: $isFileDropTargeted
                         )
-                        #else
-                        GalleryPhotoGrid(
-                            gridContainerWidth: gridLayoutWidth,
-                            currentPhotoID: store.state.currentPhotoId,
-                            deviceScreenAspectRatio: store.deviceScreenAspectRatio,
-                            dropInsertionIndex: $dropInsertionIndex,
-                            onSelectPhoto: handleGridPhotoTap,
-                            onOpenLightbox: { store.selection.openLightbox($0) },
-                            onReorderDrop: handleReorderDrop
-                        )
+                        .frame(maxWidth: .infinity, minHeight: gridContentMinHeight)
                         #endif
+
+                        Color.clear
+                            .frame(maxWidth: .infinity, minHeight: gridContentMinHeight)
+                            .contentShape(Rectangle())
+                            .onTapGesture { clearSelectionFromBackgroundTap() }
+
+                        if store.isBootstrappingGallery {
+                            VStack(spacing: 12) {
+                                ProgressView()
+                                    .controlSize(.large)
+                                Text("Loading photos from server…")
+                                    .font(AppTypography.secondary)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 280)
+                        } else if store.activePhotos.isEmpty {
+                            ContentUnavailableView {
+                                Label("Drop photos to upload", systemImage: "photo.badge.plus")
+                            } description: {
+                                Text("JPEG images from Finder, or use Add in the toolbar.")
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 280)
+                        } else {
+                            #if os(macOS)
+                            GalleryPhotoGrid(
+                                gridContainerWidth: gridLayoutWidth,
+                                columnCount: gridColumnCount,
+                                deviceScreenAspectRatio: store.deviceScreenAspectRatio,
+                                dropInsertionIndex: $dropInsertionIndex,
+                                onSelectPhoto: handleGridPhotoTap,
+                                onOpenLightbox: { store.selection.openLightbox($0) },
+                                onReorderDrop: handleReorderDrop,
+                                onFileDrop: handleFileURLDrop,
+                                onFileDropTargeted: { isFileDropTargeted = $0 }
+                            )
+                            .padding(Self.gridInsets)
+                            #else
+                            GalleryPhotoGrid(
+                                gridContainerWidth: gridLayoutWidth,
+                                columnCount: gridColumnCount,
+                                deviceScreenAspectRatio: store.deviceScreenAspectRatio,
+                                dropInsertionIndex: $dropInsertionIndex,
+                                onSelectPhoto: handleGridPhotoTap,
+                                onOpenLightbox: { store.selection.openLightbox($0) },
+                                onReorderDrop: handleReorderDrop
+                            )
+                            #endif
+                        }
                     }
+                    .frame(maxWidth: .infinity, minHeight: gridContentMinHeight)
+                    #if os(iOS)
+                    if !store.activePhotos.isEmpty {
+                        Text(photoCountLabel)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 20)
+                            .padding(.bottom, selection.isSelecting ? 96 : 28)
+                    }
+                    #endif
                 }
-                .frame(maxWidth: .infinity, minHeight: gridViewportMinHeight)
             }
             #if os(macOS)
             .galleryMacOSGridScrollEdgeEffect()
+            #else
+            .refreshable { await store.syncAll() }
             #endif
             .background {
                 GeometryReader { viewport in
@@ -313,7 +401,12 @@ private struct ThumbnailGridSelectionChrome: View {
     @Environment(GallerySelectionStore.self) private var selection
 
     private var showsSelectionBar: Bool {
-        !selection.selectedIDs.isEmpty && !selection.isLightboxOpen
+        guard !selection.isLightboxOpen else { return false }
+        #if os(iOS)
+        return selection.isSelecting
+        #else
+        return !selection.selectedIDs.isEmpty
+        #endif
     }
 
     var body: some View {
@@ -334,7 +427,7 @@ private struct ThumbnailGridSelectionChrome: View {
 private struct GalleryPhotoGrid: View {
     @Environment(GalleryStore.self) private var store
     let gridContainerWidth: CGFloat
-    let currentPhotoID: PhotoID?
+    let columnCount: Int
     let deviceScreenAspectRatio: CGFloat
     @Binding var dropInsertionIndex: Int?
     let onSelectPhoto: (PhotoID, GridTapModifiers) -> Void
@@ -349,12 +442,16 @@ private struct GalleryPhotoGrid: View {
     @State private var settledGridWidth: CGFloat = 0
     @State private var gridWidthDebounceTask: Task<Void, Never>?
 
-    private var columnCount: Int {
-        store.settings.galleryGridColumnCount
-    }
+    /// iOS: hairline gutter (Photos-style) so neighboring photos don't bleed into each other. macOS: roomier gutters
+    /// to suit pointer-sized thumbnails in a window.
+    #if os(macOS)
+    static let spacing: CGFloat = 8
+    #else
+    static let spacing: CGFloat = 2
+    #endif
 
     private var gridColumns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 0), count: columnCount)
+        Array(repeating: GridItem(.flexible(), spacing: Self.spacing), count: columnCount)
     }
 
     private var layoutGridWidth: CGFloat {
@@ -362,7 +459,7 @@ private struct GalleryPhotoGrid: View {
     }
 
     private var cellWidth: CGFloat {
-        max(1, layoutGridWidth / CGFloat(columnCount))
+        max(1, (layoutGridWidth - Self.spacing * CGFloat(columnCount - 1)) / CGFloat(columnCount))
     }
 
     private var thumbMaxPixelSize: Int {
@@ -379,7 +476,7 @@ private struct GalleryPhotoGrid: View {
     }
 
     var body: some View {
-        LazyVGrid(columns: gridColumns, spacing: 0) {
+        LazyVGrid(columns: gridColumns, spacing: Self.spacing) {
             ForEach(Array(store.activePhotos.enumerated()), id: \.element.id) { index, photo in
                 gridItem(index: index, photo: photo)
             }
@@ -416,7 +513,6 @@ private struct GalleryPhotoGrid: View {
             photoCount: store.activePhotos.count,
             thumbAspectRatio: thumbAspectRatio,
             thumbMaxPixelSize: thumbMaxPixelSize,
-            isCurrentOnDevice: currentPhotoID == photo.id,
             showsInsertionLineBefore: showsInsertionBefore,
             showsInsertionLineAfter: showsInsertionAfter,
             onSelectPhoto: onSelectPhoto,
@@ -437,7 +533,6 @@ private struct GalleryPhotoGrid: View {
             photoCount: store.activePhotos.count,
             thumbAspectRatio: thumbAspectRatio,
             thumbMaxPixelSize: thumbMaxPixelSize,
-            isCurrentOnDevice: currentPhotoID == photo.id,
             showsInsertionLineBefore: showsInsertionBefore,
             showsInsertionLineAfter: showsInsertionAfter,
             onSelectPhoto: onSelectPhoto,
@@ -462,7 +557,6 @@ private struct PhotoGridItem: View {
     let photoCount: Int
     let thumbAspectRatio: CGFloat
     let thumbMaxPixelSize: Int
-    var isCurrentOnDevice: Bool = false
     let showsInsertionLineBefore: Bool
     let showsInsertionLineAfter: Bool
     let onSelectPhoto: (PhotoID, GridTapModifiers) -> Void
@@ -484,7 +578,6 @@ private struct PhotoGridItem: View {
             thumbAspectRatio: thumbAspectRatio,
             thumbMaxPixelSize: thumbMaxPixelSize,
             isSelected: isSelected,
-            isCurrentOnDevice: isCurrentOnDevice,
             cornerTag: store.showingTag(for: photo.id),
             showsInsertionLineBefore: showsInsertionLineBefore,
             showsInsertionLineAfter: showsInsertionLineAfter
@@ -507,11 +600,12 @@ private struct PhotoGridItem: View {
             )
         }
         #else
-        .onTapGesture(count: 2) {
-            onOpenLightbox(photo.id)
-        }
-        .onTapGesture(count: 1) {
-            onSelectPhoto(photo.id, GridTapModifiers.current)
+        .onTapGesture {
+            if selection.isSelecting {
+                onSelectPhoto(photo.id, .selectModeToggle)
+            } else {
+                onOpenLightbox(photo.id)
+            }
         }
         .draggable(photo.id)
         .overlay {
@@ -772,17 +866,8 @@ private final class PhotoGridClickNSView: NSView, NSDraggingSource {
 }
 #endif
 
-/// Leading macOS toolbar title + photo count (unified toolbar `.navigation` placement).
-private struct GalleryToolbarLeadingTitle: View {
-    let photoCount: Int
-    var isBootstrapping = false
-
-    var body: some View {
-        Text(Self.photoCountLabel(photoCount, isBootstrapping: isBootstrapping))
-            .font(AppTypography.toolbarTitle)
-    }
-
-    static func photoCountLabel(_ count: Int, isBootstrapping: Bool = false) -> String {
+private enum GalleryPhotoCount {
+    static func label(_ count: Int, isBootstrapping: Bool = false) -> String {
         if isBootstrapping, count == 0 {
             return String(localized: "Loading photos…")
         }
@@ -795,6 +880,17 @@ private struct GalleryToolbarLeadingTitle: View {
 }
 
 #if os(macOS)
+/// Leading macOS toolbar title + photo count (unified toolbar `.navigation` placement).
+private struct GalleryToolbarLeadingTitle: View {
+    let photoCount: Int
+    var isBootstrapping = false
+
+    var body: some View {
+        Text(GalleryPhotoCount.label(photoCount, isBootstrapping: isBootstrapping))
+            .font(AppTypography.toolbarTitle)
+    }
+}
+
 /// Leading toolbar: system toggle + title in one navigation group (same treatment as trailing toolbar buttons).
 private struct GalleryToolbarLeadingCluster: ToolbarContent {
     let photoCount: Int
@@ -977,6 +1073,9 @@ private struct GalleryMacOSToolbarSizeActionsSeparator: ToolbarContent {
 private struct GalleryMainToolbar: ToolbarContent {
     @Environment(AppChromeState.self) private var chrome
     @Environment(GalleryStore.self) private var store
+    #if os(iOS)
+    @Environment(GallerySelectionStore.self) private var selection
+    #endif
     @Binding var showSettings: Bool
     @Binding var pickerItems: [PhotosPickerItem]
 
@@ -1002,42 +1101,37 @@ private struct GalleryMainToolbar: ToolbarContent {
             }
         }
         #else
-        ToolbarItem(placement: .primaryAction) {
-            PhotosPicker(selection: $pickerItems, maxSelectionCount: 20, matching: .images) {
-                Label("Add", systemImage: "plus")
+        if selection.isSelecting {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Done") {
+                    withAnimation(AppAnimation.bouncy) { selection.endSelecting() }
+                }
+                .fontWeight(.semibold)
             }
-            .disabled(store.isBusy)
-            .help("Add photos")
-        }
-        ToolbarItem(placement: .primaryAction) {
-            syncToolbarButton
-        }
-        if store.settings.debugMode {
-            ToolbarItem(placement: .primaryAction) {
-                activityToolbarButton
+        } else {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Select") {
+                    withAnimation(AppAnimation.bouncy) { selection.beginSelecting() }
+                }
+                .disabled(store.activePhotos.isEmpty)
             }
-        }
-        ToolbarItem(placement: .primaryAction) {
-            Button("Settings", systemImage: "gearshape") {
-                showSettings.toggle()
-            }
-            .help("Settings")
-            .sheet(isPresented: $showSettings) {
-                NavigationStack {
-                    SettingsPopover()
-                        .navigationTitle("Settings")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("Done") { showSettings = false }
-                            }
-                        }
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                PhotosPicker(selection: $pickerItems, maxSelectionCount: 20, matching: .images) {
+                    Label("Add Photos", systemImage: "plus")
+                }
+                .disabled(store.isBusy)
+                if store.settings.debugMode {
+                    activityToolbarButton
+                }
+                Button("Settings", systemImage: "gearshape") {
+                    showSettings = true
                 }
             }
         }
         #endif
     }
 
+    #if os(macOS)
     private var syncToolbarButton: some View {
         Button {
             Task { await store.syncAll() }
@@ -1053,6 +1147,7 @@ private struct GalleryMainToolbar: ToolbarContent {
         .help(store.isSyncing ? "Syncing photos…" : "Sync photos")
         .accessibilityLabel("Sync photos")
     }
+    #endif
 
     private var activityToolbarButton: some View {
         Button {
@@ -1087,8 +1182,8 @@ private struct GalleryMainToolbar: ToolbarContent {
         .modifier(GalleryMacOSToolbarActionButtonStyle())
         .help("Settings")
         .popover(isPresented: $showSettings, arrowEdge: .top) {
-            SettingsPopover()
-                .frame(width: 340)
+            SettingsView()
+                .frame(width: 380, height: 540)
         }
     }
     #endif
@@ -1100,7 +1195,6 @@ struct PhotoThumb: View {
     let thumbAspectRatio: CGFloat
     let thumbMaxPixelSize: Int
     let isSelected: Bool
-    var isCurrentOnDevice: Bool = false
     var cornerTag: String? = nil
     var showsInsertionLineBefore: Bool = false
     var showsInsertionLineAfter: Bool = false
@@ -1116,11 +1210,20 @@ struct PhotoThumb: View {
     var body: some View {
         thumbImage
             .overlay {
-                Rectangle()
-                    .strokeBorder(
-                        isSelected ? AppBrandColor.accentGreen : (isCurrentOnDevice ? Color.black : Color.clear),
-                        lineWidth: isCurrentOnDevice ? 2 : 3
-                    )
+                if isSelected {
+                    Self.cellShape
+                        .strokeBorder(AppBrandColor.accentGreen, lineWidth: 3)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title3)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, AppBrandColor.accentGreen)
+                        .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+                        .padding(6)
+                }
             }
             .overlay(alignment: .leading) {
                 if showsInsertionLineBefore {
@@ -1132,23 +1235,25 @@ struct PhotoThumb: View {
                     GalleryInsertionLine()
                 }
             }
-            .overlay(alignment: .bottomTrailing) {
+            .overlay(alignment: .bottomLeading) {
                 if let cornerTag,
                     selection.presentedLightboxPhotoID != photo.id
                 {
-                    Text(cornerTag)
-                        .font(AppTypography.thumbBadge)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 4)
-                        .background(
-                            cornerTag == PhotoFormatters.showingTodayTag ? Color.black : AppBrandColor.accentGreen
-                        )
-                        .padding(6)
+                    PhotoThumbBadge(tag: cornerTag)
+                        .padding(5)
                 }
             }
             .animation(nil, value: isSelected)
             .frame(maxWidth: .infinity)
+    }
+
+    /// Square-cornered on iOS to tile like Photos; softly rounded on macOS, where the grid has gutters.
+    private static var cellShape: RoundedRectangle {
+        #if os(macOS)
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+        #else
+        RoundedRectangle(cornerRadius: 0)
+        #endif
     }
 
     /// Portrait cell (device aspect); image aspect-fills and center-crops inside.
@@ -1165,7 +1270,32 @@ struct PhotoThumb: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .clipped()
+            .clipShape(Self.cellShape)
+    }
+}
+
+/// Schedule chip on a thumbnail: green "Today" for the photo on the frame, a quiet date for upcoming slots.
+private struct PhotoThumbBadge: View {
+    let tag: String
+
+    private var isShowingToday: Bool { tag == PhotoFormatters.showingTodayTag }
+
+    var body: some View {
+        HStack(spacing: 3) {
+            if isShowingToday {
+                Image(systemName: "photo.artframe")
+            }
+            Text(isShowingToday ? "Today" : tag)
+        }
+        .font(AppTypography.thumbBadge)
+        .foregroundStyle(isShowingToday ? AppBrandColor.accentGreen : .white)
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(isShowingToday ? Color.white : AppBrandColor.accentGreen, in: Capsule())
+        .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+        .accessibilityLabel(tag)
     }
 }
 

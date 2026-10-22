@@ -18,7 +18,7 @@ struct ActivityLogListView: View {
         Group {
             if logStore.entries.isEmpty {
                 ContentUnavailableView {
-                    Label("No activity yet", systemImage: "text.badge.clock")
+                    Label("No activity yet", systemImage: "clock.arrow.circlepath")
                 } description: {
                     Text("Sync, uploads, and server events appear here.")
                 }

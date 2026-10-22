@@ -44,39 +44,68 @@ extension View {
         modifier(FloatingActionBarStyle())
     }
 
-    /// Primary gallery action (e.g. Show for today). Uses bordered prominent (not glass) so corner radius matches Download/Delete.
+    /// Solid brand-green capsule for the main action (Show for Today, Unlock).
     func galleryPrimaryButtonStyle() -> some View {
-        buttonStyle(.borderedProminent)
-            .galleryChromeButtonBorderShape()
+        buttonStyle(BrandCapsuleButtonStyle(kind: .prominent))
     }
 
-    /// Neutral bordered gallery action (e.g. Download in lightbox) — same chrome as Delete, default tint.
+    /// Green-tinted capsule for secondary actions (Share, Download).
     func galleryBorderedButtonStyle() -> some View {
-        buttonStyle(.bordered)
-            .galleryChromeButtonBorderShape()
+        buttonStyle(BrandCapsuleButtonStyle(kind: .tinted))
     }
 
-    /// Destructive gallery chrome action (e.g. Delete in selection bar or lightbox).
-    /// Red bordered control — same on all OS versions. Pair with `galleryDestructiveChromeOpacity(isEnabled:)`.
-    /// Do not combine with `Button(role: .destructive)` (system role overrides fill/border). Alerts and context menus keep `role: .destructive`.
+    /// Red-tinted capsule for Delete. Alerts and context menus keep system `role: .destructive` styling.
     func galleryDestructiveButtonStyle() -> some View {
-        buttonStyle(.bordered)
-            .tint(.red)
-            .galleryChromeButtonBorderShape()
+        buttonStyle(BrandCapsuleButtonStyle(kind: .destructive))
+    }
+}
+
+/// Capsule buttons drawn in brand colors rather than system bordered styles: macOS desaturates those in inactive
+/// windows and both platforms gray out disabled prominent buttons, which drained the green from the interface.
+struct BrandCapsuleButtonStyle: ButtonStyle {
+    enum Kind {
+        case prominent
+        case tinted
+        case destructive
     }
 
-    /// Capsule corners shared by gallery chrome buttons (selection bar, lightbox actions).
-    func galleryChromeButtonBorderShape() -> some View {
-        buttonBorderShape(.capsule)
+    let kind: Kind
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.controlSize) private var controlSize
+    @Environment(\.colorScheme) private var colorScheme
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body.weight(.semibold))
+            .lineLimit(1)
+            .foregroundStyle(foreground)
+            .padding(.horizontal, isLarge ? 20 : 14)
+            .padding(.vertical, isLarge ? 11 : 7)
+            .background(fill(pressed: configuration.isPressed), in: Capsule())
+            .contentShape(Capsule())
+            .opacity(isEnabled ? 1 : 0.55)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 
-    /// Disabled dimming for destructive chrome buttons (matches Show for today).
-    func galleryDestructiveChromeOpacity(isEnabled: Bool) -> some View {
-        opacity(isEnabled ? 1 : 0.45)
+    private var isLarge: Bool {
+        controlSize == .large || controlSize == .extraLarge
     }
 
-    /// Expands bordered macOS buttons to the proposed width (label + outer frame).
-    func galleryFullWidthButtonLayout(minHeight: CGFloat = 32) -> some View {
-        frame(maxWidth: .infinity, minHeight: minHeight)
+    private var foreground: Color {
+        switch kind {
+        case .prominent: return .white
+        case .tinted:
+            return colorScheme == .dark ? Color(red: 0.62, green: 0.88, blue: 0.70) : AppBrandColor.accentGreen
+        case .destructive: return colorScheme == .dark ? Color(red: 1.0, green: 0.55, blue: 0.53) : .red
+        }
+    }
+
+    private func fill(pressed: Bool) -> Color {
+        let tintOpacity = colorScheme == .dark ? 0.24 : 0.14
+        switch kind {
+        case .prominent: return AppBrandColor.accentGreen.opacity(pressed ? 0.8 : 1)
+        case .tinted: return AppBrandColor.accentGreen.opacity(pressed ? tintOpacity * 1.8 : tintOpacity)
+        case .destructive: return Color.red.opacity(pressed ? tintOpacity * 1.8 : tintOpacity)
+        }
     }
 }

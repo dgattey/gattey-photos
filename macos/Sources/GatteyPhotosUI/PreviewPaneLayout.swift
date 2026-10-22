@@ -5,22 +5,15 @@ import SwiftUI
 enum PreviewPaneLayout {
     #if os(macOS)
     static let macOSPanePaddingLeading: CGFloat = 20
-    static let macOSPanePaddingTrailing: CGFloat = 12
+    static let macOSPanePaddingTrailing: CGFloat = 16
     static let macOSPanePaddingVertical: CGFloat = 20
+    static let macOSCaptionSpacing: CGFloat = 16
 
-    /// Vertical space the "Gattey Photos" title block (serif title + its top padding + VStack spacing)
-    /// takes above the framed preview. Subtracted from pane height so the intrinsic pane width matches
-    /// the height-constrained preview and leaves no trailing gap.
-    static let macOSTitleBlockHeight: CGFloat = 54
+    /// Serif title + its top padding + the VStack spacing before the frame.
+    static let macOSTitleBlockHeight: CGFloat = 82
 
-    /// Leading inset only around title + framed preview; trailing sits flush against the grid gutter.
-    static var macOSPaneHorizontalPadding: CGFloat {
-        macOSPanePaddingLeading
-    }
-
-    static var macOSPaneVerticalPadding: CGFloat {
-        2 * macOSPanePaddingVertical
-    }
+    /// Now Showing caption (eyebrow, attribution, until) + spacing above it + bottom padding.
+    static let macOSCaptionBlockHeight: CGFloat = 104
     #endif
 
     /// SwiftUI width ÷ height for the device preview frame (portrait default; landscape when `isLandscape`).
@@ -39,30 +32,14 @@ enum PreviewPaneLayout {
     }
 
     #if os(macOS)
-    /// Auto left column width: framed device preview at full content height (no 28% min floor).
-    ///
-    /// Height-limited intrinsic: unlimited content width, height = `contentHeight − verticalPadding`.
-    /// `screenW = (contentHeight − verticalPadding − 2×frameOverhead) × aspect`
-    /// `leftW = framed.width + horizontalPadding`, capped at 72% of `totalWidth`.
+    /// Auto left column width: framed device preview filling the height left over by the title and caption,
+    /// capped at the configured fraction of `totalWidth`.
     static func macOSLeftPaneWidth(
         contentHeight: CGFloat,
         screenAspectRatio: CGFloat,
         totalWidth: CGFloat
     ) -> CGFloat {
-        macOSClampedLeftPaneWidth(
-            macOSIntrinsicLeftPaneWidth(
-                contentHeight: contentHeight,
-                screenAspectRatio: screenAspectRatio
-            ),
-            totalWidth: totalWidth
-        )
-    }
-
-    static func macOSIntrinsicLeftPaneWidth(
-        contentHeight: CGFloat,
-        screenAspectRatio: CGFloat
-    ) -> CGFloat {
-        let availableH = max(0, contentHeight - macOSPaneVerticalPadding - macOSTitleBlockHeight)
+        let availableH = max(0, contentHeight - macOSTitleBlockHeight - macOSCaptionBlockHeight)
         let screenW = DevicePreviewChrome.screenWidth(
             for: CGSize(width: .greatestFiniteMagnitude, height: availableH),
             screenAspectRatio: screenAspectRatio
@@ -71,17 +48,8 @@ enum PreviewPaneLayout {
             screenWidth: screenW,
             screenAspectRatio: screenAspectRatio
         )
-        return framed.width + macOSPaneHorizontalPadding
-    }
-
-    /// Clamps pane width to the configured maximum fraction of `totalWidth`.
-    static func macOSClampedLeftPaneWidth(
-        _ width: CGFloat,
-        totalWidth: CGFloat
-    ) -> CGFloat {
-        let total = max(totalWidth, 1)
-        let maxW = total * CGFloat(AppSettings.previewPaneSplitFractionMax)
-        return min(max(width, 0), maxW)
+        let maxW = max(totalWidth, 1) * CGFloat(AppSettings.previewPaneSplitFractionMax)
+        return min(framed.width + macOSPanePaddingLeading, maxW)
     }
     #endif
 }

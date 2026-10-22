@@ -10,6 +10,9 @@ public final class GallerySelectionStore {
     public init() {}
 
     var selectedIDs: Set<PhotoID> = []
+    /// iOS Select mode: taps toggle selection instead of opening the photo. macOS selects with clicks and modifiers,
+    /// so this stays false there.
+    private(set) var isSelecting = false
     /// Drives `NavigationPath` in `RootView`.
     var lightboxNavigationPhotoID: PhotoID?
     /// Committed when the pushed lightbox appears.
@@ -74,6 +77,16 @@ public final class GallerySelectionStore {
         selectionAnchor = nil
     }
 
+    func beginSelecting() {
+        clearSelection()
+        isSelecting = true
+    }
+
+    func endSelecting() {
+        isSelecting = false
+        clearSelection()
+    }
+
     /// Photo to show when opening the lightbox from the keyboard (anchor, else first in grid order).
     func preferredLightboxPhotoID(in photoOrder: [PhotoID]) -> PhotoID? {
         guard !selectedIDs.isEmpty else { return nil }
@@ -108,6 +121,12 @@ public final class GallerySelectionStore {
     func closeLightbox() {
         lightboxPhotoID = nil
         lightboxNavigationPhotoID = nil
+        #if os(iOS)
+        // Outside Select mode the photo opened in the lightbox shouldn't stay checked in the grid.
+        if !isSelecting {
+            clearSelection()
+        }
+        #endif
     }
 
     /// Moves grid selection along gallery order (horizontal) or by row (vertical × `columnCount`).

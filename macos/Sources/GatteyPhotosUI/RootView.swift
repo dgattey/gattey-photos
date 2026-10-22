@@ -6,12 +6,14 @@ import AppKit
 #endif
 
 struct RootView: View {
+    @Environment(AppChromeState.self) private var chrome
     @Environment(GalleryStore.self) private var store
     @Environment(\.scenePhase) private var scenePhase
     @State private var resignedActiveAt: Date?
     @State private var navigationPath = NavigationPath()
 
     var body: some View {
+        @Bindable var chrome = chrome
         @Bindable var store = store
         NavigationStack(path: $navigationPath) {
             galleryRoot
@@ -20,6 +22,9 @@ struct RootView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .galleryDeleteKeyboard(photoIDs: Set([photoID]))
                 }
+        }
+        .inspector(isPresented: $chrome.showActivityInspector) {
+            ActivityLogPaneView()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onChange(of: store.selection.lightboxNavigationPhotoID) { _, photoID in

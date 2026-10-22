@@ -2,8 +2,6 @@ import SwiftUI
 
 #if os(macOS)
 import AppKit
-#elseif os(iOS)
-import UIKit
 #endif
 
 struct GridTapModifiers {
@@ -11,10 +9,8 @@ struct GridTapModifiers {
     var rangeSelect: Bool
 
     #if os(iOS)
-    /// Touch taps select a single photo; hardware keyboard modifiers are not tracked on iOS yet.
-    static var current: GridTapModifiers {
-        GridTapModifiers(append: false, rangeSelect: false)
-    }
+    /// Select mode taps toggle one photo in or out, like Photos.
+    static let selectModeToggle = GridTapModifiers(append: true, rangeSelect: false)
     #endif
 }
 

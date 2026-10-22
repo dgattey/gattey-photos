@@ -5,6 +5,8 @@ import Foundation
 /// Do not use `Bundle.module` in shipped apps: when the bundle path does not match what SwiftPM
 /// expects at runtime, `Bundle.module` traps during static initialization.
 enum GatteyPhotosUIResources {
+    private final class BundleAnchor {}
+
     private static let resourceBundleName = "GatteyPhotos_GatteyPhotosUI"
     private static let markerResource = "unlock-welcome"
     private static let markerExtension = "png"
@@ -40,6 +42,15 @@ enum GatteyPhotosUIResources {
             if let bundle = containsMarker(Bundle(url: bundleURL)) {
                 return bundle
             }
+        }
+
+        let anchorBundle = Bundle(for: BundleAnchor.self)
+        let siblingURL =
+            anchorBundle.bundleURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("\(resourceBundleName).bundle")
+        if let bundle = containsMarker(Bundle(url: siblingURL)) {
+            return bundle
         }
 
         return containsMarker(.main)

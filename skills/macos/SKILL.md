@@ -59,7 +59,7 @@ Verify live with `.chrome-verify/capture-toolbar.sh <label>` (drives the running
 
 `UnlockView` / `AppSession` — name + family password only at unlock (`POST /api/auth/session` → `syncSessionToken`). All sync calls use session Bearer only.
 
-`SettingsPopover.swift` + `FramesSettingsSection.swift` — register frames on the server (paste Bloomin8 setup block; tokens encrypted in `devices/registry.json` on Blob). **Debug → Toggle Debug Mode** switches API URL; start local server with `./scripts/dev.sh` (not from the app).
+`SettingsView.swift` + `FramesSettingsSection.swift` — register frames on the server (paste Bloomin8 setup block; tokens encrypted in `devices/registry.json` on Blob). **Debug → Toggle Debug Mode** switches API URL; start local server with `./scripts/dev.sh` (not from the app).
 
 **Frames:** `GET /api/devices`, `POST /api/devices`, `GET /api/devices/status`. Server pushes to einkshot after `currentPhotoId` changes. No client pull when locked or quit.
 

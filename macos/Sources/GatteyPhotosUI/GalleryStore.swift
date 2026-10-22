@@ -212,19 +212,8 @@ public final class GalleryStore {
         return rotationCache.formattedTagByPhotoID[photoID]
     }
 
-    func devicePreviewCaption(for photo: PhotoEntry) -> String {
-        if let until = rotationPlan?.currentShowingUntil, state.currentPhotoId == photo.id {
-            return PhotoFormatters.addedByUntilFriendly(
-                photo: photo,
-                until: until,
-                uploaders: state.uploaders
-            )
-        }
-        return PhotoFormatters.addedBy(photo, uploaders: state.uploaders)
-    }
-
-    /// Lightbox secondary line when this photo is the device current (rotation end date).
-    func lightboxShowingUntilCaption(for photo: PhotoEntry) -> String? {
+    /// `Until tomorrow`-style rotation end when `photo` is the device's current photo.
+    func showingUntilCaption(for photo: PhotoEntry) -> String? {
         guard state.currentPhotoId == photo.id,
             let until = rotationPlan?.currentShowingUntil
         else { return nil }

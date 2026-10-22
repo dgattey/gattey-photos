@@ -436,4 +436,42 @@ struct StartupLatencyTests {
         #expect(createReq.cachePolicy == .reloadIgnoringLocalCacheData)
         #expect(createReq.timeoutInterval == AuthVerifier.createSessionTimeout)
     }
+
+    @Test("PhotoImageModel falls back to cached full-size photo when bucketed thumbnail is absent")
+    @MainActor
+    func photoImageModelFallsBackToFullSizeCache() async throws {
+        let tempSupport = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gp-cache-fallback-\(UUID().uuidString)", isDirectory: true)
+        AppConfig.setSupportFolderForTesting(tempSupport)
+        defer {
+            AppConfig.flushPersistence()
+            AppConfig.setSupportFolderForTesting(nil)
+            try? FileManager.default.removeItem(at: tempSupport)
+        }
+
+        let photoID = "test-fallback-\(UUID().uuidString)"
+        let fullURL = AppConfig.cacheURL(for: photoID)
+        let thumb512URL = AppConfig.thumbnailCacheURL(for: photoID, width: 512)
+
+        let welcomeURL = try #require(
+            GatteyPhotosUIResources.bundle.url(forResource: "unlock-welcome", withExtension: "png")
+        )
+        let imageData = try Data(contentsOf: welcomeURL)
+        try FileManager.default.createDirectory(
+            at: fullURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try imageData.write(to: fullURL, options: .atomic)
+        #expect(!FileManager.default.fileExists(atPath: thumb512URL.path))
+
+        let model = PhotoImageModel()
+        model.load(photoID: photoID, maxPixelSize: 360, thumbnailWidth: 512)
+        for _ in 0..<50 where model.isLoading {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+
+        #expect(!model.isLoading)
+        #expect(!model.loadFailed)
+        #expect(model.image != nil)
+    }
 }

@@ -233,9 +233,11 @@ struct WindowGlassBackground: View {
     }
 }
 
+/// Photo detail sits on the plain system background (white / black) so the photo reads as the hero.
 struct PushedDetailBackground: View {
     var body: some View {
-        AppSurfaceBackground()
+        Color(uiColor: .systemBackground)
+            .ignoresSafeArea()
     }
 }
 
@@ -245,20 +247,23 @@ struct UnlockGlassBackground: View {
     }
 }
 
-struct SoftColumnSeparator: View {
-    var visibleWidth: CGFloat
+struct WindowChromeConfigurator: View {
+    @Environment(AppChromeState.self) private var chrome
+    var unlocked: Bool
 
     var body: some View {
-        RoundedRectangle(cornerRadius: visibleWidth / 2, style: .continuous)
-            .fill(Color.primary.opacity(0.14))
-            .frame(width: visibleWidth)
-            .frame(maxHeight: .infinity)
+        Color.clear
+            .frame(width: 0, height: 0)
+            .task(id: chrome.initialOrientation) {
+                guard let orientation = chrome.initialOrientation else { return }
+                let mask: UIInterfaceOrientationMask =
+                    orientation == .landscape ? .landscapeRight : .portrait
+                for scene in UIApplication.shared.connectedScenes {
+                    guard let windowScene = scene as? UIWindowScene else { continue }
+                    windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: mask))
+                }
+            }
     }
-}
-
-struct WindowChromeConfigurator: View {
-    var unlocked: Bool
-    var body: some View { EmptyView() }
 }
 
 struct TransparentWindowConfigurator: View {

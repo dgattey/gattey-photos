@@ -300,6 +300,7 @@ private struct GalleryArrowSelectionKeyboardHandling: ViewModifier {
     @Environment(GalleryStore.self) private var store
     @Environment(GallerySelectionStore.self) private var selection
     let isEnabled: Bool
+    let columnCount: Int
 
     func body(content: Content) -> some View {
         content
@@ -312,13 +313,12 @@ private struct GalleryArrowSelectionKeyboardHandling: ViewModifier {
     private func handleArrow(horizontal: Int, vertical: Int) -> KeyPress.Result {
         guard isEnabled else { return .ignored }
         let order = store.activePhotos.map(\.id)
-        let columns = store.settings.galleryGridColumnCount
         guard
             selection.navigateGridSelection(
                 horizontalDelta: horizontal,
                 verticalDelta: vertical,
                 photoOrder: order,
-                columnCount: columns
+                columnCount: columnCount
             )
         else { return .ignored }
         return .handled
@@ -327,8 +327,8 @@ private struct GalleryArrowSelectionKeyboardHandling: ViewModifier {
 
 extension View {
     /// Arrow keys move grid selection when the lightbox is closed (order matches `activePhotos` / grid rows).
-    func galleryArrowSelectionKeyboard(isEnabled: Bool) -> some View {
-        modifier(GalleryArrowSelectionKeyboardHandling(isEnabled: isEnabled))
+    func galleryArrowSelectionKeyboard(isEnabled: Bool, columnCount: Int) -> some View {
+        modifier(GalleryArrowSelectionKeyboardHandling(isEnabled: isEnabled, columnCount: columnCount))
     }
 }
 
