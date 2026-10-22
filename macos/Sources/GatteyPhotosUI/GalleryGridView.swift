@@ -52,10 +52,10 @@ struct GalleryGridView: View {
         .modifier(GalleryMacOSToolbarTitleRemoval())
         .overlay(alignment: .top) {
             VariableBlurView(maxBlurRadius: 4, direction: .blurredTopClearBottom)
-            .frame(height: 68)
-            .frame(maxWidth: .infinity)
-            .ignoresSafeArea(edges: .top)
-            .allowsHitTesting(false)
+                .frame(height: 68)
+                .frame(maxWidth: .infinity)
+                .ignoresSafeArea(edges: .top)
+                .allowsHitTesting(false)
         }
         // Fallback for chrome outside the grid; populated grids use AppKit targets (see thumbnailGridColumn).
         .onDrop(of: fileDropTypes, isTargeted: $isFileDropTargeted) { providers, _ in
@@ -84,32 +84,32 @@ struct GalleryGridView: View {
 
     private var galleryShell: some View {
         platformShell
-        .focusable()
-        .focusEffectDisabled()
-        .focused($gridDeleteKeyFocus)
-        .galleryDeleteKeyboard(photoIDs: gridDeleteKeyPhotoIDs)
-        .galleryOpenLightboxKeyboard(
-            isEnabled: galleryGridKeyboardEnabled,
-            photoOrder: store.activePhotoIDs
-        )
-        .galleryClearSelectionKeyboard(isEnabled: galleryGridKeyboardEnabled)
-        .galleryArrowSelectionKeyboard(isEnabled: galleryGridKeyboardEnabled, columnCount: gridColumnCount)
-        .onChange(of: gridDeleteKeyPhotoIDs) { _, _ in
-            syncGridKeyboardFocus()
-        }
-        .onChange(of: selection.isLightboxOpen) { _, _ in
-            syncGridKeyboardFocus()
-        }
-        .onChange(of: showSettings) { _, _ in
-            syncGridKeyboardFocus()
-        }
-        .onChange(of: store.activePhotoIDs) { _, _ in
-            applyInitialViewIfNeeded()
-        }
-        .onAppear {
-            syncGridKeyboardFocus()
-            applyInitialViewIfNeeded()
-        }
+            .focusable()
+            .focusEffectDisabled()
+            .focused($gridDeleteKeyFocus)
+            .galleryDeleteKeyboard(photoIDs: gridDeleteKeyPhotoIDs)
+            .galleryOpenLightboxKeyboard(
+                isEnabled: galleryGridKeyboardEnabled,
+                photoOrder: store.activePhotoIDs
+            )
+            .galleryClearSelectionKeyboard(isEnabled: galleryGridKeyboardEnabled)
+            .galleryArrowSelectionKeyboard(isEnabled: galleryGridKeyboardEnabled, columnCount: gridColumnCount)
+            .onChange(of: gridDeleteKeyPhotoIDs) { _, _ in
+                syncGridKeyboardFocus()
+            }
+            .onChange(of: selection.isLightboxOpen) { _, _ in
+                syncGridKeyboardFocus()
+            }
+            .onChange(of: showSettings) { _, _ in
+                syncGridKeyboardFocus()
+            }
+            .onChange(of: store.activePhotoIDs) { _, _ in
+                applyInitialViewIfNeeded()
+            }
+            .onAppear {
+                syncGridKeyboardFocus()
+                applyInitialViewIfNeeded()
+            }
     }
 
     private func applyInitialViewIfNeeded() {
@@ -205,79 +205,79 @@ struct GalleryGridView: View {
         ZStack {
             ScrollView {
                 VStack(spacing: 0) {
-                #if os(iOS)
-                NowShowingCard()
-                    .padding(.horizontal, 16)
-                    .padding(.top, 4)
-                    .padding(.bottom, 16)
-                #endif
-                ZStack(alignment: .top) {
-                    #if os(macOS)
-                    GalleryFileDropTarget(
-                        onDrop: handleFileURLDrop,
-                        isTargeted: $isFileDropTargeted
-                    )
-                    .frame(maxWidth: .infinity, minHeight: gridContentMinHeight)
+                    #if os(iOS)
+                    NowShowingCard()
+                        .padding(.horizontal, 16)
+                        .padding(.top, 4)
+                        .padding(.bottom, 16)
                     #endif
-
-                    Color.clear
-                        .frame(maxWidth: .infinity, minHeight: gridContentMinHeight)
-                        .contentShape(Rectangle())
-                        .onTapGesture { clearSelectionFromBackgroundTap() }
-
-                    if store.isBootstrappingGallery {
-                        VStack(spacing: 12) {
-                            ProgressView()
-                                .controlSize(.large)
-                            Text("Loading photos from server…")
-                                .font(AppTypography.secondary)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 280)
-                    } else if store.activePhotos.isEmpty {
-                        ContentUnavailableView {
-                            Label("Drop photos to upload", systemImage: "photo.badge.plus")
-                        } description: {
-                            Text("JPEG images from Finder, or use Add in the toolbar.")
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 280)
-                    } else {
+                    ZStack(alignment: .top) {
                         #if os(macOS)
-                        GalleryPhotoGrid(
-                            gridContainerWidth: gridLayoutWidth,
-                            columnCount: gridColumnCount,
-                            deviceScreenAspectRatio: store.deviceScreenAspectRatio,
-                            dropInsertionIndex: $dropInsertionIndex,
-                            onSelectPhoto: handleGridPhotoTap,
-                            onOpenLightbox: { store.selection.openLightbox($0) },
-                            onReorderDrop: handleReorderDrop,
-                            onFileDrop: handleFileURLDrop,
-                            onFileDropTargeted: { isFileDropTargeted = $0 }
+                        GalleryFileDropTarget(
+                            onDrop: handleFileURLDrop,
+                            isTargeted: $isFileDropTargeted
                         )
-                        .padding(Self.gridInsets)
-                        #else
-                        GalleryPhotoGrid(
-                            gridContainerWidth: gridLayoutWidth,
-                            columnCount: gridColumnCount,
-                            deviceScreenAspectRatio: store.deviceScreenAspectRatio,
-                            dropInsertionIndex: $dropInsertionIndex,
-                            onSelectPhoto: handleGridPhotoTap,
-                            onOpenLightbox: { store.selection.openLightbox($0) },
-                            onReorderDrop: handleReorderDrop
-                        )
+                        .frame(maxWidth: .infinity, minHeight: gridContentMinHeight)
                         #endif
+
+                        Color.clear
+                            .frame(maxWidth: .infinity, minHeight: gridContentMinHeight)
+                            .contentShape(Rectangle())
+                            .onTapGesture { clearSelectionFromBackgroundTap() }
+
+                        if store.isBootstrappingGallery {
+                            VStack(spacing: 12) {
+                                ProgressView()
+                                    .controlSize(.large)
+                                Text("Loading photos from server…")
+                                    .font(AppTypography.secondary)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 280)
+                        } else if store.activePhotos.isEmpty {
+                            ContentUnavailableView {
+                                Label("Drop photos to upload", systemImage: "photo.badge.plus")
+                            } description: {
+                                Text("JPEG images from Finder, or use Add in the toolbar.")
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 280)
+                        } else {
+                            #if os(macOS)
+                            GalleryPhotoGrid(
+                                gridContainerWidth: gridLayoutWidth,
+                                columnCount: gridColumnCount,
+                                deviceScreenAspectRatio: store.deviceScreenAspectRatio,
+                                dropInsertionIndex: $dropInsertionIndex,
+                                onSelectPhoto: handleGridPhotoTap,
+                                onOpenLightbox: { store.selection.openLightbox($0) },
+                                onReorderDrop: handleReorderDrop,
+                                onFileDrop: handleFileURLDrop,
+                                onFileDropTargeted: { isFileDropTargeted = $0 }
+                            )
+                            .padding(Self.gridInsets)
+                            #else
+                            GalleryPhotoGrid(
+                                gridContainerWidth: gridLayoutWidth,
+                                columnCount: gridColumnCount,
+                                deviceScreenAspectRatio: store.deviceScreenAspectRatio,
+                                dropInsertionIndex: $dropInsertionIndex,
+                                onSelectPhoto: handleGridPhotoTap,
+                                onOpenLightbox: { store.selection.openLightbox($0) },
+                                onReorderDrop: handleReorderDrop
+                            )
+                            #endif
+                        }
                     }
-                }
-                .frame(maxWidth: .infinity, minHeight: gridContentMinHeight)
-                #if os(iOS)
-                if !store.activePhotos.isEmpty {
-                    Text(photoCountLabel)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(.top, 20)
-                        .padding(.bottom, selection.isSelecting ? 96 : 28)
-                }
-                #endif
+                    .frame(maxWidth: .infinity, minHeight: gridContentMinHeight)
+                    #if os(iOS)
+                    if !store.activePhotos.isEmpty {
+                        Text(photoCountLabel)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 20)
+                            .padding(.bottom, selection.isSelecting ? 96 : 28)
+                    }
+                    #endif
                 }
             }
             #if os(macOS)

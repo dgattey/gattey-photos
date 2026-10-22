@@ -94,7 +94,8 @@ struct BrandCapsuleButtonStyle: ButtonStyle {
     private var foreground: Color {
         switch kind {
         case .prominent: return .white
-        case .tinted: return colorScheme == .dark ? Color(red: 0.62, green: 0.88, blue: 0.70) : AppBrandColor.accentGreen
+        case .tinted:
+            return colorScheme == .dark ? Color(red: 0.62, green: 0.88, blue: 0.70) : AppBrandColor.accentGreen
         case .destructive: return colorScheme == .dark ? Color(red: 1.0, green: 0.55, blue: 0.53) : .red
         }
     }

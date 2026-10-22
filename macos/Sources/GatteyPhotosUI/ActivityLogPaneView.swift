@@ -13,23 +13,23 @@ struct ActivityLogPaneView: View {
             ActivityLogListView()
                 .navigationTitle("Activity")
                 #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    if chrome.showActivityInspector {
-                        ToolbarItem(placement: horizontalSizeClass == .compact ? .cancellationAction : .primaryAction) {
-                            Button("Clear", role: .destructive) {
-                                logStore.clear()
-                            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if chrome.showActivityInspector {
+                    ToolbarItem(placement: horizontalSizeClass == .compact ? .cancellationAction : .primaryAction) {
+                        Button("Clear", role: .destructive) {
+                            logStore.clear()
                         }
-                        if horizontalSizeClass == .compact {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("Done") {
-                                    chrome.showActivityInspector = false
-                                }
+                    }
+                    if horizontalSizeClass == .compact {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") {
+                                chrome.showActivityInspector = false
                             }
                         }
                     }
                 }
+            }
                 #endif
         }
         .background(WindowGlassBackground())

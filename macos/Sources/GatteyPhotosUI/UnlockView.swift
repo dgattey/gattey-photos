@@ -39,7 +39,7 @@ struct UnlockView: View {
             .background(UnlockGlassBackground())
             .background(TransparentWindowConfigurator())
             #if os(macOS)
-            .toolbarBackground(.hidden, for: .windowToolbar)
+        .toolbarBackground(.hidden, for: .windowToolbar)
             #endif
             .onAppear {
                 let savedName = store.settings.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -148,8 +148,8 @@ struct UnlockView: View {
                 .autocorrectionDisabled()
                 .focused($focusedField, equals: .name)
                 #if os(iOS)
-                .submitLabel(.next)
-                .onSubmit { focusedField = .password }
+            .submitLabel(.next)
+            .onSubmit { focusedField = .password }
                 #endif
                 .unlockFieldRow()
             Divider()
