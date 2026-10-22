@@ -14,6 +14,9 @@ fi
 echo "==> macOS: swift test"
 (cd macos && swift test --build-system native)
 
+echo "==> iOS: simulator build"
+"$ROOT/scripts/build-ios.sh" >/dev/null
+
 echo "==> server: typecheck"
 # shellcheck source=scripts/lib/node-env.sh
 source "$ROOT/scripts/lib/node-env.sh"
