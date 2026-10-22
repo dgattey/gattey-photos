@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# Compile macos/AppIcon.icon (icon.json + Assets) to Assets.car via actool.
+# Compile macos/AppIcon.icon (icon.json + Assets) to Assets.car via actool, then refresh the web icons.
+# --app-only stops after Assets.car: app builds need nothing else, and the web icons need ictool and sharp.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+APP_ONLY=0
+[[ "${1:-}" == "--app-only" ]] && APP_ONLY=1
 MACOS="$ROOT/macos"
 ICON_BUNDLE="$MACOS/AppIcon.icon"
 OUT_DIR="$MACOS/.icon-build/out"
@@ -39,6 +42,7 @@ fi
 
 cp "$OUT_DIR/Assets.car" "$CAR"
 echo "Icon: $CAR (CFBundleIconName AppIcon)"
+[[ "$APP_ONLY" == "1" ]] && exit 0
 
 # Web icon URL contract shared with dyl-kit and dylangattey.com:
 #   /icon.png             1024×1024 (server/public/icon.png)
