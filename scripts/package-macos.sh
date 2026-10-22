@@ -63,7 +63,7 @@ strip_non_system_rpaths() {
 chmod +x "$ROOT/scripts/generate-app-icon.sh"
 CAR_OUT="$MACOS/Assets.car"
 if [[ "$FORCE_RESIGN" == "1" || ! -f "$CAR_OUT" ]] || [[ -n "$(find "$MACOS/AppIcon.icon" -newer "$CAR_OUT" -print -quit 2>/dev/null || true)" ]]; then
-  "$ROOT/scripts/generate-app-icon.sh"
+  "$ROOT/scripts/generate-app-icon.sh" --app-only
 fi
 
 cd "$MACOS"

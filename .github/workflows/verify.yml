@@ -122,6 +122,10 @@ jobs:
 
       - uses: jdx/mise-action@v2
 
+      # release-macos.yml packages the app without server/node_modules, so package it here before npm ci.
+      - name: Package the macOS app like the release job
+        run: GATTEY_OPEN_AFTER=0 GATTEY_FORCE_RESIGN=1 ./scripts/package-macos.sh
+
       - name: Install server dependencies
         working-directory: server
         run: npm ci
