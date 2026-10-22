@@ -10,8 +10,8 @@ struct GatteyPhotosApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     #endif
     @State private var chrome = AppChromeState(
-        initialViewRawValue: ProcessInfo.processInfo.environment["GATTEYPHOTOS_INITIAL_VIEW"]?.lowercased(),
-        initialOrientationRawValue: ProcessInfo.processInfo.environment["GATTEYPHOTOS_ORIENTATION"]?.lowercased()
+        initialViewRawValue: LaunchOverrides.gatteyPhotos.initialView,
+        initialOrientationRawValue: LaunchOverrides.gatteyPhotos.value("orientation")
     )
     @State private var session = AppSession()
     @State private var store = GalleryStore()
