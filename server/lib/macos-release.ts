@@ -1,5 +1,6 @@
-import fs from "fs";
-import path from "path";
+/** Sparkle feed of the newest GitHub release; photos.gattey.com/appcast.xml (`SUFeedURL`) redirects here. */
+export const LATEST_APPCAST_URL =
+  "https://github.com/dgattey/gattey-photos/releases/latest/download/appcast.xml";
 
 export type ReleaseNoteSection = {
   version: string;
@@ -13,15 +14,13 @@ export type MacOSRelease = {
   minimumSystemVersion: string | null;
   /** Newest first, as plain text, from the cumulative HTML in the latest item's `<description>`. */
   releaseNotes: ReleaseNoteSection[];
-  /** Pathname for the zip, e.g. `/Gattey-Photos-1.0.7.zip`. */
+  /** Pathname for the zip, e.g. `/dgattey/gattey-photos/releases/download/v1.1.11/Gattey-Photos-1.1.11.zip`. */
   zipPath: string;
   /** Absolute URL used for download redirects. */
   downloadUrl: string;
-  /** False when appcast names a zip that is not in `server/public/` (broken tree or mid-release build). */
-  downloadReady: boolean;
 };
 
-export function parseAppcastXml(xml: string): Omit<MacOSRelease, "downloadReady"> | null {
+export function parseAppcastXml(xml: string): MacOSRelease | null {
   const version =
     xml.match(/<sparkle:shortVersionString>([^<]+)<\/sparkle:shortVersionString>/)?.[1] ??
     xml.match(/<title>([^<]+)<\/title>/)?.[1];
@@ -99,25 +98,16 @@ export function getSiteOrigin(): string {
   return `http://localhost:${process.env.PORT ?? 3000}`;
 }
 
-function readBundledAppcastXml(): string | null {
-  const appcastPath = path.join(process.cwd(), "public", "appcast.xml");
-  if (!fs.existsSync(appcastPath)) return null;
-  return fs.readFileSync(appcastPath, "utf8");
-}
-
-function zipExistsInPublic(zipPath: string): boolean {
-  const localZip = path.join(process.cwd(), "public", zipPath.replace(/^\//, ""));
-  return fs.existsSync(localZip);
-}
-
-/** Reads committed `server/public/` artifacts (static at build / deploy time). */
-export function getMacOSRelease(): MacOSRelease | null {
-  const xml = readBundledAppcastXml();
-  if (!xml) return null;
-
-  const parsed = parseAppcastXml(xml);
-  if (!parsed) return null;
-
-  const downloadReady = zipExistsInPublic(parsed.zipPath);
-  return { ...parsed, downloadReady };
+/**
+ * Reads the latest GitHub release's appcast, revalidated every minute, so a new release shows up on the
+ * page and behind `/download/macos` without a redeploy.
+ */
+export async function getMacOSRelease(): Promise<MacOSRelease | null> {
+  try {
+    const response = await fetch(LATEST_APPCAST_URL, { next: { revalidate: 60 } });
+    if (!response.ok) return null;
+    return parseAppcastXml(await response.text());
+  } catch {
+    return null;
+  }
 }

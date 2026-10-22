@@ -4,7 +4,10 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=scripts/lib/signing.sh
 source "$ROOT/scripts/lib/signing.sh"
 MACOS="$ROOT/macos"
-PUBLIC_DIR="$ROOT/server/public"
+REPO="${GITHUB_REPOSITORY:-dgattey/gattey-photos}"
+
+export GATTEY_PREVIOUS_APPCAST="${GATTEY_PREVIOUS_APPCAST:-$ROOT/dist/previous-appcast.xml}"
+[[ -f "$GATTEY_PREVIOUS_APPCAST" ]] || "$ROOT/scripts/fetch-previous-appcast.sh" "$GATTEY_PREVIOUS_APPCAST"
 
 VERSION="${1:-$("$ROOT/scripts/next-release-version.sh")}"
 
@@ -39,11 +42,11 @@ SIGN_ID="${GATTEY_SIGN_IDENTITY:-$(resolve_sign_identity)}"
 WORK="$ROOT/dist/release"
 STAGE="$WORK/stage"
 rm -rf "$WORK"
-mkdir -p "$STAGE" "$PUBLIC_DIR"
+mkdir -p "$STAGE"
 
 BUILD_NUMBER="${GATTEY_BUILD_NUMBER:-$(git -C "$ROOT" rev-list --count HEAD)}"
-if [[ -z "${GATTEY_BUILD_NUMBER:-}" && -f "$PUBLIC_DIR/appcast.xml" ]]; then
-  last_build="$(sed -n 's/.*<sparkle:version>\([^<]*\)<\/sparkle:version>.*/\1/p' "$PUBLIC_DIR/appcast.xml" | head -1)"
+if [[ -z "${GATTEY_BUILD_NUMBER:-}" ]]; then
+  last_build="$(sed -n 's/.*<sparkle:version>\([^<]*\)<\/sparkle:version>.*/\1/p' "$GATTEY_PREVIOUS_APPCAST" | head -1)"
   if [[ -n "$last_build" && "$BUILD_NUMBER" -le "$last_build" ]]; then
     BUILD_NUMBER=$((last_build + 1))
   fi
@@ -80,11 +83,11 @@ ZIP="$WORK/Gattey-Photos-${VERSION}.zip"
 ditto -c -k --keepParent "$APP" "$ZIP"
 rm -rf "$STAGE"
 
-"$ROOT/scripts/release-notes.sh" --version "$VERSION" --existing-appcast "$PUBLIC_DIR/appcast.xml" >"$WORK/Gattey-Photos-${VERSION}.html"
+"$ROOT/scripts/release-notes.sh" --version "$VERSION" --existing-appcast "$GATTEY_PREVIOUS_APPCAST" >"$WORK/Gattey-Photos-${VERSION}.html"
 
 GA="$MACOS/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
 [[ -x "$GA" ]] || { echo "package-release: generate_appcast not found — run 'cd macos && swift build'." >&2; exit 1; }
-GA_ARGS=(--download-url-prefix "https://photos.gattey.com/" --link "https://photos.gattey.com" --embed-release-notes)
+GA_ARGS=(--download-url-prefix "https://github.com/$REPO/releases/download/v${VERSION}/" --link "https://photos.gattey.com" --embed-release-notes)
 if [[ -n "${SPARKLE_ED_KEY_FILE:-}" && -f "${SPARKLE_ED_KEY_FILE}" ]]; then
   GA_ARGS+=(--ed-key-file "$SPARKLE_ED_KEY_FILE")
 fi
@@ -112,10 +115,6 @@ if [[ -n "$ED_SIG" && -n "$PUB_KEY" ]] && openssl version 2>/dev/null | grep -q 
   fi
 fi
 
-rm -f "$PUBLIC_DIR"/Gattey-Photos-*.zip
-cp "$ZIP" "$PUBLIC_DIR/"
-cp "$WORK/appcast.xml" "$PUBLIC_DIR/appcast.xml"
-
 echo "package-release: v${VERSION} (build ${BUILD_NUMBER}), identity=${SIGN_ID}"
-echo "  server/public/$(basename "$ZIP")"
-echo "  server/public/appcast.xml"
+echo "  dist/release/$(basename "$ZIP")"
+echo "  dist/release/appcast.xml"
