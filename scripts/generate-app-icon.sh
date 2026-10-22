@@ -57,11 +57,19 @@ if [[ -d "$SERVER_APP_DIR" ]]; then
   mkdir -p "$IOS_OUT_DIR"
 
   iconutil --convert iconset "$OUT_DIR/AppIcon.icns" -o "$ICONSET_DIR"
-  if [[ ! -f "$ICONSET_DIR/icon_512x512@2x.png" ]]; then
-    echo "generate-app-icon: AppIcon.icns has no 1024px rendition (icon_512x512@2x.png)" >&2
+
+  # AppIcon.icns tops out at 512px, so Icon Composer's ictool renders the 1024px macOS icon.
+  ICTOOL="${ICTOOL:-$(xcode-select -p)/../Applications/Icon Composer.app/Contents/Executables/ictool}"
+  if [[ ! -x "$ICTOOL" ]]; then
+    echo "generate-app-icon: ictool not found at $ICTOOL (install Xcode 26+)" >&2
     exit 1
   fi
-  cp "$ICONSET_DIR/icon_512x512@2x.png" "$SERVER_PUBLIC_DIR/icon.png"
+  if ! "$ICTOOL" "$ICON_BUNDLE" --export-image --output-file "$SERVER_PUBLIC_DIR/icon.png" \
+    --platform macOS --rendition Default --width 1024 --height 1024 --scale 1; then
+    "$ICTOOL" --help >&2 || true
+    echo "generate-app-icon: ictool could not export the 1024px icon" >&2
+    exit 1
+  fi
 
   python3 - "$ICONSET_DIR/icon_16x16.png" "$ICONSET_DIR/icon_16x16@2x.png" "$SERVER_APP_DIR/favicon.ico" <<'PY'
 import struct

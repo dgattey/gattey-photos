@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
+import nextConfig from "../next.config.ts";
 import { BRAND } from "./brand.ts";
 import { SITE_MEDIA } from "./site-media.ts";
 
@@ -56,6 +57,26 @@ describe("photos.gattey.com icons", () => {
       !existsSync(repoPath("server/app/icon.png")),
       "server/app/icon.png would shadow /icon.png; keep the 1024px icon in server/public/",
     );
+  });
+
+  it("serves both shared icons cross-origin with an hour of caching", async () => {
+    const rules = (await nextConfig.headers?.()) ?? [];
+    for (const path of ["/icon.png", "/apple-touch-icon.png"]) {
+      const headers = new Map(
+        rules.find((rule) => rule.source === path)?.headers.map((h) => [h.key, h.value]),
+      );
+      assert.equal(
+        headers.get("Cache-Control"),
+        "public, max-age=3600, stale-while-revalidate=86400",
+        `${path} Cache-Control`,
+      );
+      assert.equal(headers.get("Access-Control-Allow-Origin"), "*", `${path} CORS`);
+    }
+  });
+
+  it("serves an opaque full-bleed /apple-touch-icon.png so iOS never fills black corners", async () => {
+    const { isOpaque } = await sharp(repoPath("server/public/apple-touch-icon.png")).stats();
+    assert.ok(isOpaque, "apple-touch-icon.png has transparent pixels");
   });
 
   it("serves /apple-touch-icon.png and /apple-icon.png as the same 180×180 PNG", async () => {
