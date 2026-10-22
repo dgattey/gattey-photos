@@ -70,6 +70,17 @@ if [[ -d "$SERVER_APP_DIR" ]]; then
     echo "generate-app-icon: ictool could not export the 1024px icon" >&2
     exit 1
   fi
+  # ictool writes 16-bit RGBA (~1.4 MB); lossless 8-bit is ~320 KB.
+  if [[ ! -d "$ROOT/server/node_modules/sharp" ]]; then
+    echo "generate-app-icon: run npm ci in server/ first (sharp re-encodes icon.png)" >&2
+    exit 1
+  fi
+  (cd "$ROOT/server" && node -e '
+    const sharp = require("sharp");
+    const file = process.argv[1];
+    sharp(file).toColourspace("srgb").png({ compressionLevel: 9, adaptiveFiltering: true }).toBuffer()
+      .then((png) => require("fs").writeFileSync(file, png));
+  ' "$SERVER_PUBLIC_DIR/icon.png")
 
   python3 - "$ICONSET_DIR/icon_16x16.png" "$ICONSET_DIR/icon_16x16@2x.png" "$SERVER_APP_DIR/favicon.ico" <<'PY'
 import struct

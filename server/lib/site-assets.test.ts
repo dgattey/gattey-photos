@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import nextConfig from "../next.config.ts";
@@ -53,6 +53,10 @@ async function assertPngSize(path: string, size: number) {
 describe("photos.gattey.com icons", () => {
   it("serves /icon.png at 1024×1024", async () => {
     await assertPngSize("server/public/icon.png", 1024);
+    const { depth } = await sharp(repoPath("server/public/icon.png")).metadata();
+    const { size } = statSync(repoPath("server/public/icon.png"));
+    assert.equal(depth, "uchar", "icon.png should be 8-bit; ictool exports 16-bit");
+    assert.ok(size < 500_000, `icon.png is ${size} bytes`);
     assert.ok(
       !existsSync(repoPath("server/app/icon.png")),
       "server/app/icon.png would shadow /icon.png; keep the 1024px icon in server/public/",
