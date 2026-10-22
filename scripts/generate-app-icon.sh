@@ -95,5 +95,8 @@ PY
   if [[ -f "$IOS_OUT_DIR/AppIcon60x60@3x.png" ]]; then
     cp "$IOS_OUT_DIR/AppIcon60x60@3x.png" "$SERVER_APP_DIR/apple-icon.png"
   fi
+  (cd "$ICON_BUNDLE" && export LC_ALL=C && cat icon.json Assets/*) | shasum -a 256 | cut -d' ' -f1 \
+    >"$ROOT/server/lib/app-icon-source.sha256"
   echo "Web icons: $SERVER_APP_DIR/{favicon.ico,icon.png,apple-icon.png}"
+  echo "App icon changed: update photos.gattey.com (server/app/page.tsx) and ask the dg project to update dylangattey.com."
 fi
