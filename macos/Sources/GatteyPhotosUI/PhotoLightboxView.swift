@@ -177,24 +177,10 @@ struct PhotoLightboxView: View {
                     .galleryPrimaryButtonStyle()
                     .disabled(store.isBusy || !store.canSetAsCurrent(photoID: photo.id))
                 }
-                HStack(spacing: 10) {
-                    Button {
-                        Task { await store.downloadPhoto(photo) }
-                    } label: {
-                        Label(Self.downloadTitle, systemImage: Self.downloadSymbol)
-                            .frame(maxWidth: .infinity)
-                    }
-                    .galleryBorderedButtonStyle()
-                    .disabled(store.isBusy)
-
-                    Button(role: .destructive) {
-                        galleryDeleteRequest?(Set([photo.id]))
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .galleryDestructiveButtonStyle()
-                    .disabled(!canDelete(photo))
+                // Side by side when the details column is wide enough, stacked rather than truncated otherwise.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) { secondaryActions(photo: photo) }
+                    VStack(spacing: 10) { secondaryActions(photo: photo) }
                 }
             }
             .controlSize(.large)
@@ -203,6 +189,27 @@ struct PhotoLightboxView: View {
         #if os(macOS)
         .animation(nil, value: photo.id)
         #endif
+    }
+
+    @ViewBuilder
+    private func secondaryActions(photo: PhotoEntry) -> some View {
+        Button {
+            Task { await store.downloadPhoto(photo) }
+        } label: {
+            Label(Self.downloadTitle, systemImage: Self.downloadSymbol)
+                .frame(maxWidth: .infinity)
+        }
+        .galleryBorderedButtonStyle()
+        .disabled(store.isBusy)
+
+        Button(role: .destructive) {
+            galleryDeleteRequest?(Set([photo.id]))
+        } label: {
+            Label("Delete", systemImage: "trash")
+                .frame(maxWidth: .infinity)
+        }
+        .galleryDestructiveButtonStyle()
+        .disabled(!canDelete(photo))
     }
 
     private func nowShowingChip(photo: PhotoEntry) -> some View {
