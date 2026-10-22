@@ -28,6 +28,8 @@ Author `macos/AppIcon.icon/` in **Icon Composer** (layer fills, glass on/off), n
 
 Single **G** group: `glass: true`, solid white layer fill, translucency/specular on the group. Rebuild: `./scripts/generate-app-icon.sh` then relaunch.
 
+**Design sync.** The icon script also rewrites the web icons (`server/public/icon.png` at 1024 px, `server/public/apple-touch-icon.png` and `server/app/apple-icon.png` at 180 px, `server/app/favicon.ico`) and `server/lib/app-icon-source.sha256`; commit them with the icon. The `verify-web-icons` CI job regenerates them on macOS and fails when the committed files are stale. Any icon, brand color, or UI redesign also updates photos.gattey.com and dylangattey.com (see **Design sync** in `AGENTS.md`). `server/lib/site-assets.test.ts` fails in `./scripts/verify.sh` until the web side matches.
+
 ## Auto-update (Sparkle)
 
 The app self-updates via Sparkle 2 (SPM dep in `Package.swift`, linked into `GatteyPhotosApp` only). Family distribution uses **ad-hoc** signing (`-`) with `com.apple.security.cs.disable-library-validation` (`macos/GatteyPhotos.local.entitlements`) plus EdDSA (`scripts/generate-sparkle-key.sh`). Push to **`main`** with `macos/` changes → `.github/workflows/release-macos.yml` commits `server/public/` once; Vercel Git deploys it (`paths-ignore` on `server/public/**` prevents a loop). Each release bumps the patch version unless the merged PR checks **Minor** or **Major** under **Release info** (`scripts/next-release-version.sh`). See **`docs/DISTRIBUTION.md`**.

@@ -7,7 +7,9 @@ description: Change the Gattey Photos Next.js sync API on Vercel (gallery routes
 
 ## Entry points
 
-- `app/page.tsx` — `GET /` download splash (static from `server/public/` at deploy time; download via `/download/macos`)
+- `app/page.tsx` — `GET /` photos.gattey.com landing page (static from `server/public/` at deploy time; download via `/download/macos`; What's new from the appcast release notes)
+- `lib/brand.ts` — web copies of the app brand greens; `lib/site-media.ts` — every image the landing page renders
+- `lib/site-assets.test.ts` — fails when web icons, brand colors, or landing images drift from `macos/AppIcon.icon`, `AppBrandColor.swift`, or `server/public/`. Fix by updating the page, not the test (see **Design sync** in `AGENTS.md`).
 - `app/download/macos/route.ts` — static redirect to the zip named in committed `appcast.xml`
 - `lib/macos-release.ts` — parses bundled appcast, sets `downloadReady` when the zip file exists in `public/`
 - `app/api/gallery/route.ts` — GET manifest

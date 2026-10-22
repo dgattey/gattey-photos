@@ -11,6 +11,7 @@ jobs:
     outputs:
       server: ${{ steps.filter.outputs.server }}
       macos: ${{ steps.filter.outputs.macos }}
+      icons: ${{ steps.filter.outputs.icons }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,6 +42,11 @@ jobs:
           else
             echo "macos=false" >> "$GITHUB_OUTPUT"
           fi
+          if echo "$CHANGED" | grep -qE '^(macos/AppIcon\.icon/|scripts/generate-app-icon\.sh$|server/app/(icon\.png|apple-icon\.png|favicon\.ico)$|server/public/(icon|apple-touch-icon)\.png$|server/lib/app-icon-source\.sha256$|\.github/workflows/verify\.yml$)'; then
+            echo "icons=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "icons=false" >> "$GITHUB_OUTPUT"
+          fi
 
   verify-server:
     needs: changes
@@ -61,6 +67,48 @@ jobs:
           npm run typecheck
           npm run test
           npm run build
+
+  verify-web-icons:
+    needs: changes
+    if: needs.changes.outputs.icons == 'true'
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Xcode 26.5
+        run: sudo xcode-select -s /Applications/Xcode_26.5.app/Contents/Developer
+
+      - uses: jdx/mise-action@v2
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Regenerate web icons from macos/AppIcon.icon
+        run: ./scripts/generate-app-icon.sh
+
+      - name: Upload regenerated web icons
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-icons
+          path: |
+            server/public/icon.png
+            server/public/apple-touch-icon.png
+            server/app/apple-icon.png
+            server/app/favicon.ico
+            server/lib/app-icon-source.sha256
+
+      # Rendered pixels vary slightly between runner images, so compare the source stamp
+      # and file presence rather than PNG bytes.
+      - name: Fail when committed web icons are stale
+        run: |
+          stale="$(git status --porcelain -- server/lib/app-icon-source.sha256; git status --porcelain --untracked-files=all -- server/public server/app | grep '^??' || true)"
+          if [[ -n "$stale" ]]; then
+            echo "$stale"
+            echo "::error::Web icons differ from macos/AppIcon.icon. Run ./scripts/generate-app-icon.sh on a Mac, or commit the web-icons artifact from this run."
+            exit 1
+          fi
 
   verify-macos:
     needs: changes

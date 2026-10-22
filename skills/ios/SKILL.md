@@ -55,6 +55,10 @@ Runs `./scripts/build-ios.sh`, then `simctl install` / `launch`.
 
 In Simulator, choose **Device → iPad** (or iPhone) so the app is full-screen—not the tiny iPhone-compat window; use **⌘1** for the app switcher if the app is behind Simulator chrome.
 
+## Design sync
+
+iOS and macOS share `GatteyPhotosUI`, so an iOS redesign is an app redesign. Update photos.gattey.com (`server/app/page.tsx`, showcase images in `server/lib/site-media.ts`) and ask the `dg` project to update dylangattey.com in the same PR. See **Design sync** in `AGENTS.md`.
+
 ## macOS dev loop unchanged
 
 After `macos/` edits that affect the shipping macOS app (including shared `GatteyPhotosUI`), run **`./scripts/launch.sh macos`** per **`skills/dev-loop/SKILL.md`**. iOS-only testing does not replace relaunch when mac UI behavior may have changed.

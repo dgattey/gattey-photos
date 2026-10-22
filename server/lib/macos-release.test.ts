@@ -28,4 +28,39 @@ describe("parseAppcastXml", () => {
   it("returns null for invalid xml", () => {
     assert.equal(parseAppcastXml("<rss></rss>"), null);
   });
+
+  it("reads minimum macOS and plain-text release notes from the description", () => {
+    const xml = SAMPLE.replace(
+      "<enclosure",
+      `<sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<h3 style="margin: 0">1.0.7</h3>
+<ul>
+  <li style="line-height: 1.45;">Fix signature validation (<code>-67050</code>) &amp; retries</li>
+  <li>Faster startup</li>
+</ul>
+<h3 style="opacity: 0.75;">1.0.6</h3>
+<p>PR title only</p>
+<ul>
+  <li>Embed release notes</li>
+</ul>
+<h3>1.0.5</h3>
+<p>No bullets</p>
+]]></description>
+      <enclosure`,
+    );
+    const release = parseAppcastXml(xml);
+    assert.ok(release);
+    assert.equal(release.minimumSystemVersion, "14.0");
+    assert.deepEqual(release.releaseNotes, [
+      { version: "1.0.7", notes: ["Fix signature validation (-67050) & retries", "Faster startup"] },
+      { version: "1.0.6", notes: ["Embed release notes"] },
+    ]);
+  });
+
+  it("returns empty release notes when the appcast has no description", () => {
+    const release = parseAppcastXml(SAMPLE);
+    assert.ok(release);
+    assert.equal(release.minimumSystemVersion, null);
+    assert.deepEqual(release.releaseNotes, []);
+  });
 });
