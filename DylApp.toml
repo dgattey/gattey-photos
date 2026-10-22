@@ -10,7 +10,7 @@ category = "public.app-category.photography"
 [build]
 product = "GatteyPhotos"
 entitlements = "GatteyPhotos.local.entitlements"
-icon-generator = "scripts/link-app-icon.swift"
+icon = "AppIcon.icon"
 
 [ios]
 simulator = "iPhone 17"
@@ -18,18 +18,8 @@ simulator = "iPhone 17"
 [release]
 sparkle-public-key = "sparkle-public-key.txt"
 site-url = "https://photos.gattey.com"
+assets = "https://igpmx3tb1qer8wh9.public.blob.vercel-storage.com"
 artifacts-dir = "server/public"
-# Only what ships in the app. Test release-kit or workflow changes with a manual workflow_dispatch run.
-inputs = [
-    "Sources/**",
-    "Package.swift",
-    "Package.resolved",
-    "DylApp.toml",
-    "GatteyPhotos.local.entitlements",
-    "sparkle-public-key.txt",
-    "AppIcon.icon/**",
-    "scripts/link-app-icon.swift",
-]
 
 # Read by @dylkit/web for photos.gattey.com. Screenshot paths are under release.artifacts-dir.
 [site]

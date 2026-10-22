@@ -10,8 +10,8 @@ struct GatteyPhotosApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     #endif
     @State private var chrome = AppChromeState(
-        initialViewRawValue: LaunchOverrides.gatteyPhotos.initialView,
-        initialOrientationRawValue: LaunchOverrides.gatteyPhotos.value("orientation")
+        initialViewRawValue: LaunchOverrides.current.initialView,
+        initialOrientationRawValue: LaunchOverrides.current.value("orientation")
     )
     @State private var session = AppSession()
     @State private var store = GalleryStore()
@@ -80,14 +80,10 @@ struct GatteyPhotosApp: App {
             .environment(store)
             .environment(store.selection)
             .environment(ActivityLogStore.shared)
-            .preferredColorScheme(LaunchOverrides.gatteyPhotos.appearance.map { $0 == .dark ? .dark : .light })
+            .preferredColorScheme(LaunchOverrides.current.appearance.map { $0 == .dark ? .dark : .light })
             .onAppear {
                 store.session = session
-                AppUpdater.shared.mainWindowDidAppear(launch: .gatteyPhotos)
+                AppUpdater.shared.mainWindowDidAppear()
             }
     }
-}
-
-extension LaunchOverrides {
-    static let gatteyPhotos = LaunchOverrides(prefix: "GATTEYPHOTOS")
 }

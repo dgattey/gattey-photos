@@ -1,19 +1,18 @@
-Closes 
+<!-- Written by `devkit sync` from DylKit. Change DylKit's copy, not this one. -->
+Closes
 
+<!-- User-facing bullets for Sparkle's update dialog and the release. No file paths or symbol names. -->
 # Release notes
 
-- 
+-
 
 # What changed?
 
-- 
+-
 
-# Design sync
+# Before merging
 
-If this PR changes the app UI, brand colors, or `AppIcon.icon`:
-
-- [ ] photos.gattey.com (`[site]` in `DylApp.toml`, icons in `server/public/`) matches the new design and icons
-- [ ] dylangattey.com (dg project, Contentful) has been asked to update
+- [ ] If the icon or UI design changed, I updated the landing page and the app's dylangattey.com Contentful entry
 
 # Release info
 
