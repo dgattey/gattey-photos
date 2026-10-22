@@ -8,6 +8,12 @@ export type SiteImage = {
 
 /** Every image the landing page renders. `site-assets.test.ts` checks each file and its pixel size. */
 export const SITE_MEDIA = {
+  appIcon: {
+    src: "/apple-touch-icon.png",
+    width: 180,
+    height: 180,
+    alt: "",
+  },
   framePhoto: {
     src: "/unlock-welcome.png",
     width: 680,
@@ -39,3 +45,11 @@ export const SITE_MEDIA = {
     alt: "Privacy and Security settings showing Gattey Photos was blocked with an Open Anyway button",
   },
 } as const satisfies Record<string, SiteImage>;
+
+/** Link-preview image only, never rendered on the page; the icons test checks its 1024px size. */
+export const SHARE_ICON = {
+  src: "/icon.png",
+  width: 1024,
+  height: 1024,
+  alt: "Gattey Photos app icon",
+} as const satisfies SiteImage;

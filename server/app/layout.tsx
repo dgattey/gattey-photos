@@ -1,10 +1,44 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { brandCssVariables } from "@/lib/brand";
+import { getSiteOrigin } from "@/lib/macos-release";
+import { SHARE_ICON, SITE_MEDIA } from "@/lib/site-media";
 import "./globals.css";
 
+const title = "Gattey Photos";
+const description =
+  "Download Gattey Photos for Mac. Upload family photos, schedule what each Bloomin8 frame shows, and keep every frame in sync.";
+const ogImage = {
+  url: SHARE_ICON.src,
+  width: SHARE_ICON.width,
+  height: SHARE_ICON.height,
+  alt: SHARE_ICON.alt,
+};
+
 export const metadata: Metadata = {
-  title: "Gattey Photos",
-  description:
-    "Download Gattey Photos for macOS — family gallery uploads and Bloomin8 frame sync.",
+  title,
+  description,
+  metadataBase: new URL(getSiteOrigin()),
+  openGraph: {
+    title,
+    description,
+    url: "/",
+    siteName: title,
+    type: "website",
+    images: [ogImage],
+  },
+  twitter: {
+    card: "summary",
+    title,
+    description,
+    images: [ogImage.url],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f2f2f0" },
+    { media: "(prefers-color-scheme: dark)", color: "#141416" },
+  ],
 };
 
 export default function RootLayout({
@@ -13,9 +47,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" style={brandCssVariables}>
       <head>
-        <link rel="preload" href="/unlock-welcome.png" as="image" />
+        <link rel="preload" href={SITE_MEDIA.framePhoto.src} as="image" />
       </head>
       <body>{children}</body>
     </html>
