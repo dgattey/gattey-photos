@@ -158,8 +158,17 @@ struct GalleryGridView: View {
         !selection.isLightboxOpen && !showSettings
     }
 
+    /// macOS insets the grid from the window edge and the toolbar; iOS runs edge to edge like Photos.
+    private static var gridInsets: EdgeInsets {
+        #if os(macOS)
+        EdgeInsets(top: 8, leading: 8, bottom: 20, trailing: 20)
+        #else
+        EdgeInsets()
+        #endif
+    }
+
     private var gridLayoutWidth: CGFloat {
-        max(gridViewportWidth, 1)
+        max(gridViewportWidth - Self.gridInsets.leading - Self.gridInsets.trailing, 1)
     }
 
     /// iOS has no thumbnail-size control, so columns follow the width: ~100pt cells on iPhone, ~150pt on iPad.
@@ -245,6 +254,7 @@ struct GalleryGridView: View {
                             onFileDrop: handleFileURLDrop,
                             onFileDropTargeted: { isFileDropTargeted = $0 }
                         )
+                        .padding(Self.gridInsets)
                         #else
                         GalleryPhotoGrid(
                             gridContainerWidth: gridLayoutWidth,
@@ -432,8 +442,13 @@ private struct GalleryPhotoGrid: View {
     @State private var settledGridWidth: CGFloat = 0
     @State private var gridWidthDebounceTask: Task<Void, Never>?
 
-    /// Hairline gutter between thumbnails (Photos-style), so neighboring photos don't bleed into each other.
+    /// iOS: hairline gutter (Photos-style) so neighboring photos don't bleed into each other. macOS: roomier gutters
+    /// to suit pointer-sized thumbnails in a window.
+    #if os(macOS)
+    static let spacing: CGFloat = 8
+    #else
     static let spacing: CGFloat = 2
+    #endif
 
     private var gridColumns: [GridItem] {
         Array(repeating: GridItem(.flexible(), spacing: Self.spacing), count: columnCount)
@@ -1196,7 +1211,7 @@ struct PhotoThumb: View {
         thumbImage
             .overlay {
                 if isSelected {
-                    Rectangle()
+                    Self.cellShape
                         .strokeBorder(AppBrandColor.accentGreen, lineWidth: 3)
                 }
             }
@@ -1232,6 +1247,15 @@ struct PhotoThumb: View {
             .frame(maxWidth: .infinity)
     }
 
+    /// Square-cornered on iOS to tile like Photos; softly rounded on macOS, where the grid has gutters.
+    private static var cellShape: RoundedRectangle {
+        #if os(macOS)
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+        #else
+        RoundedRectangle(cornerRadius: 0)
+        #endif
+    }
+
     /// Portrait cell (device aspect); image aspect-fills and center-crops inside.
     private var thumbImage: some View {
         Color.clear
@@ -1246,7 +1270,7 @@ struct PhotoThumb: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .clipped()
+            .clipShape(Self.cellShape)
     }
 }
 
@@ -1264,15 +1288,13 @@ private struct PhotoThumbBadge: View {
             Text(isShowingToday ? "Today" : tag)
         }
         .font(AppTypography.thumbBadge)
-        .foregroundStyle(.white)
+        .foregroundStyle(isShowingToday ? AppBrandColor.accentGreen : .white)
         .lineLimit(1)
         .minimumScaleFactor(0.75)
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
-        .background(
-            isShowingToday ? AnyShapeStyle(AppBrandColor.accentGreen) : AnyShapeStyle(.black.opacity(0.5)),
-            in: Capsule()
-        )
+        .background(isShowingToday ? Color.white : AppBrandColor.accentGreen, in: Capsule())
+        .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
         .accessibilityLabel(tag)
     }
 }

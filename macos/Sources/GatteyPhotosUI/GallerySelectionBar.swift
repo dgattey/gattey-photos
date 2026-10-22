@@ -50,7 +50,6 @@ struct GallerySelectionBar: View {
                 }
                 .galleryPrimaryButtonStyle()
                 .disabled(!canSetAsCurrent(for: id))
-                .opacity(canSetAsCurrent(for: id) ? 1 : 0.45)
             }
             Button {
                 galleryDeleteRequest?(selection.selectedIDs)
@@ -64,7 +63,6 @@ struct GallerySelectionBar: View {
             }
             .galleryDestructiveButtonStyle()
             .disabled(!canDelete)
-            .galleryDestructiveChromeOpacity(isEnabled: canDelete)
         }
         .animation(AppAnimation.bouncy, value: count)
         .focusEffectDisabled()

@@ -44,6 +44,7 @@ struct NowShowingCard: View {
     @Environment(GallerySelectionStore.self) private var selection
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isDropTargeted = false
 
     private static let chromeScale: CGFloat = 0.3
@@ -75,10 +76,11 @@ struct NowShowingCard: View {
                 }
             }
             .padding(14)
-            .background(
-                Color(uiColor: .secondarySystemGroupedBackground),
-                in: RoundedRectangle(cornerRadius: 22, style: .continuous)
-            )
+            .background {
+                let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+                shape.fill(Color(uiColor: .secondarySystemGroupedBackground))
+                shape.fill(AppBrandColor.accentGreen.opacity(colorScheme == .dark ? 0.22 : 0.12))
+            }
             .overlay {
                 if isDropTargeted {
                     RoundedRectangle(cornerRadius: 22, style: .continuous)

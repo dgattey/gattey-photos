@@ -174,8 +174,7 @@ struct PhotoLightboxView: View {
                         Label("Show for Today", systemImage: "photo.artframe")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    .galleryPrimaryButtonStyle()
                     .disabled(store.isBusy || !store.canSetAsCurrent(photoID: photo.id))
                 }
                 HStack(spacing: 10) {
@@ -185,7 +184,7 @@ struct PhotoLightboxView: View {
                         Label(Self.downloadTitle, systemImage: Self.downloadSymbol)
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
+                    .galleryBorderedButtonStyle()
                     .disabled(store.isBusy)
 
                     Button(role: .destructive) {
@@ -194,12 +193,11 @@ struct PhotoLightboxView: View {
                         Label("Delete", systemImage: "trash")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
+                    .galleryDestructiveButtonStyle()
                     .disabled(!canDelete(photo))
                 }
-                .controlSize(.large)
             }
-            .buttonBorderShape(.capsule)
+            .controlSize(.large)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         #if os(macOS)
@@ -209,11 +207,11 @@ struct PhotoLightboxView: View {
 
     private func nowShowingChip(photo: PhotoEntry) -> some View {
         Label(nowShowingText(photo: photo), systemImage: "photo.artframe")
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(AppBrandColor.accentGreen)
+            .font(.caption.weight(.bold))
+            .foregroundStyle(.white)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(AppBrandColor.accentGreen.opacity(0.14), in: Capsule())
+            .background(AppBrandColor.accentGreen, in: Capsule())
     }
 
     private func nowShowingText(photo: PhotoEntry) -> String {
@@ -275,8 +273,11 @@ struct PhotoLightboxView: View {
             } else {
                 Label("On the Frame", systemImage: "photo.artframe")
                     .labelStyle(.titleAndIcon)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(AppBrandColor.accentGreen)
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(AppBrandColor.accentGreen, in: Capsule())
             }
         }
         if #available(iOS 26.0, *) {

@@ -187,6 +187,7 @@ struct UnlockView: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "photo.artframe")
+                        .foregroundStyle(AppBrandColor.accentGreen)
                     Text("Set up a frame now")
                     Text("Optional")
                         .foregroundStyle(.secondary)
@@ -249,16 +250,12 @@ struct UnlockView: View {
                 if isUnlocking {
                     ProgressView()
                         .controlSize(.small)
+                        .tint(.white)
                 }
             }
-            .font(.body.weight(.semibold))
             .frame(maxWidth: .infinity)
-            #if os(iOS)
-            .frame(minHeight: 34)
-            #endif
         }
-        .buttonStyle(.borderedProminent)
-        .buttonBorderShape(.capsule)
+        .galleryPrimaryButtonStyle()
         .controlSize(.large)
         .disabled(isUnlocking || !canSubmitUnlock)
         .keyboardShortcut(.defaultAction)
