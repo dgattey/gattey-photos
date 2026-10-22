@@ -233,26 +233,17 @@ struct WindowGlassBackground: View {
     }
 }
 
+/// Photo detail sits on the plain system background (white / black) so the photo reads as the hero.
 struct PushedDetailBackground: View {
     var body: some View {
-        AppSurfaceBackground()
+        Color(uiColor: .systemBackground)
+            .ignoresSafeArea()
     }
 }
 
 struct UnlockGlassBackground: View {
     var body: some View {
         AppSurfaceBackground()
-    }
-}
-
-struct SoftColumnSeparator: View {
-    var visibleWidth: CGFloat
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: visibleWidth / 2, style: .continuous)
-            .fill(Color.primary.opacity(0.14))
-            .frame(width: visibleWidth)
-            .frame(maxHeight: .infinity)
     }
 }
 

@@ -34,11 +34,10 @@ struct AutofillPasswordField: NSViewRepresentable {
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: AutofillPasswordContainerView, context: Context) -> CGSize?
     {
-        let height = max(proposal.height ?? 0, nsView.intrinsicContentSize.height)
         guard let width = proposal.width, width > 0, width.isFinite else {
             return nil
         }
-        return CGSize(width: width, height: height)
+        return CGSize(width: width, height: nsView.intrinsicContentSize.height)
     }
 
     final class Coordinator: NSObject, NSTextFieldDelegate {
@@ -59,8 +58,8 @@ final class AutofillPasswordContainerView: NSView {
     private var field: NSTextField?
     private var isSecure = true
 
-    /// Height of a bordered rounded-bezel field at regular control size (matches SwiftUI `.roundedBorder`).
-    private static let borderedFieldHeight: CGFloat = {
+    /// Height of a rounded-bezel field at regular control size, so the borderless field lines up with SwiftUI rows.
+    private static let fieldHeight: CGFloat = {
         let probe = NSTextField(string: "")
         probe.isBordered = true
         probe.isBezeled = true
@@ -71,7 +70,7 @@ final class AutofillPasswordContainerView: NSView {
     }()
 
     override var intrinsicContentSize: NSSize {
-        NSSize(width: NSView.noIntrinsicMetric, height: Self.borderedFieldHeight)
+        NSSize(width: NSView.noIntrinsicMetric, height: Self.fieldHeight)
     }
 
     func setField(
@@ -101,7 +100,7 @@ final class AutofillPasswordContainerView: NSView {
             newField.leadingAnchor.constraint(equalTo: leadingAnchor),
             newField.trailingAnchor.constraint(equalTo: trailingAnchor),
             newField.centerYAnchor.constraint(equalTo: centerYAnchor),
-            newField.heightAnchor.constraint(equalToConstant: Self.borderedFieldHeight),
+            newField.heightAnchor.constraint(equalToConstant: Self.fieldHeight),
         ])
         field = newField
         isSecure = secure
@@ -114,9 +113,10 @@ final class AutofillPasswordContainerView: NSView {
     private static func makeField(secure: Bool, placeholder: String) -> NSTextField {
         let field: NSTextField = secure ? NSSecureTextField(string: "") : NSTextField(string: "")
         field.placeholderString = placeholder
-        field.isBordered = true
-        field.isBezeled = true
-        field.bezelStyle = .roundedBezel
+        field.isBordered = false
+        field.isBezeled = false
+        field.drawsBackground = false
+        field.focusRingType = .none
         field.controlSize = .regular
         field.font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
         field.maximumNumberOfLines = 1

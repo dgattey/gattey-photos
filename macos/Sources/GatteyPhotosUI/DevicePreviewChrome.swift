@@ -1,7 +1,10 @@
 import GatteyPhotosCore
 import SwiftUI
 
-/// White mat + black bezel around the e-ink opening (shared by device preview and unlock welcome).
+/// White mat + black bezel around the e-ink opening (shared by device preview, Now Showing card, and unlock welcome).
+///
+/// `chromeScale` shrinks the mat and bezel with the frame so small renderings still read as a picture frame
+/// instead of a thick black box around a postage stamp.
 enum DevicePreviewChrome {
     /// White mat between art and outer frame (einkshot-style).
     static let matPadding: CGFloat = 18
@@ -21,27 +24,27 @@ enum DevicePreviewChrome {
     static func screenWidth(
         for available: CGSize,
         screenAspectRatio: CGFloat,
-        minScreenWidth: CGFloat = 80
+        minScreenWidth: CGFloat = 80,
+        chromeScale: CGFloat = 1
     ) -> CGFloat {
-        let overhead = 2 * frameSideOverhead
+        let overhead = 2 * frameSideOverhead * chromeScale
         let maxByWidth = max(0, available.width - overhead)
         let maxByHeight = max(0, available.height - overhead) * screenAspectRatio
         let fit = min(maxByWidth, maxByHeight)
         return max(minScreenWidth, fit)
     }
 
-    static func framedDimensions(screenWidth: CGFloat, screenAspectRatio: CGFloat) -> CGSize {
+    static func framedDimensions(
+        screenWidth: CGFloat,
+        screenAspectRatio: CGFloat,
+        chromeScale: CGFloat = 1
+    ) -> CGSize {
         let screenHeight = screenWidth / screenAspectRatio
-        let overhead = 2 * frameSideOverhead
+        let overhead = 2 * frameSideOverhead * chromeScale
         return CGSize(
             width: screenWidth + overhead,
             height: screenHeight + overhead
         )
-    }
-
-    static func framedUnitAspectRatio(screenWidth: CGFloat, screenAspectRatio: CGFloat) -> CGFloat {
-        let d = framedDimensions(screenWidth: screenWidth, screenAspectRatio: screenAspectRatio)
-        return d.height > 0 ? d.width / d.height : screenAspectRatio
     }
 }
 
@@ -96,6 +99,7 @@ extension View {
 struct DevicePreviewFramed<Screen: View>: View {
     let screenWidth: CGFloat
     let screenAspectRatio: CGFloat
+    var chromeScale: CGFloat = 1
     @ViewBuilder var screen: () -> Screen
 
     private var screenHeight: CGFloat {
@@ -106,11 +110,42 @@ struct DevicePreviewFramed<Screen: View>: View {
         screen()
             .frame(width: screenWidth, height: screenHeight)
             .clipped()
-            .padding(DevicePreviewChrome.matPadding)
+            .padding(DevicePreviewChrome.matPadding * chromeScale)
             .background(Color.white)
-            .padding(DevicePreviewChrome.outerFrameWidth)
+            .padding(DevicePreviewChrome.outerFrameWidth * chromeScale)
             .background(DevicePreviewChrome.outerFrameColor)
             .fixedSize()
-            .shadow(color: .black.opacity(0.24), radius: 14, x: 0, y: 7)
+            .shadow(
+                color: .black.opacity(0.24),
+                radius: max(4, 14 * chromeScale),
+                x: 0,
+                y: max(2, 7 * chromeScale)
+            )
+    }
+}
+
+/// What the e-ink opening shows: the device's current photo letterboxed on black (matches the push canvas),
+/// or an empty frame glyph.
+struct DeviceScreenContent: View {
+    let photoID: PhotoID?
+    var maxPixelSize: Int = 1200
+
+    var body: some View {
+        Color.black
+            .overlay {
+                if let photoID {
+                    CachedPhotoImage(
+                        photoID: photoID,
+                        maxPixelSize: maxPixelSize,
+                        contentMode: .fit,
+                        showsLoadingSpinner: true
+                    )
+                } else {
+                    Image(systemName: "photo.artframe")
+                        .font(.system(size: 28, weight: .light))
+                        .foregroundStyle(.white.opacity(0.35))
+                }
+            }
+            .devicePreviewScreenInnerVignette()
     }
 }

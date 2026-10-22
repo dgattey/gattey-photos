@@ -100,31 +100,18 @@ enum PhotoFormatters {
         showingShort.string(from: start)
     }
 
-    static func showingUntil(_ until: Date) -> String {
-        "Showing until \(showingShort.string(from: until))"
-    }
-
-    /// Device preview hover: `Added by Dylan / until tomorrow` (single line, `/` separator).
-    static func addedByUntilFriendly(
-        photo: PhotoEntry,
-        until: Date,
-        uploaders: [UploaderID: String],
-        calendar: Calendar = .current
-    ) -> String {
-        "\(addedBy(photo, uploaders: uploaders)) / \(untilFriendlyPhrase(until: until, calendar: calendar))"
-    }
-
-    private static func untilFriendlyPhrase(until: Date, calendar: Calendar) -> String {
+    /// Rotation end for the device's current photo: `Until today`, `Until tomorrow`, or `Until 10/22/26`.
+    static func showingUntil(_ until: Date, calendar: Calendar = .current, now: Date = Date()) -> String {
         let untilDay = calendar.startOfDay(for: until)
-        let today = calendar.startOfDay(for: Date())
+        let today = calendar.startOfDay(for: now)
         if untilDay == today {
-            return "until today"
+            return "Until today"
         }
         if let tomorrow = calendar.date(byAdding: .day, value: 1, to: today),
             untilDay == calendar.startOfDay(for: tomorrow)
         {
-            return "until tomorrow"
+            return "Until tomorrow"
         }
-        return "until \(showingShort.string(from: until))"
+        return "Until \(showingShort.string(from: until))"
     }
 }

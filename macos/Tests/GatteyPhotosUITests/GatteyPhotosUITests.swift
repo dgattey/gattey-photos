@@ -8,10 +8,10 @@ import ViewInspector
 
 @Suite("GatteyPhotosUI Component Views (ViewInspector)")
 struct GatteyPhotosUITests {
-    @Test("ConnectionPill renders title, status label, optional subtitle, and checking spinner")
+    @Test("LinkStatusRow renders title, status label, optional subtitle, and checking spinner")
     @MainActor
-    func connectionPillInspection() throws {
-        let connected = ConnectionPill(
+    func linkStatusRowInspection() throws {
+        let connected = LinkStatusRow(
             title: "Server",
             subtitle: "https://photos.gattey.com",
             status: .up
@@ -27,7 +27,7 @@ struct GatteyPhotosUITests {
             _ = try inspectedConnected.find(ViewType.ProgressView.self)
         }
 
-        let checking = ConnectionPill(
+        let checking = LinkStatusRow(
             title: "All frames",
             status: .checking
         )
@@ -36,7 +36,7 @@ struct GatteyPhotosUITests {
         #expect(try inspectedChecking.find(text: "Connecting").string() == "Connecting")
         _ = try inspectedChecking.find(ViewType.ProgressView.self)
 
-        let down = ConnectionPill(title: "Server", status: .down)
+        let down = LinkStatusRow(title: "Server", status: .down)
         #expect(try down.inspect().find(text: "Disconnected").string() == "Disconnected")
     }
 
@@ -83,7 +83,7 @@ struct GatteyPhotosUITests {
 
         let inspectedSingle = try singleBar.inspect()
         #expect(try inspectedSingle.find(text: "1 photo selected").string() == "1 photo selected")
-        _ = try inspectedSingle.find(button: "Show for today")
+        _ = try inspectedSingle.find(button: "Show for Today")
         let deleteButton = try inspectedSingle.find(button: "Delete")
         #expect(!deleteButton.isDisabled())
 
@@ -96,7 +96,7 @@ struct GatteyPhotosUITests {
         let inspectedMulti = try multiBar.inspect()
         #expect(try inspectedMulti.find(text: "2 photos selected").string() == "2 photos selected")
         #expect(throws: (any Error).self) {
-            _ = try inspectedMulti.find(button: "Show for today")
+            _ = try inspectedMulti.find(button: "Show for Today")
         }
         try inspectedMulti.find(button: "Delete").tap()
         #expect(deletedIDs == ["photo-1", "photo-2"])
@@ -277,13 +277,11 @@ struct GatteyPhotosUITests {
         }
     }
 
-    @Test("PhotoLightboxView scales side-by-side column width and spacing for compact and regular widths")
+    @Test("PhotoLightboxView details column takes about a third of the width, clamped for iPad and Mac")
     @MainActor
-    func photoLightboxSideColumnSizing() {
-        #expect(PhotoLightboxView.sideBySideSpacing(forContainerWidth: 750) == 24)
-        #expect(PhotoLightboxView.sideBySideSpacing(forContainerWidth: 1032) == 44)
-        #expect(PhotoLightboxView.sideColumnWidth(forContainerWidth: 750) == 275)
-        #expect(PhotoLightboxView.sideColumnWidth(forContainerWidth: 1032) == 375)
-        #expect(PhotoLightboxView.sideColumnWidth(forContainerWidth: 1376) == 400)
+    func photoLightboxDetailsColumnSizing() {
+        #expect(PhotoLightboxView.detailsColumnWidth(forContainerWidth: 750) == 280)
+        #expect(PhotoLightboxView.detailsColumnWidth(forContainerWidth: 1032) == 309)
+        #expect(PhotoLightboxView.detailsColumnWidth(forContainerWidth: 1376) == 360)
     }
 }

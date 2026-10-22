@@ -1,28 +1,47 @@
 import GatteyPhotosCore
 import SwiftUI
 
+/// Photo detail: the photo is the hero. iPhone pairs it with a bottom toolbar; iPad and Mac add a
+/// trailing details column with attribution, schedule status, and actions.
 struct PhotoLightboxView: View {
     @Environment(GalleryStore.self) private var store
     @Environment(\.galleryDeleteRequest) private var galleryDeleteRequest
+    #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    #endif
     @FocusState private var isFocused: Bool
     let photoID: PhotoID
 
-    private static let sideColumnPreferredWidth: CGFloat = 400
-    private static let sideBySideClusterSpacing: CGFloat = 44
-    private static let lightboxAttributionBlockSpacing: CGFloat = 16
-    private static let macOSSideColumnMinWidth: CGFloat = 640
+    private static let detailsColumnMaxWidth: CGFloat = 360
+    private static let detailsColumnMinWidth: CGFloat = 280
 
     private var photo: PhotoEntry? {
         store.state.photos[photoID]
     }
 
+    /// Trailing details column width: roughly a third of the window, clamped so text never gets cramped.
+    static func detailsColumnWidth(forContainerWidth width: CGFloat) -> CGFloat {
+        min(detailsColumnMaxWidth, max(detailsColumnMinWidth, floor(width * 0.3)))
+    }
+
+    private var usesDetailsColumn: Bool {
+        #if os(macOS)
+        true
+        #else
+        horizontalSizeClass == .regular
+        #endif
+    }
+
     var body: some View {
         Group {
             if let photo {
-                lightboxContent(photo: photo)
+                if usesDetailsColumn {
+                    detailsColumnLayout(photo: photo)
+                } else {
+                    heroImage(photo: photo)
+                }
             } else {
-                ContentUnavailableView("Photo unavailable", systemImage: "photo")
+                ContentUnavailableView("Photo Unavailable", systemImage: "photo")
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -44,9 +63,15 @@ struct PhotoLightboxView: View {
         .toolbarBackground(.hidden, for: .windowToolbar)
         .modifier(LightboxMacOSToolbarTitleRemoval())
         #else
-        .navigationTitle(photo?.filename ?? "Photo")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            if let photo, !usesDetailsColumn {
+                ToolbarItem(placement: .principal) {
+                    titleStack(photo: photo)
+                }
+                phoneBottomBar(photo: photo)
+            }
+        }
         #endif
         .focusable()
         .focusEffectDisabled()
@@ -66,280 +91,209 @@ struct PhotoLightboxView: View {
         #endif
     }
 
-    @ViewBuilder
-    private func lightboxContent(photo: PhotoEntry) -> some View {
-        // GeometryReader must expand inside NavigationStack destinations; otherwise it
-        // collapses to zero and the hero Image shows macOS's broken-image caution icon.
-        GeometryReader { geo in
-            let sideBySide = usesSideColumn(forWidth: geo.size.width)
-            Group {
-                if sideBySide {
-                    lightboxSideBySideLayout(photo: photo, geo: geo)
-                } else {
-                    VStack(spacing: 0) {
-                        lightboxHeroImage(photo: photo, sideBySide: false)
-                            .frame(width: geo.size.width, height: max(240, geo.size.height * 0.62))
-                        lightboxDetailsColumn(photo: photo, sideBySide: false)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    }
-                }
-            }
-            .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        #if os(macOS)
-        .ignoresSafeArea(edges: .top)
-        #endif
-    }
+    // MARK: - Hero
 
-    @ViewBuilder
-    private func lightboxSideBySideLayout(photo: PhotoEntry, geo: GeometryProxy) -> some View {
-        let heroMaxHeight = lightboxHeroMaxHeight(in: geo)
-        #if os(macOS)
-        HStack(alignment: .center, spacing: 0) {
-            Spacer(minLength: 0)
-            HStack(alignment: .center, spacing: Self.sideBySideClusterSpacing) {
-                lightboxDetailsColumn(
-                    photo: photo,
-                    sideBySide: true,
-                    clusterHeight: heroMaxHeight
-                )
-                .frame(width: Self.sideColumnPreferredWidth)
-                .frame(maxHeight: heroMaxHeight, alignment: .center)
-                .zIndex(1)
-                lightboxHeroImage(photo: photo, sideBySide: true)
-                    .frame(maxHeight: heroMaxHeight, alignment: .trailing)
-                    .ignoresSafeArea(edges: .top)
-                    .zIndex(0)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-        #else
-        let clusterSpacing = Self.sideBySideSpacing(forContainerWidth: geo.size.width)
-        let sideColumnWidth = Self.sideColumnWidth(forContainerWidth: geo.size.width)
-        HStack(alignment: .center, spacing: clusterSpacing) {
-            lightboxDetailsColumn(
-                photo: photo,
-                sideBySide: true,
-                clusterHeight: heroMaxHeight
-            )
-            .frame(width: sideColumnWidth)
-            .frame(maxHeight: heroMaxHeight, alignment: .center)
-            lightboxHeroImage(photo: photo, sideBySide: true)
-                .frame(maxHeight: heroMaxHeight, alignment: .center)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        #endif
-    }
-
-    static func sideBySideSpacing(forContainerWidth width: CGFloat) -> CGFloat {
-        width < 900 ? 24 : sideBySideClusterSpacing
-    }
-
-    static func sideColumnWidth(forContainerWidth width: CGFloat) -> CGFloat {
-        let spacing = sideBySideSpacing(forContainerWidth: width)
-        return min(sideColumnPreferredWidth, max(260, floor((width - spacing) * 0.38)))
-    }
-
-    /// Max hero height for side-by-side; width follows photo aspect ratio inside the hero container.
-    private func lightboxHeroMaxHeight(in geo: GeometryProxy) -> CGFloat {
-        #if os(macOS)
-        max(0, geo.size.height + geo.safeAreaInsets.top)
-        #else
-        max(0, geo.size.height)
-        #endif
-    }
-
-    private var lightboxHeroAspectRatio: CGFloat {
-        let r = store.deviceScreenAspectRatio
-        return r > 0 ? min(r, 1) : Bloomin8Screen.defaultAspectRatio
-    }
-
-    private func usesSideColumn(forWidth width: CGFloat) -> Bool {
-        #if os(macOS)
-        return width >= Self.macOSSideColumnMinWidth
-        #else
-        return horizontalSizeClass == .regular || width >= Self.macOSSideColumnMinWidth
-        #endif
-    }
-
-    private func lightboxHeroImage(photo: PhotoEntry, sideBySide: Bool) -> some View {
+    private func heroImage(photo: PhotoEntry) -> some View {
         CachedPhotoImage(
             photoID: photo.id,
             maxPixelSize: 4096,
             contentMode: .fit,
             showsLoadingSpinner: true
         )
-        .aspectRatio(lightboxHeroAspectRatio, contentMode: .fit)
-        .frame(maxHeight: sideBySide ? .infinity : nil)
-        .clipped()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(nil, value: photo.id)
-        .padding(sideBySide ? lightboxHeroPaddingWide : lightboxHeroPaddingCompact)
-        .modifier(
-            LightboxHeroWidthModifier(
-                expandsHorizontally: !sideBySide,
-                horizontalAlignment: lightboxHeroHorizontalAlignment(sideBySide: sideBySide)
-            )
-        )
-        .allowsHitTesting(false)
+        .contentShape(Rectangle())
+        #if os(iOS)
+        .gesture(swipeToNavigate)
+        #endif
         .focusable(false)
-        #if os(macOS)
-        .ignoresSafeArea(edges: .top)
-        #endif
+        .accessibilityLabel(PhotoFormatters.addedBy(photo, uploaders: store.state.uploaders))
     }
 
-    private func lightboxHeroHorizontalAlignment(sideBySide: Bool) -> HorizontalAlignment {
-        #if os(macOS)
-        sideBySide ? .trailing : .center
-        #else
-        .center
-        #endif
-    }
-
-    private var lightboxHeroPaddingWide: EdgeInsets {
-        #if os(macOS)
-        EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
-        #else
-        EdgeInsets(top: 16, leading: 0, bottom: 16, trailing: 24)
-        #endif
-    }
-
-    private var lightboxHeroPaddingCompact: EdgeInsets {
-        #if os(macOS)
-        EdgeInsets(top: 0, leading: 20, bottom: 12, trailing: 20)
-        #else
-        EdgeInsets(top: 16, leading: 20, bottom: 12, trailing: 20)
-        #endif
-    }
-
-    @ViewBuilder
-    private func lightboxDetailsColumn(
-        photo: PhotoEntry,
-        sideBySide: Bool,
-        clusterHeight: CGFloat? = nil
-    ) -> some View {
-        if sideBySide, let clusterHeight {
-            ScrollView {
-                lightboxDetailsBody(photo: photo, sideBySide: true)
-                    .frame(minHeight: clusterHeight, alignment: .center)
+    #if os(iOS)
+    private var swipeToNavigate: some Gesture {
+        DragGesture(minimumDistance: 24)
+            .onEnded { value in
+                let dx = value.translation.width
+                guard abs(dx) > 60, abs(dx) > abs(value.translation.height) else { return }
+                withAnimation(AppAnimation.smooth) {
+                    _ = store.selection.navigateLightbox(
+                        by: dx < 0 ? 1 : -1,
+                        photoOrder: store.activePhotoIDs
+                    )
+                }
             }
-            .scrollContentBackground(.hidden)
-            .scrollBounceBehavior(.basedOnSize)
-            .frame(height: clusterHeight)
-            .focusEffectDisabled()
-        } else {
-            ScrollView {
-                lightboxDetailsBody(photo: photo, sideBySide: false)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+    #endif
+
+    // MARK: - iPad / Mac details column
+
+    private func detailsColumnLayout(photo: PhotoEntry) -> some View {
+        GeometryReader { geo in
+            HStack(spacing: 0) {
+                heroImage(photo: photo)
+                    .padding(24)
+                ScrollView {
+                    detailsColumn(photo: photo)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 32)
+                        .frame(minHeight: geo.size.height, alignment: .center)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .scrollIndicators(.hidden)
+                .frame(width: Self.detailsColumnWidth(forContainerWidth: geo.size.width))
             }
-            .scrollContentBackground(.hidden)
-            .scrollBounceBehavior(.basedOnSize)
-            .focusEffectDisabled()
         }
     }
 
-    private func lightboxDetailsBody(photo: PhotoEntry, sideBySide: Bool) -> some View {
-        let metaAlignment: HorizontalAlignment = sideBySide ? .trailing : .leading
-        let textAlignment: TextAlignment = sideBySide ? .trailing : .leading
-        return VStack(alignment: metaAlignment, spacing: 20) {
-            VStack(alignment: metaAlignment, spacing: Self.lightboxAttributionBlockSpacing) {
+    private func detailsColumn(photo: PhotoEntry) -> some View {
+        let isCurrent = store.state.currentPhotoId == photo.id
+        return VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 10) {
+                if isCurrent {
+                    nowShowingChip(photo: photo)
+                }
                 Text(PhotoFormatters.addedBy(photo, uploaders: store.state.uploaders))
-                    .font(AppTypography.lightboxAttribution)
-                    .multilineTextAlignment(textAlignment)
-                Text(photo.filename)
-                    .font(AppTypography.lightboxFilename)
-                    .multilineTextAlignment(textAlignment)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(
-                        maxWidth: sideBySide ? Self.sideColumnPreferredWidth : .infinity,
-                        alignment: sideBySide ? .trailing : .leading
-                    )
-                Text("Updated \(PhotoFormatters.updatedAt(photo.updatedAt))")
-                    .font(AppTypography.lightboxMeta)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(textAlignment)
+                    .font(AppTypography.lightboxTitle)
+                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(photo.filename)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text("Updated \(PhotoFormatters.updatedAt(photo.updatedAt))")
+                }
+                .font(.callout)
+                .foregroundStyle(.secondary)
             }
 
-            VStack(alignment: metaAlignment, spacing: 6) {
-                Button {
-                    Task { await store.setAsCurrent(photoID: photo.id) }
-                } label: {
-                    Text(lightboxShowTodayButtonLabel(for: photo))
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity)
+            VStack(spacing: 10) {
+                if !isCurrent {
+                    Button {
+                        Task { await store.setAsCurrent(photoID: photo.id) }
+                    } label: {
+                        Label("Show for Today", systemImage: "photo.artframe")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .disabled(store.isBusy || !store.canSetAsCurrent(photoID: photo.id))
                 }
-                .galleryPrimaryButtonStyle()
-                .galleryFullWidthButtonLayout(minHeight: 56)
-                #if os(macOS)
-                .controlSize(.large)
-                #endif
-                .disabled(store.isBusy || !store.canSetAsCurrent(photoID: photo.id))
-                .opacity(lightboxShowTodayButtonOpacity(for: photo))
-
-                HStack(spacing: 12) {
+                HStack(spacing: 10) {
                     Button {
                         Task { await store.downloadPhoto(photo) }
                     } label: {
-                        Text("Download")
+                        Label(Self.downloadTitle, systemImage: Self.downloadSymbol)
                             .frame(maxWidth: .infinity)
                     }
-                    .galleryBorderedButtonStyle()
-                    .frame(maxWidth: .infinity, minHeight: 42)
-                    #if os(macOS)
-                    .controlSize(.regular)
-                    #endif
+                    .buttonStyle(.bordered)
                     .disabled(store.isBusy)
 
-                    Button {
+                    Button(role: .destructive) {
                         galleryDeleteRequest?(Set([photo.id]))
                     } label: {
-                        Text("Delete")
+                        Label("Delete", systemImage: "trash")
                             .frame(maxWidth: .infinity)
                     }
-                    .galleryDestructiveButtonStyle()
-                    .frame(maxWidth: .infinity, minHeight: 42)
-                    #if os(macOS)
-                    .controlSize(.regular)
-                    #endif
-                    .disabled(store.isBusy || !store.canDeletePhotos(ids: [photo.id]))
-                    .galleryDestructiveChromeOpacity(
-                        isEnabled: !store.isBusy && store.canDeletePhotos(ids: [photo.id])
-                    )
+                    .buttonStyle(.bordered)
+                    .disabled(!canDelete(photo))
                 }
+                .controlSize(.large)
             }
-            .frame(maxWidth: .infinity, alignment: sideBySide ? .trailing : .leading)
+            .buttonBorderShape(.capsule)
         }
-        .frame(maxWidth: .infinity, alignment: sideBySide ? .trailing : .leading)
-        .padding(lightboxDetailsPadding(sideBySide: sideBySide))
+        .frame(maxWidth: .infinity, alignment: .leading)
         #if os(macOS)
         .animation(nil, value: photo.id)
         #endif
     }
 
-    private func lightboxShowTodayButtonLabel(for photo: PhotoEntry) -> String {
-        if store.canSetAsCurrent(photoID: photo.id) {
-            return "Show for today"
-        }
-        return store.lightboxShowingUntilCaption(for: photo) ?? "Show for today"
+    private func nowShowingChip(photo: PhotoEntry) -> some View {
+        Label(nowShowingText(photo: photo), systemImage: "photo.artframe")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(AppBrandColor.accentGreen)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(AppBrandColor.accentGreen.opacity(0.14), in: Capsule())
     }
 
-    private func lightboxShowTodayButtonOpacity(for photo: PhotoEntry) -> Double {
-        if store.canSetAsCurrent(photoID: photo.id) && !store.isBusy {
-            return 1
-        }
-        if !store.canSetAsCurrent(photoID: photo.id) {
-            return 1
-        }
-        return 0.45
+    private func nowShowingText(photo: PhotoEntry) -> String {
+        guard let until = store.showingUntilCaption(for: photo) else { return "On the frame" }
+        return "On the frame · \(until)"
     }
 
-    private func lightboxDetailsPadding(sideBySide: Bool) -> EdgeInsets {
-        if sideBySide {
-            return EdgeInsets(top: 0, leading: 24, bottom: 0, trailing: 0)
-        }
-        return EdgeInsets(top: 0, leading: 20, bottom: 28, trailing: 20)
+    private func canDelete(_ photo: PhotoEntry) -> Bool {
+        !store.isBusy && store.canDeletePhotos(ids: [photo.id])
     }
+
+    #if os(iOS)
+    private static let downloadTitle = "Share"
+    private static let downloadSymbol = "square.and.arrow.up"
+    #else
+    private static let downloadTitle = "Download"
+    private static let downloadSymbol = "arrow.down.circle"
+    #endif
+
+    // MARK: - iPhone chrome
+
+    #if os(iOS)
+    private func titleStack(photo: PhotoEntry) -> some View {
+        VStack(spacing: 1) {
+            Text(PhotoFormatters.addedBy(photo, uploaders: store.state.uploaders))
+                .font(.headline)
+            Text(store.showingUntilCaption(for: photo) ?? PhotoFormatters.updatedAt(photo.updatedAt))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .lineLimit(1)
+    }
+
+    @ToolbarContentBuilder
+    private func phoneBottomBar(photo: PhotoEntry) -> some ToolbarContent {
+        ToolbarItem(placement: .bottomBar) {
+            Button {
+                Task { await store.downloadPhoto(photo) }
+            } label: {
+                Label(Self.downloadTitle, systemImage: Self.downloadSymbol)
+            }
+            .disabled(store.isBusy)
+        }
+        if #available(iOS 26.0, *) {
+            ToolbarSpacer(.flexible, placement: .bottomBar)
+        } else {
+            ToolbarItem(placement: .bottomBar) { Spacer() }
+        }
+        ToolbarItem(placement: .bottomBar) {
+            if store.canSetAsCurrent(photoID: photo.id) {
+                Button {
+                    Task { await store.setAsCurrent(photoID: photo.id) }
+                } label: {
+                    Label("Show for Today", systemImage: "photo.artframe")
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(store.isBusy)
+            } else {
+                Label("On the Frame", systemImage: "photo.artframe")
+                    .labelStyle(.titleAndIcon)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AppBrandColor.accentGreen)
+            }
+        }
+        if #available(iOS 26.0, *) {
+            ToolbarSpacer(.flexible, placement: .bottomBar)
+        } else {
+            ToolbarItem(placement: .bottomBar) { Spacer() }
+        }
+        ToolbarItem(placement: .bottomBar) {
+            Button(role: .destructive) {
+                galleryDeleteRequest?(Set([photo.id]))
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            .disabled(!canDelete(photo))
+        }
+    }
+    #endif
 }
 
 #if os(macOS)

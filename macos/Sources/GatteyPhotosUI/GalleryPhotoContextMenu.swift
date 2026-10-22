@@ -21,19 +21,27 @@ struct GalleryPhotoContextMenuItems: View {
         store.canDeletePhotos(ids: actionTargetIDs) && !store.isBusy
     }
 
+    #if os(iOS)
+    private static let downloadTitle = "Share…"
+    private static let downloadSymbol = "square.and.arrow.up"
+    #else
+    private static let downloadTitle = "Download"
+    private static let downloadSymbol = "arrow.down.circle"
+    #endif
+
     var body: some View {
-        Button("Show for today") {
+        Button("Show for Today", systemImage: "photo.artframe") {
             Task { await store.setAsCurrent(photoID: photoID) }
         }
         .disabled(!canSetCurrent)
 
-        Button("Download") {
+        Button(Self.downloadTitle, systemImage: Self.downloadSymbol) {
             Task { await store.downloadPhotos(ids: actionTargetIDs) }
         }
         .disabled(store.isBusy)
 
         // Context menus use system destructive styling (red label); not `galleryDestructiveButtonStyle`.
-        Button("Delete", role: .destructive) {
+        Button("Delete", systemImage: "trash", role: .destructive) {
             galleryDeleteRequest?(actionTargetIDs)
         }
         .disabled(!canDelete)

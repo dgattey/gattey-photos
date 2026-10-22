@@ -44,7 +44,7 @@ extension View {
         modifier(FloatingActionBarStyle())
     }
 
-    /// Primary gallery action (e.g. Show for today). Uses bordered prominent (not glass) so corner radius matches Download/Delete.
+    /// Primary gallery action (e.g. Show for Today). Uses bordered prominent (not glass) so corner radius matches Download/Delete.
     func galleryPrimaryButtonStyle() -> some View {
         buttonStyle(.borderedProminent)
             .galleryChromeButtonBorderShape()
@@ -70,13 +70,8 @@ extension View {
         buttonBorderShape(.capsule)
     }
 
-    /// Disabled dimming for destructive chrome buttons (matches Show for today).
+    /// Disabled dimming for destructive chrome buttons (matches Show for Today).
     func galleryDestructiveChromeOpacity(isEnabled: Bool) -> some View {
         opacity(isEnabled ? 1 : 0.45)
-    }
-
-    /// Expands bordered macOS buttons to the proposed width (label + outer frame).
-    func galleryFullWidthButtonLayout(minHeight: CGFloat = 32) -> some View {
-        frame(maxWidth: .infinity, minHeight: minHeight)
     }
 }

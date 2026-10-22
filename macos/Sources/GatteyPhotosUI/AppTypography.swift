@@ -2,49 +2,45 @@ import SwiftUI
 
 /// Semantic text styles: system text styles where possible; serif matches app icon (Georgia).
 enum AppTypography {
-    /// Section labels (e.g. "Current", selection bar).
+    /// Section labels (e.g. selection bar count).
     static let sectionTitle: Font = .headline
     /// Secondary supporting text.
     static let secondary: Font = .subheadline
     /// Small badges on thumbnails.
-    static let thumbBadge: Font = .caption.weight(.semibold)
-    /// Device preview hover badge on the e-ink opening (larger than grid thumb badges).
-    static let devicePreviewHoverBadge: Font = .system(size: 17, weight: .semibold)
+    static let thumbBadge: Font = .caption2.weight(.semibold)
+    /// Small uppercase label above a title (e.g. "Now Showing"). Pair with `.textCase(.uppercase)`.
+    static let eyebrow: Font = .caption.weight(.semibold)
 
-    /// Primary app title — unlock welcome (serif matches app icon).
-    /// Sized above `.largeTitle` (~38pt) on macOS; semantic on iOS so iPad Dynamic Type stays sane.
+    /// Brand title: unlock welcome and the macOS gallery pane.
     #if os(iOS)
     static let primaryTitle: Font = .system(.largeTitle, design: .serif).weight(.bold)
     #else
-    static let primaryTitle: Font = .system(size: 38, weight: .bold, design: .serif)
+    static let primaryTitle: Font = .system(size: 34, weight: .bold, design: .serif)
     #endif
-    /// Logged-in toolbar title — standard sans on macOS; serif on iOS principal toolbar.
-    #if os(iOS)
-    static let toolbarTitle: Font = .system(.title2, design: .serif).weight(.bold)
-    #else
-    static let toolbarTitle: Font = .headline.weight(.semibold)
-    /// Photo count under the macOS leading toolbar title.
-    static let toolbarSubtitle: Font = .caption
-    #endif
-    /// Unlock supporting line — readable, not caption-sized.
-    static let unlockSubtitle: Font = .title3
-    /// Form labels and inline errors on unlock.
-    static let unlockBody: Font = .body
 
-    /// Lightbox "Added by …" — serif matches unlock welcome.
+    /// "Added by …" under the Now Showing eyebrow.
     #if os(iOS)
-    static let lightboxAttribution: Font = .system(.title2, design: .serif).weight(.semibold)
+    static let nowShowingTitle: Font = .system(.title3, design: .serif).weight(.semibold)
     #else
-    static let lightboxAttribution: Font = .system(size: 36, weight: .semibold, design: .serif)
+    static let nowShowingTitle: Font = .system(size: 20, weight: .semibold, design: .serif)
     #endif
-    /// Lightbox / legacy device preview serif caption (`devicePreviewCaption(for:)`).
+
+    /// Lightbox inspector "Added by …" (iPad and macOS).
     #if os(iOS)
-    static let devicePreviewCaption: Font = .system(.title2, design: .serif).weight(.semibold)
+    static let lightboxTitle: Font = .system(.title, design: .serif).weight(.bold)
     #else
-    static let devicePreviewCaption: Font = .system(size: 28, weight: .semibold, design: .serif)
+    static let lightboxTitle: Font = .system(size: 26, weight: .bold, design: .serif)
     #endif
-    /// Lightbox filename under attribution.
-    static let lightboxFilename: Font = .title2.weight(.semibold)
-    /// Lightbox supporting line (e.g. updated date).
-    static let lightboxMeta: Font = .title3
+
+    #if os(macOS)
+    /// Photo count in the leading unified-toolbar slot.
+    static let toolbarTitle: Font = .headline.weight(.semibold)
+    #endif
+
+    /// Unlock supporting line.
+    #if os(iOS)
+    static let unlockSubtitle: Font = .body
+    #else
+    static let unlockSubtitle: Font = .title3
+    #endif
 }

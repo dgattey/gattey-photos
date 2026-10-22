@@ -1,57 +1,45 @@
 import GatteyPhotosCore
 import SwiftUI
 
-#if os(macOS)
-import AppKit
-#elseif os(iOS)
-import UIKit
-#endif
+/// Shared sizing so the launch spinner and the unlock form place the welcome frame in the same spot.
+enum UnlockLayout {
+    /// Side-by-side (iPad, Mac): frame height beside the form column.
+    static let regularFramedHeight: CGFloat = 440
+    static let regularColumnSpacing: CGFloat = 56
+    static let formColumnWidth: CGFloat = 400
+    /// iPhone: a smaller frame above the form, with chrome scaled down so it reads as a picture frame.
+    static let compactFramedHeight: CGFloat = 200
+    static let compactChromeScale: CGFloat = 0.5
+    static let compactTopPadding: CGFloat = 24
+}
 
-/// Bundled portrait on the unlock screen; same framed chrome as `DeviceCurrentPreview`.
+/// Bundled portrait on the unlock screen; same framed chrome as the device preview.
 struct UnlockWelcomePhotoPanel: View {
-    /// Matches the unlock form column height (from layout preferences).
-    var contentHeight: CGFloat
+    var framedHeight: CGFloat
+    var chromeScale: CGFloat = 1
 
-    #if os(iOS)
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    #endif
-
-    @State private var loadedWelcomeImage: PlatformWelcomeImage? = Self.cachedWelcomeImage
+    @State private var loadedWelcomeImage: PlatformThumbnailImage? = Self.cachedWelcomeImage
 
     private let screenAspectRatio = Bloomin8Screen.defaultAspectRatio
-    private let maxPaneWidth: CGFloat = 420
+
+    private var screenWidth: CGFloat {
+        DevicePreviewChrome.screenWidth(
+            for: CGSize(width: .greatestFiniteMagnitude, height: framedHeight),
+            screenAspectRatio: screenAspectRatio,
+            minScreenWidth: 40,
+            chromeScale: chromeScale
+        )
+    }
 
     var body: some View {
-        GeometryReader { geo in
-            let height = panelLayoutHeight(fallback: geo.size.height)
-            let available = CGSize(
-                width: min(geo.size.width, maxPaneWidth),
-                height: height
-            )
-            let screenW = DevicePreviewChrome.screenWidth(
-                for: available,
-                screenAspectRatio: screenAspectRatio
-            )
-            let framedSize = DevicePreviewChrome.framedDimensions(
-                screenWidth: screenW,
-                screenAspectRatio: screenAspectRatio
-            )
-
-            DevicePreviewFramed(screenWidth: screenW, screenAspectRatio: screenAspectRatio) {
-                welcomePhoto(screenWidth: screenW)
-            }
-            .aspectRatio(
-                DevicePreviewChrome.framedUnitAspectRatio(
-                    screenWidth: screenW,
-                    screenAspectRatio: screenAspectRatio
-                ),
-                contentMode: .fit
-            )
-            .frame(width: framedSize.width, height: framedSize.height)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: panelContentAlignment)
+        DevicePreviewFramed(
+            screenWidth: screenWidth,
+            screenAspectRatio: screenAspectRatio,
+            chromeScale: chromeScale
+        ) {
+            welcomePhoto
         }
-        .frame(maxWidth: panelOuterMaxWidth)
-        .frame(height: panelFrameHeight)
+        .accessibilityHidden(true)
         .task {
             if loadedWelcomeImage == nil {
                 loadedWelcomeImage = await Self.loadBundledWelcomeImage()
@@ -59,45 +47,18 @@ struct UnlockWelcomePhotoPanel: View {
         }
     }
 
-    private var panelContentAlignment: Alignment {
-        #if os(iOS)
-        horizontalSizeClass == .compact ? .center : .trailing
-        #else
-        .trailing
-        #endif
-    }
-
-    private var panelOuterMaxWidth: CGFloat {
-        #if os(iOS)
-        horizontalSizeClass == .compact ? .infinity : maxPaneWidth
-        #else
-        maxPaneWidth
-        #endif
-    }
-
-    private var panelFrameHeight: CGFloat? {
-        #if os(iOS)
-        if horizontalSizeClass == .compact {
-            return IOSContentWidth.unlockCompactWelcomePhotoMaxHeight
-        }
-        #endif
-        return contentHeight > 0 ? contentHeight : nil
-    }
-
-    private func panelLayoutHeight(fallback: CGFloat) -> CGFloat {
-        #if os(iOS)
-        if horizontalSizeClass == .compact {
-            return IOSContentWidth.unlockCompactWelcomePhotoMaxHeight
-        }
-        #endif
-        return contentHeight > 0 ? contentHeight : fallback
-    }
-
     @ViewBuilder
-    private func welcomePhoto(screenWidth: CGFloat) -> some View {
-        let screenHeight = screenWidth / screenAspectRatio
+    private var welcomePhoto: some View {
         if let image = loadedWelcomeImage {
-            welcomeImageView(image, screenWidth: screenWidth, screenHeight: screenHeight)
+            platformImage(image)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(
+                    width: screenWidth,
+                    height: screenWidth / screenAspectRatio,
+                    alignment: .leading
+                )
+                .clipped()
                 .devicePreviewScreenInnerVignette()
         } else {
             Color.secondary.opacity(0.15)
@@ -105,26 +66,13 @@ struct UnlockWelcomePhotoPanel: View {
         }
     }
 
-    @ViewBuilder
-    private func welcomeImageView(_ image: PlatformWelcomeImage, screenWidth: CGFloat, screenHeight: CGFloat)
-        -> some View
-    {
+    private func platformImage(_ image: PlatformThumbnailImage) -> Image {
         #if os(macOS)
         Image(nsImage: image)
-            .resizable()
-            .aspectRatio(contentMode: .fill)
-            .frame(width: screenWidth, height: screenHeight, alignment: .leading)
-            .clipped()
-        #elseif os(iOS)
+        #else
         Image(uiImage: image)
-            .resizable()
-            .aspectRatio(contentMode: .fill)
-            .frame(width: screenWidth, height: screenHeight, alignment: .leading)
-            .clipped()
         #endif
     }
-
-    private typealias PlatformWelcomeImage = PlatformThumbnailImage
 
     private static var welcomeImageURL: URL? {
         GatteyPhotosUIResources.bundle.url(
@@ -133,12 +81,12 @@ struct UnlockWelcomePhotoPanel: View {
         )
     }
 
-    private static var cachedWelcomeImage: PlatformWelcomeImage? {
+    private static var cachedWelcomeImage: PlatformThumbnailImage? {
         guard let url = welcomeImageURL else { return nil }
         return ImageDownsampler.cachedThumbnail(from: url, maxPixelSize: 1200)
     }
 
-    private static func loadBundledWelcomeImage() async -> PlatformWelcomeImage? {
+    private static func loadBundledWelcomeImage() async -> PlatformThumbnailImage? {
         guard let url = welcomeImageURL else { return nil }
         if let cached = ImageDownsampler.cachedThumbnail(from: url, maxPixelSize: 1200) {
             return cached
