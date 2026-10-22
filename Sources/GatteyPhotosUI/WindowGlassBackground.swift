@@ -114,18 +114,27 @@ struct TransparentWindowConfigurator: NSViewRepresentable {
     }
 }
 
-/// Runs a window configuration as soon as the view joins its window, and again on each SwiftUI update.
+/// Runs a window configuration once the view joins its window, and again after each SwiftUI update.
 final class WindowHookView: NSView {
     private var apply: (NSWindow) -> Void = { _ in }
 
     func configure(_ apply: @escaping (NSWindow) -> Void) {
         self.apply = apply
-        if let window { apply(window) }
+        applyAfterCurrentUpdate()
     }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if let window { apply(window) }
+        applyAfterCurrentUpdate()
+    }
+
+    /// Deferred past the current update: changing the window while SwiftUI is still installing its hosting view and
+    /// toolbar leaves the content drawn over the titlebar (no traffic lights or toolbar).
+    private func applyAfterCurrentUpdate() {
+        Task { @MainActor [weak self] in
+            guard let self, let window = self.window else { return }
+            self.apply(window)
+        }
     }
 }
 
