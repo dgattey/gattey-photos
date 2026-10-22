@@ -1,8 +1,8 @@
 import SwiftUI
 
 public struct AppRootContainer: View {
-    @EnvironmentObject private var session: AppSession
-    @EnvironmentObject private var store: GalleryStore
+    @Environment(AppSession.self) private var session
+    @Environment(GalleryStore.self) private var store
 
     public init() {}
 

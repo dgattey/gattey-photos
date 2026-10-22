@@ -23,7 +23,7 @@ Examples:
   $(basename "$0") ios ipad
   $(basename "$0") all
 
-Overrides: GATTEY_OPEN_BACKGROUND, GATTEY_BUILD_CONFIG, IOS_OPEN_SIMULATOR_APP, IOS_DEVICE_NAME, IOS_SIM_DEST, IOS_SCHEME, IOS_CONFIG, IOS_DERIVED_DATA
+Overrides: GATTEY_OPEN_BACKGROUND, GATTEY_BUILD_CONFIG, IOS_OPEN_SIMULATOR_APP, IOS_DEVICE_NAME, IOS_BUNDLE_ID
 EOF
 }
 
@@ -44,48 +44,13 @@ launch_macos() {
 
 launch_ios_simulator() {
   local default_device="$1"
-  local MACOS="$ROOT/macos"
-  local SCHEME="${IOS_SCHEME:-GatteyPhotosIOS}"
-  local CONFIG="${IOS_CONFIG:-Debug}"
   local BUNDLE_ID="${IOS_BUNDLE_ID:-com.gattey.photos}"
-  local DERIVED="${IOS_DERIVED_DATA:-$MACOS/.derivedData-ios}"
-  local PRODUCTS="$DERIVED/Build/Products/${CONFIG}-iphonesimulator"
   local DEVICE_NAME="${IOS_DEVICE_NAME:-$default_device}"
-  local DEST="${IOS_SIM_DEST:-platform=iOS Simulator,name=${DEVICE_NAME}}"
   local OPEN_SIM_APP="${IOS_OPEN_SIMULATOR_APP:-$([[ "$OPEN_BACKGROUND" == "0" ]] && echo 1 || echo 0)}"
 
-  cd "$MACOS"
-  echo "launch: scheme=$SCHEME device='$DEVICE_NAME' (openSimulatorApp=${OPEN_SIM_APP})" >&2
-
-  xcodebuild \
-    -scheme "$SCHEME" \
-    -destination "$DEST" \
-    -sdk iphonesimulator \
-    -configuration "$CONFIG" \
-    -derivedDataPath "$DERIVED" \
-    CODE_SIGNING_ALLOWED=YES \
-    build
-
-  local BINARY="$PRODUCTS/GatteyPhotosIOS"
-  local UI_BUNDLE="$PRODUCTS/GatteyPhotos_GatteyPhotosUI.bundle"
-  local INFO_PLIST="$MACOS/Sources/GatteyPhotosIOS/Info.plist"
-
-  if [[ ! -x "$BINARY" ]]; then
-    echo "launch: missing binary at $BINARY" >&2
-    return 1
-  fi
-
-  local STAGE="$DERIVED/stage/Gattey Photos.app"
-  rm -rf "$STAGE"
-  mkdir -p "$STAGE"
-  cp "$BINARY" "$STAGE/GatteyPhotosIOS"
-  cp "$INFO_PLIST" "$STAGE/Info.plist"
-  if [[ -d "$UI_BUNDLE" ]]; then
-    cp -R "$UI_BUNDLE" "$STAGE/"
-  fi
-  plutil -replace CFBundleExecutable -string GatteyPhotosIOS "$STAGE/Info.plist" 2>/dev/null || true
-  plutil -replace MinimumOSVersion -string 17.0 "$STAGE/Info.plist" 2>/dev/null || true
-  plutil -replace CFBundleSupportedPlatforms -json '["iPhoneSimulator"]' "$STAGE/Info.plist" 2>/dev/null || true
+  echo "launch: ios device='$DEVICE_NAME' (openSimulatorApp=${OPEN_SIM_APP})" >&2
+  local APP
+  APP="$("$ROOT/scripts/build-ios.sh")" || return 1
 
   export DEVICE_NAME
   local UDID
@@ -120,7 +85,7 @@ sys.exit(1)
   fi
 
   xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
-  xcrun simctl install "$UDID" "$STAGE"
+  xcrun simctl install "$UDID" "$APP"
 
   local launch_out=""
   local attempt
@@ -141,7 +106,7 @@ sys.exit(1)
 
   echo "$launch_out"
   echo "launch: installed and launched on $DEVICE_NAME ($UDID)" >&2
-  echo "launch: app=$STAGE" >&2
+  echo "launch: app=$APP" >&2
 }
 
 TARGETS=()

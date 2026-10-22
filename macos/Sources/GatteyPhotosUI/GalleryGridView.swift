@@ -10,7 +10,7 @@ import AppKit
 struct GalleryGridView: View {
     @Environment(AppChromeState.self) private var chrome
     @Environment(GallerySelectionStore.self) private var selection
-    @EnvironmentObject private var store: GalleryStore
+    @Environment(GalleryStore.self) private var store
     @FocusState private var gridDeleteKeyFocus: Bool
     @State private var showSettings = false
     @State private var isFileDropTargeted = false
@@ -332,7 +332,7 @@ private struct ThumbnailGridSelectionChrome: View {
 
 /// Grid layout and gallery list only — does not observe selection (per-cell views do).
 private struct GalleryPhotoGrid: View {
-    @EnvironmentObject private var store: GalleryStore
+    @Environment(GalleryStore.self) private var store
     let gridContainerWidth: CGFloat
     let currentPhotoID: PhotoID?
     let deviceScreenAspectRatio: CGFloat
@@ -456,7 +456,7 @@ private struct GalleryPhotoGrid: View {
 /// One grid cell: observes selection for this photo only.
 private struct PhotoGridItem: View {
     @Environment(GallerySelectionStore.self) private var selection
-    @EnvironmentObject private var store: GalleryStore
+    @Environment(GalleryStore.self) private var store
     let photo: PhotoEntry
     let photoIndex: Int
     let photoCount: Int
@@ -884,7 +884,7 @@ private struct GalleryMacOSToolbarTitleRemoval: ViewModifier {
 #if os(macOS)
 /// Thumbnail scale for the gallery grid (`AppSettings.galleryGridColumnCount`, photos per row).
 private struct GalleryThumbnailSizeToolbarControl: View {
-    @EnvironmentObject private var store: GalleryStore
+    @Environment(GalleryStore.self) private var store
 
     private static let iconFrame: CGFloat = 20
     private static let leadingPadding: CGFloat = 10
@@ -976,7 +976,7 @@ private struct GalleryMacOSToolbarSizeActionsSeparator: ToolbarContent {
 /// Primary window toolbar scoped to the gallery (detail) column — not the activity inspector.
 private struct GalleryMainToolbar: ToolbarContent {
     @Environment(AppChromeState.self) private var chrome
-    @EnvironmentObject private var store: GalleryStore
+    @Environment(GalleryStore.self) private var store
     @Binding var showSettings: Bool
     @Binding var pickerItems: [PhotosPickerItem]
 

@@ -6,12 +6,13 @@ private enum SettingsField: Hashable {
 }
 
 struct SettingsPopover: View {
-    @EnvironmentObject private var store: GalleryStore
-    @EnvironmentObject private var session: AppSession
+    @Environment(GalleryStore.self) private var store
+    @Environment(AppSession.self) private var session
     @FocusState private var focusedField: SettingsField?
     @State private var didRefreshConnectionsOnOpen = false
 
     var body: some View {
+        @Bindable var store = store
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Your name")

@@ -5,18 +5,17 @@ import SwiftUI
 @main
 struct GatteyPhotosIOSApp: App {
     @State private var chrome = AppChromeState()
-    @StateObject private var session = AppSession()
-    @StateObject private var store = GalleryStore()
-    @StateObject private var activityLog = ActivityLogStore.shared
+    @State private var session = AppSession()
+    @State private var store = GalleryStore()
 
     var body: some Scene {
         WindowGroup {
             AppRootContainer()
                 .environment(chrome)
-                .environmentObject(session)
-                .environmentObject(store)
+                .environment(session)
+                .environment(store)
                 .environment(store.selection)
-                .environmentObject(activityLog)
+                .environment(ActivityLogStore.shared)
                 .onAppear {
                     store.session = session
                 }

@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 public enum LogCategory: String, Codable, Sendable, CaseIterable {
     case server
@@ -276,10 +277,11 @@ public enum ActivityLogFile {
 }
 
 @MainActor
-public final class ActivityLogStore: ObservableObject {
+@Observable
+public final class ActivityLogStore {
     public static let shared = ActivityLogStore()
 
-    @Published public private(set) var entries: [LogEntry] = []
+    public private(set) var entries: [LogEntry] = []
 
     private static let maxInMemoryEntries = 1000
     private var liveReloadTask: Task<Void, Never>?

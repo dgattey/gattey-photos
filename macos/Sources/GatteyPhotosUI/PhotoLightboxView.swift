@@ -2,7 +2,7 @@ import GatteyPhotosCore
 import SwiftUI
 
 struct PhotoLightboxView: View {
-    @EnvironmentObject private var store: GalleryStore
+    @Environment(GalleryStore.self) private var store
     @Environment(\.galleryDeleteRequest) private var galleryDeleteRequest
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @FocusState private var isFocused: Bool

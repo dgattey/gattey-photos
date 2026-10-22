@@ -3,7 +3,7 @@ import SwiftUI
 
 struct ActivityLogPaneView: View {
     @Environment(AppChromeState.self) private var chrome
-    @EnvironmentObject private var logStore: ActivityLogStore
+    @Environment(ActivityLogStore.self) private var logStore
 
     var body: some View {
         NavigationStack {

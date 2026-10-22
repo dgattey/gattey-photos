@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Right-click / long-press menu on gallery thumbnails (same rules as selection bar and lightbox).
 struct GalleryPhotoContextMenuItems: View {
-    @EnvironmentObject private var store: GalleryStore
+    @Environment(GalleryStore.self) private var store
     @Environment(GallerySelectionStore.self) private var selection
     @Environment(\.galleryDeleteRequest) private var galleryDeleteRequest
     let photoID: PhotoID

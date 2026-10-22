@@ -14,7 +14,8 @@ private actor GalleryMutationSerial {
 }
 
 @MainActor
-public final class GalleryStore: ObservableObject {
+@Observable
+public final class GalleryStore {
     public init(urlSession: URLSession = SyncURLSession.shared) {
         self.urlSession = urlSession
         let initialSettings = AppSettings.defaults
@@ -31,11 +32,11 @@ public final class GalleryStore: ObservableObject {
     }
 
     private let urlSession: URLSession
-    public weak var session: AppSession?
+    @ObservationIgnored public weak var session: AppSession?
 
     public let selection = GallerySelectionStore()
 
-    @Published public var settings: AppSettings {
+    public var settings: AppSettings {
         didSet {
             settingsRevision &+= 1
             if oldValue.displayName != settings.displayName {
@@ -43,7 +44,7 @@ public final class GalleryStore: ObservableObject {
             }
         }
     }
-    @Published var state: GalleryState {
+    var state: GalleryState {
         didSet {
             stateRevision &+= 1
         }
@@ -52,21 +53,21 @@ public final class GalleryStore: ObservableObject {
     private var settingsRevision: UInt64 = 1
     private var lastPersistedDisplayName: String
     private var bootstrapDiskTask: Task<Void, Never>?
-    @Published var serverLinkStatus: LinkStatus = .down
-    @Published var deviceLinkStatus: LinkStatus = .down
-    @Published private(set) var isCheckingConnection = false
+    var serverLinkStatus: LinkStatus = .down
+    var deviceLinkStatus: LinkStatus = .down
+    private(set) var isCheckingConnection = false
     /// Parsed from pasted setup text (`Device:` line); cosmetic only.
-    @Published private(set) var registeredFrames: [RegisteredDevicePublic] = []
+    private(set) var registeredFrames: [RegisteredDevicePublic] = []
     /// Normalized width ÷ height from first reachable frame (`Bloomin8Screen.aspectRatio`, always ≤ 1).
-    @Published private(set) var deviceScreenAspectRatio: CGFloat = Bloomin8Screen.defaultAspectRatio
+    private(set) var deviceScreenAspectRatio: CGFloat = Bloomin8Screen.defaultAspectRatio
     /// Physical panel orientation for preview chrome (portrait default).
-    @Published private(set) var deviceScreenIsLandscape = false
-    @Published public var isBusy = false
-    @Published public var isSyncing = false
+    private(set) var deviceScreenIsLandscape = false
+    public var isBusy = false
+    public var isSyncing = false
 
     #if os(iOS)
     /// Temp file for `PhotoActivityShareSheet` after `downloadPhoto(photoID:)`.
-    @Published public var photoShareItem: PhotoShareItem?
+    public var photoShareItem: PhotoShareItem?
     #endif
 
     private let log = ActivityLogStore.shared
@@ -85,7 +86,7 @@ public final class GalleryStore: ObservableObject {
         (isBusy && activePhotos.isEmpty) || isAwaitingInitialGalleryPull
     }
 
-    @Published private(set) var isAwaitingInitialGalleryPull = false
+    private(set) var isAwaitingInitialGalleryPull = false
 
     private enum PullKind {
         case foreground
@@ -110,8 +111,8 @@ public final class GalleryStore: ObservableObject {
         var formattedTagByPhotoID: [PhotoID: String] = [:]
     }
 
-    private var derivedCache = DerivedStateCache()
-    private var rotationCache = RotationPlanCache()
+    @ObservationIgnored private var derivedCache = DerivedStateCache()
+    @ObservationIgnored private var rotationCache = RotationPlanCache()
 
     private func ensureDerivedCache() {
         if derivedCache.stateRevision == stateRevision {

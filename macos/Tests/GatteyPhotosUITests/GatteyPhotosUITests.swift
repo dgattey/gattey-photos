@@ -44,7 +44,7 @@ struct GatteyPhotosUITests {
     @MainActor
     func activityLogListViewInspection() throws {
         let emptyStore = ActivityLogStore(entries: [])
-        let emptyView = ActivityLogListView().environmentObject(emptyStore)
+        let emptyView = ActivityLogListView().environment(emptyStore)
         let inspectedEmpty = try emptyView.inspect()
         #expect(try inspectedEmpty.find(text: "No activity yet").string() == "No activity yet")
         #expect(
@@ -62,7 +62,7 @@ struct GatteyPhotosUITests {
                 )
             ]
         )
-        let populatedView = ActivityLogListView().environmentObject(populatedStore)
+        let populatedView = ActivityLogListView().environment(populatedStore)
         let inspectedPopulated = try populatedView.inspect()
         #expect(try inspectedPopulated.find(text: "Pulled 12 photos").string() == "Pulled 12 photos")
         #expect(try inspectedPopulated.find(text: "200 OK").string() == "200 OK")
@@ -77,7 +77,7 @@ struct GatteyPhotosUITests {
 
         var deletedIDs: Set<PhotoID>?
         let singleBar = GallerySelectionBar()
-            .environmentObject(store)
+            .environment(store)
             .environment(selection)
             .environment(\.galleryDeleteRequest, { ids in deletedIDs = ids })
 
@@ -89,7 +89,7 @@ struct GatteyPhotosUITests {
 
         selection.selectedIDs = ["photo-1", "photo-2"]
         let multiBar = GallerySelectionBar()
-            .environmentObject(store)
+            .environment(store)
             .environment(selection)
             .environment(\.galleryDeleteRequest, { ids in deletedIDs = ids })
 
@@ -269,7 +269,7 @@ struct GatteyPhotosUITests {
         store.settings.displayName = "Dylan"
         store.replaceFetchedRegisteredFrames([bedroom, casaLapa])
 
-        let section = FramesSettingsSection().environmentObject(store)
+        let section = FramesSettingsSection().environment(store)
         let inspected = try section.inspect()
         #expect(try inspected.find(text: "Bedroom").string() == "Bedroom")
         #expect(throws: (any Error).self) {

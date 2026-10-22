@@ -2,7 +2,7 @@ import GatteyPhotosCore
 import SwiftUI
 
 struct ActivityLogListView: View {
-    @EnvironmentObject private var logStore: ActivityLogStore
+    @Environment(ActivityLogStore.self) private var logStore
     @State private var expandedEntryIDs: Set<UUID> = []
 
     private static let collapsedDetailLimit = 160
