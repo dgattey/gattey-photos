@@ -1,4 +1,5 @@
-# Build a signed macOS release and commit server/public/ for Vercel Git deploys.
+# Build a signed macOS release and publish it as a GitHub Release (zip + Sparkle appcast.xml) on the pushed commit.
+# Nothing is pushed back to main: photos.gattey.com redirects /appcast.xml to the latest release's appcast.
 # Only runs when macOS or packaging inputs change (not site-only server edits).
 name: release-macos
 
@@ -15,7 +16,8 @@ on:
       - 'scripts/lib/signing.sh'
       - 'scripts/next-release-version.sh'
       - 'scripts/setup-self-signed-cert.sh'
-      - 'scripts/fetch-live-macos-release.sh'
+      - 'scripts/fetch-previous-appcast.sh'
+      - 'scripts/release-notes.sh'
       - '.github/workflows/release-macos.yml'
   workflow_dispatch:
     inputs:
@@ -49,7 +51,11 @@ jobs:
         env:
           GITHUB_EVENT_BEFORE: ${{ github.event.before }}
         run: |
-          if ./scripts/macos-release-inputs-changed.sh; then
+          released="$(git tag --points-at HEAD --list 'v*')"
+          if [[ -n "$released" ]]; then
+            echo "release-macos: $GITHUB_SHA is already released as $released"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          elif ./scripts/macos-release-inputs-changed.sh; then
             echo "build=true" >> "$GITHUB_OUTPUT"
           else
             echo "build=false" >> "$GITHUB_OUTPUT"
@@ -66,15 +72,23 @@ jobs:
           GATTEY_RELEASE_TYPE: ${{ inputs.release_type }}
         run: ./scripts/ci-build-macos-release.sh
 
-      - name: Commit and push release artifacts
+      - name: Publish GitHub release
         if: steps.macos.outputs.build == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.package.outputs.version }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add server/public/
-          if git diff --staged --quiet; then
-            echo "release-macos: no changes to server/public — skipping commit"
-            exit 0
-          fi
-          git commit -m "Release v${{ steps.package.outputs.version }}"
-          git push
+          gh release create "v${VERSION}" \
+            "dist/release/Gattey-Photos-${VERSION}.zip" \
+            dist/release/appcast.xml \
+            --target "$GITHUB_SHA" \
+            --title "Gattey Photos ${VERSION}" \
+            --notes-file "dist/release/Gattey-Photos-${VERSION}.html"
+
+      - name: Check the latest release serves the new appcast
+        if: steps.macos.outputs.build == 'true'
+        env:
+          VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          curl -fsSL "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/appcast.xml" \
+            | grep -F "<sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>"

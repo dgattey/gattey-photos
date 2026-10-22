@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { LATEST_APPCAST_URL } from "./lib/macos-release";
 
 /** Icon URLs dyl-kit and dylangattey.com fetch cross-origin from every <app>.gattey.com site. */
 const SHARED_ICON_PATHS = ["/icon.png", "/apple-touch-icon.png"] as const;
@@ -13,6 +14,9 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: "12mb",
     },
+  },
+  async redirects() {
+    return [{ source: "/appcast.xml", destination: LATEST_APPCAST_URL, permanent: false }];
   },
   async headers() {
     return SHARED_ICON_PATHS.map((source) => ({ source, headers: SHARED_ICON_HEADERS }));

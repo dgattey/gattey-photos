@@ -3,7 +3,7 @@ import { getMacOSRelease } from "@/lib/macos-release";
 import { SITE_MEDIA } from "@/lib/site-media";
 import styles from "./page.module.css";
 
-export const dynamic = "force-static";
+export const revalidate = 60;
 
 const FEATURES: { title: string; body: string; glyph: ReactNode }[] = [
   {
@@ -41,8 +41,8 @@ const FEATURES: { title: string; body: string; glyph: ReactNode }[] = [
   },
 ];
 
-export default function HomePage() {
-  const release = getMacOSRelease();
+export default async function HomePage() {
+  const release = await getMacOSRelease();
   const recentNotes = release?.releaseNotes.slice(0, 3) ?? [];
 
   return (
@@ -92,11 +92,6 @@ export default function HomePage() {
                     ? `Requires macOS ${release.minimumSystemVersion}+ on Apple silicon`
                     : "Requires a Mac with Apple silicon"}
                 </p>
-                {!release.downloadReady ? (
-                  <p className={styles.hint}>
-                    That version is still deploying. Refresh in a minute if download fails.
-                  </p>
-                ) : null}
 
                 <details className={styles.manualApproval}>
                   <summary>First time on this Mac? macOS may block the app</summary>

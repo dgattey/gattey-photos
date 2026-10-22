@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-APPCAST="$ROOT/server/public/appcast.xml"
+APPCAST="${GATTEY_PREVIOUS_APPCAST:-$ROOT/dist/previous-appcast.xml}"
 VERSION_FILE="$ROOT/macos/VERSION"
 BASE="${GATTEY_RELEASE_BASE_URL:-https://photos.gattey.com}"
 
@@ -47,7 +47,7 @@ if [[ -z "$current" && -f "$APPCAST" ]]; then
   current="$(appcast_version <"$APPCAST")"
 fi
 if [[ -z "$current" ]]; then
-  current="$(curl -fsS "$BASE/appcast.xml" 2>/dev/null | appcast_version || true)"
+  current="$(curl -fsSL "$BASE/appcast.xml" 2>/dev/null | appcast_version || true)"
 fi
 if [[ -z "$current" && -f "$VERSION_FILE" ]]; then
   current="$(tr -d '[:space:]' <"$VERSION_FILE")"
