@@ -42,16 +42,31 @@ function appIconSourceHash(): string {
   return hash.digest("hex");
 }
 
-describe("photos.gattey.com icons", () => {
-  it("serves a square icon.png and a 180×180 apple-icon.png", async () => {
-    const icon = await sharp(repoPath("server/app/icon.png")).metadata();
-    assert.equal(icon.format, "png");
-    assert.equal(icon.width, icon.height);
-    assert.ok((icon.width ?? 0) >= 180, `icon.png is ${icon.width}px`);
+async function assertPngSize(path: string, size: number) {
+  const metadata = await sharp(repoPath(path)).metadata();
+  assert.equal(metadata.format, "png", `${path} is not a PNG`);
+  assert.deepEqual([metadata.width, metadata.height], [size, size], `${path} must be ${size}×${size}`);
+}
 
-    const apple = await sharp(repoPath("server/app/apple-icon.png")).metadata();
-    assert.equal(apple.format, "png");
-    assert.deepEqual([apple.width, apple.height], [180, 180]);
+/** URL contract dyl-kit and dylangattey.com read from every <app>.gattey.com site. */
+describe("photos.gattey.com icons", () => {
+  it("serves /icon.png at 1024×1024", async () => {
+    await assertPngSize("server/public/icon.png", 1024);
+    assert.ok(
+      !existsSync(repoPath("server/app/icon.png")),
+      "server/app/icon.png would shadow /icon.png; keep the 1024px icon in server/public/",
+    );
+  });
+
+  it("serves /apple-touch-icon.png and /apple-icon.png as the same 180×180 PNG", async () => {
+    await assertPngSize("server/public/apple-touch-icon.png", 180);
+    await assertPngSize("server/app/apple-icon.png", 180);
+    assert.ok(
+      readFileSync(repoPath("server/public/apple-touch-icon.png")).equals(
+        readFileSync(repoPath("server/app/apple-icon.png")),
+      ),
+      "apple-touch-icon.png and apple-icon.png differ; rerun ./scripts/generate-app-icon.sh",
+    );
   });
 
   it("packs 16px and 32px PNG frames into favicon.ico", () => {
