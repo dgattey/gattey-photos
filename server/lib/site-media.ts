@@ -6,7 +6,7 @@ export type SiteImage = {
   alt: string;
 };
 
-/** Every image the landing page renders. `site-assets.test.ts` checks each file and its pixel size. */
+/** Every image the site serves. `site-assets.test.ts` checks each file and its pixel size. */
 export const SITE_MEDIA = {
   appIcon: {
     src: "/apple-touch-icon.png",
@@ -44,12 +44,11 @@ export const SITE_MEDIA = {
     height: 903,
     alt: "Privacy and Security settings showing Gattey Photos was blocked with an Open Anyway button",
   },
+  /** Link-preview image only; dyl-kit and dylangattey.com also fetch it cross-origin. */
+  shareIcon: {
+    src: "/icon.png",
+    width: 1024,
+    height: 1024,
+    alt: "Gattey Photos app icon",
+  },
 } as const satisfies Record<string, SiteImage>;
-
-/** Link-preview image only, never rendered on the page; the icons test checks its 1024px size. */
-export const SHARE_ICON = {
-  src: "/icon.png",
-  width: 1024,
-  height: 1024,
-  alt: "Gattey Photos app icon",
-} as const satisfies SiteImage;

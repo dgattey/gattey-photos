@@ -1,17 +1,17 @@
 import type { Metadata, Viewport } from "next";
 import { brandCssVariables } from "@/lib/brand";
 import { getSiteOrigin } from "@/lib/macos-release";
-import { SHARE_ICON, SITE_MEDIA } from "@/lib/site-media";
+import { SITE_MEDIA } from "@/lib/site-media";
 import "./globals.css";
 
 const title = "Gattey Photos";
 const description =
   "Download Gattey Photos for Mac. Upload family photos, schedule what each Bloomin8 frame shows, and keep every frame in sync.";
 const ogImage = {
-  url: SHARE_ICON.src,
-  width: SHARE_ICON.width,
-  height: SHARE_ICON.height,
-  alt: SHARE_ICON.alt,
+  url: SITE_MEDIA.shareIcon.src,
+  width: SITE_MEDIA.shareIcon.width,
+  height: SITE_MEDIA.shareIcon.height,
+  alt: SITE_MEDIA.shareIcon.alt,
 };
 
 export const metadata: Metadata = {
