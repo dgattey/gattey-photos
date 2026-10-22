@@ -7,11 +7,10 @@ description: Change the Gattey Photos Next.js sync API on Vercel (gallery routes
 
 ## Entry points
 
-- `app/page.tsx` — `GET /` download page from `@dylkit/web` (`loadSite()` reads `../DylApp.toml` and `public/appcast.xml` at build time)
-- `app/download/macos/route.ts` — `@dylkit/web` redirect to the zip named in committed `appcast.xml`
-- `next.config.ts` — serves `/icon.png` and `/apple-touch-icon.png` with `Access-Control-Allow-Origin: *` and an hour of caching for dyl-kit and dylangattey.com
-- `next.config.ts` — redirects `/appcast.xml` (installed apps' `SUFeedURL`) to the latest GitHub release's appcast, where releases up to 1.1.11 live
-- `lib/site-assets.test.ts` — fails when the shared icons in `public/` or their headers break that URL contract (see **Design sync** in `AGENTS.md`)
+- `app/page.tsx` — `GET /` download page from `@dylkit/web`, built from `[site]` in `../DylApp.toml` and the Blob store's `release.json` (revalidated every minute)
+- `app/appcast.xml/route.ts`, `app/download/macos/route.ts` — installed apps' `SUFeedURL` and the download redirect, both read from the release Blob store (`[release] assets`)
+- `app/icons/[name]/route.ts` — `/icons/*`, re-exported at `/icon.png`, `/apple-touch-icon.png` and `/favicon.ico`: the icons each release uploads, served cross-origin for dylangattey.com
+- `next.config.ts` — traces `../DylApp.toml` and the screenshots into the functions, since `loadSite()` reads them at request time
 - `app/api/gallery/route.ts` — GET manifest
 - `app/api/gallery/photos/route.ts` — POST upload
 - `app/api/gallery/photos/[id]/route.ts` — DELETE

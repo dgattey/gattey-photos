@@ -30,7 +30,7 @@ After each Swift edit session, rebuild and verify in the same turn; a successful
 
 The dev app is `com.gattey.photos.dev` with no Sparkle keys, and keeps its config, cache and activity log in `~/Library/Application Support/GatteyPhotos Dev`, so `relaunch` and `capture` are safe on a Mac with Gattey Photos installed. Never launch the staged release in `build/release/stage/`: it carries `com.gattey.photos`.
 
-The icon comes from `AppIcon.icon/` through `scripts/link-app-icon.swift`; editing it only needs a rebuild.
+The icon comes from `AppIcon.icon/` (`[build] icon` in `DylApp.toml`); editing it only needs a rebuild.
 
 ## Backend / server (Next.js under `server/`)
 

@@ -9,13 +9,13 @@
 
 Vercel only deploys `server/` when root directory is set. No monorepo rewrite is needed.
 
-macOS Sparkle files in `server/public/` are committed by `.github/workflows/release.yml` (DylKit's `release-kit`) when the app changes. `server/vercel.json`'s `ignoreCommand` also redeploys when `DylApp.toml` changes, since the download page reads it. Vercel’s normal Git Production deploy serves them; no extra Vercel settings required. See `docs/DISTRIBUTION.md`.
+macOS releases don't deploy the site. `.github/workflows/release.yml` (DylKit's `release-kit`) uploads each one to the public `gattey-photos-releases` Blob store, and the download page, `/appcast.xml`, `/download/macos` and the icon routes read that store at request time. `server/vercel.json`'s `ignoreCommand` also redeploys when `DylApp.toml` changes, since the site reads it. See `docs/DISTRIBUTION.md`.
 
 ## Environment variables (Production)
 
 | Variable | Purpose |
 |----------|---------|
-| `BLOB_READ_WRITE_TOKEN` | Vercel Blob (auto-added if Blob is linked) |
+| `BLOB_READ_WRITE_TOKEN` | The private `gattey-photos` gallery store (auto-added when it's linked) |
 | `SYNC_PASSWORD` | Family sync password (not in the app binary) |
 | `CRON_SECRET` | Protects `GET /api/cron/advance-current` (Vercel Cron sends `Authorization: Bearer …`) |
 | `EDGE_CONFIG` | Optional; use Edge Config key `syncPassword` instead of env |

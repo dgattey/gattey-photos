@@ -20,7 +20,7 @@ iOS/iPad app (shared `GatteyPhotosUI` + `GatteyPhotosCore`): see **`skills/ios/S
 
 ## App icon
 
-Author `AppIcon.icon/` in **Icon Composer** (layer fills, glass on/off), not hand-wavy JSON. There is no Xcode project: `scripts/link-app-icon.swift` (the `[build] icon-generator` in `DylApp.toml`) hands it to devkit, which runs `actool` into the bundle's `Assets.car`.
+Author `AppIcon.icon/` in **Icon Composer** (layer fills, glass on/off), not hand-wavy JSON. There is no Xcode project: `[build] icon` in `DylApp.toml` points devkit at it, and devkit runs `actool` into the bundle's `Assets.car`.
 
 **Canvas gradient (root fill in `icon.json`):** vertical linear gradient only (two stops). Top RGB **94, 159, 125** → `srgb:0.368627,0.623529,0.490196,1.000000`. Bottom RGB **46, 92, 69** → `srgb:0.180392,0.360784,0.270588,1.000000`. Orientation `start` (0.5, 0) → `stop` (0.5, 1). Edit in Icon Composer: select **AppIcon** in the sidebar → Fill → Gradient.
 
@@ -28,11 +28,11 @@ Author `AppIcon.icon/` in **Icon Composer** (layer fills, glass on/off), not han
 
 Single **G** group: `glass: true`, solid white layer fill, translucency/specular on the group. Rebuild with `./run dev build`.
 
-**Design sync.** An icon change also needs new web icons in `server/public/` (`icon.png` at 1024 px, `apple-touch-icon.png` and `apple-icon.png` at 180 px, `app-icon.png`) and `server/app/favicon.ico`. Export them from Icon Composer by hand until DylKit v0.2.1's `site-icons` generates them. Any icon, brand color, or UI redesign also updates photos.gattey.com and dylangattey.com (see **Design sync** in `AGENTS.md`). `server/lib/site-assets.test.ts` checks the shared icon URL contract in `npm test`.
+**Design sync.** The web icons need no export: each release renders them from `AppIcon.icon` and uploads them to the Blob store. Any icon, brand color, or UI redesign also updates photos.gattey.com and dylangattey.com (see **Design sync** in `AGENTS.md`).
 
 ## Auto-update (Sparkle)
 
-The app self-updates through DylKit's `DylUpdates` (`AppUpdater.shared`, Sparkle 2 underneath). Family distribution uses **ad-hoc** signing (`-`) with `com.apple.security.cs.disable-library-validation` (`GatteyPhotos.local.entitlements`) plus EdDSA (`scripts/generate-sparkle-key.sh`). A push to **`main`** touching the `[release] inputs` in `DylApp.toml` runs `.github/workflows/release.yml`, which uses `release-kit` to commit `server/public/` once; Vercel Git deploys it. Each release bumps the version the merged PR checks under **Release info**. See DylKit's **`apple-release`** and **`docs/DISTRIBUTION.md`**.
+The app self-updates through DylKit's `DylUpdates` (`AppUpdater.shared`, Sparkle 2 underneath). Family distribution uses **ad-hoc** signing (`-`) with `com.apple.security.cs.disable-library-validation` (`GatteyPhotos.local.entitlements`) plus EdDSA (`scripts/generate-sparkle-key.sh`). Merging a PR that touches the app runs `.github/workflows/release.yml`, which uses `release-kit` to upload the release to the `gattey-photos-releases` Blob store and tag `v<version>`. Each release bumps the version the merged PR checks under **Release info**. See DylKit's **`apple-release`** and **`docs/DISTRIBUTION.md`**.
 
 ## State
 
