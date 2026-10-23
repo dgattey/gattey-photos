@@ -17,4 +17,5 @@ fi
 # dev.sh sequences start -> relaunch, so the launcher must return even
 # headless; the supervisor it spawns keeps running in the background.
 GATTEY_FOREGROUND_HOLD=0 "$ROOT/scripts/start-server.sh"
-"$ROOT/run" dev relaunch
+cd "$ROOT"
+swift run devkit relaunch

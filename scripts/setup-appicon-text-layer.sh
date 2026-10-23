@@ -11,6 +11,6 @@ if [[ ! -d "$ICON" ]]; then
 fi
 
 echo "G is Assets/Letter-G.svg (outlined paths). Edit fill gradient on the canvas and glass on the G layer in Icon Composer."
-echo "Then: ./run dev build"
+echo "Then: swift run devkit build"
 echo ""
 open -a "$IC_APP" "$ICON"

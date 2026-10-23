@@ -1,6 +1,6 @@
 ---
 name: dev-loop
-description: Rebuild, restart, and verify the Gattey Photos local stack after edits. Use when changing Sources/, server/, or before ending an agent task that touched either; covers ./run dev, the server supervisor, typecheck, and dev.sh.
+description: Rebuild, restart, and verify the Gattey Photos local stack after edits. Use when changing Sources/, server/, or before ending an agent task that touched either; covers swift run devkit, the server supervisor, typecheck, and dev.sh.
 ---
 
 # Gattey Photos dev loop
@@ -15,16 +15,16 @@ export PATH="$HOME/.local/share/mise/shims:$PATH"
 
 ## Swift app
 
-Building, launching, capturing and testing follow DylKit's **`apple-dev-loop`** skill. Everything runs from the repo root through `./run dev …`:
+Building, launching, capturing and testing follow DylKit's **`apple-dev-loop`** skill. Everything runs from the repo root through `swift run devkit …`:
 
 | Task | Command |
 |------|---------|
-| Build `build/Gattey Photos Dev.app` | `./run dev build` |
-| Rebuild and reopen in the background | `./run dev relaunch` |
-| iPhone Simulator, headless, with a screenshot | `./run dev ios --run --capture` |
-| iPad Simulator | `./run dev ios --run --capture --simulator "iPad Pro 13-inch (M5)"` |
-| Lint tiers 1–3 | `./run dev checks` |
-| What macOS CI runs | `./run dev verify` |
+| Build `build/Gattey Photos Dev.app` | `swift run devkit build` |
+| Rebuild and reopen in the background | `swift run devkit relaunch` |
+| iPhone Simulator, headless, with a screenshot | `swift run devkit ios --run --capture` |
+| iPad Simulator | `swift run devkit ios --run --capture --simulator "iPad Pro 13-inch (M5)"` |
+| Lint tiers 1–3 | `swift run devkit checks` |
+| What macOS CI runs | `swift run devkit verify` |
 
 After each Swift edit session, rebuild and verify in the same turn; a successful `swift build` alone doesn't refresh `build/Gattey Photos Dev.app`. Never ask the user to relaunch as the main verification step.
 
@@ -87,7 +87,7 @@ First-time or “run everything”:
 ./scripts/dev.sh
 ```
 
-Starts the server (`start-server.sh`), then `./run dev relaunch`.
+Starts the server (`start-server.sh`), then `swift run devkit relaunch`.
 
 ## When both Swift and `server/` change
 
@@ -99,7 +99,7 @@ Starts the server (`start-server.sh`), then `./run dev relaunch`.
 Run the same gates as CI (`verify.yml` on macOS, `site.yml` on ubuntu):
 
 ```bash
-./run dev verify
+swift run devkit verify
 cd server && npm run typecheck && npm run test && npm run build
 ```
 
@@ -107,7 +107,7 @@ cd server && npm run typecheck && npm run test && npm run build
 
 | Touched | Before task end (this turn) |
 |---------|-----------------------------|
-| Swift only | `./run dev relaunch`, plus the iOS Simulator for shared `GatteyPhotosUI` changes |
+| Swift only | `swift run devkit relaunch`, plus the iOS Simulator for shared `GatteyPhotosUI` changes |
 | `server/` only (runtime) | `stop-server.sh` + `start-server.sh`, then `cd server && npm run typecheck` |
 | Both | Server restart, then rebuild and verify the app |
-| Before push | `./run dev verify` and the server checks — required; do not claim deploy-safe without a green build |
+| Before push | `swift run devkit verify` and the server checks — required; do not claim deploy-safe without a green build |

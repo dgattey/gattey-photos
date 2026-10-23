@@ -27,8 +27,8 @@ Frames: same **Settings → Frames** UI as macOS — register Bloomin8 tokens on
 DylKit's `apple-dev-loop` owns this. From repo root:
 
 ```bash
-./run dev ios --run --capture
-./run dev ios --run --capture --simulator "iPad Pro 13-inch (M5)"
+swift run devkit ios --run --capture
+swift run devkit ios --run --capture --simulator "iPad Pro 13-inch (M5)"
 ```
 
 devkit builds the `GatteyPhotos` product for the iOS Simulator, wraps it into `build/Gattey Photos-iOS.app` with the `[ios]` settings from `DylApp.toml`, installs and launches it headlessly with `simctl`, and saves a screenshot under `build/captures/`. The default simulator is `[ios] simulator`.

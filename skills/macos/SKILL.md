@@ -26,13 +26,13 @@ Author `AppIcon.icon/` in **Icon Composer** (layer fills, glass on/off), not han
 
 **Letter G:** `Assets/Letter-G.svg` (Georgia “G” as paths, not live text). Icon Composer’s public `icon.json` schema uses `image-name` layers; Apple’s docs say to convert text to outlines in SVG. Tweak glass/position in Icon Composer on that image layer, or regenerate paths: `swift scripts/ExportLetterG.swift`. Do not expect a separate “Text layer” type in Icon Composer for actool.
 
-Single **G** group: `glass: true`, solid white layer fill, translucency/specular on the group. Rebuild with `./run dev build`.
+Single **G** group: `glass: true`, solid white layer fill, translucency/specular on the group. Rebuild with `swift run devkit build`.
 
 **Design sync.** The web icons need no export: each release renders them from `AppIcon.icon` and uploads them to the Blob store. Any icon, brand color, or UI redesign also updates photos.gattey.com and dylangattey.com (see **Design sync** in `AGENTS.md`).
 
 ## Auto-update (Sparkle)
 
-The app self-updates through DylKit's `DylUpdates` (`AppUpdater.shared`, Sparkle 2 underneath). Family distribution uses **ad-hoc** signing (`-`) with `com.apple.security.cs.disable-library-validation` (`GatteyPhotos.local.entitlements`) plus EdDSA (`scripts/generate-sparkle-key.sh`). Merging a PR that touches the app runs `.github/workflows/release.yml`, which uses `release-kit` to upload the release to the `gattey-photos-releases` Blob store and tag `v<version>`. Each release bumps the version the merged PR checks under **Release info**. See DylKit's **`apple-release`** and **`docs/DISTRIBUTION.md`**.
+The app self-updates through DylKit's `DylUpdates` (`AppUpdater.shared`, Sparkle 2 underneath). Family distribution uses **ad-hoc** signing (`-`) with `com.apple.security.cs.disable-library-validation` (`GatteyPhotos.local.entitlements`) plus EdDSA (`scripts/generate-sparkle-key.sh`). Merging a PR that touches the app runs `.github/workflows/dylkit.yml`, which uses `release-kit` to upload the release to the `gattey-photos-releases` Blob store and tag `v<version>`. Each release bumps the version the merged PR checks under **Release info**. See DylKit's **`apple-release`** and **`docs/DISTRIBUTION.md`**.
 
 ## State
 

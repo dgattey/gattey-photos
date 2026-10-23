@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Push the Sparkle EdDSA private key to GitHub Actions as SPARKLE_ED_PRIVATE_KEY_BASE64 for release.yml.
+# Push the Sparkle EdDSA private key to GitHub Actions as SPARKLE_ED_PRIVATE_KEY_BASE64 for dylkit.yml.
 # Releases are signed ad-hoc, so no codesigning certificate is exported.
 #
 # Usage:

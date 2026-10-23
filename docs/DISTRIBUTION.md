@@ -11,7 +11,7 @@ Small family install: **ad-hoc** code signing (`-`) + `com.apple.security.cs.dis
 
 - App checks `https://photos.gattey.com/appcast.xml` (Sparkle 2, HTTPS only). That route, the download page and `/download/macos` read the store's latest feed and `release.json` through `@dylkit/web`, so they change without a deploy.
 - DylKit's `AppUpdater` runs only when `SUFeedURL` and `SUPublicEDKey` are in the built app; release-kit writes both from `DylApp.toml`.
-- Merging a PR into **`main`** that touches the app runs `.github/workflows/release.yml` (synced from DylKit): `release-kit` versions, bundles, signs, writes the appcast and uploads it all to the store with `BLOB_READ_WRITE_TOKEN`, then a second job waits for photos.gattey.com to serve the new version and icons. DylKit's `apple-release` skill documents each step and how to run them by hand on a Mac.
+- Merging a PR into **`main`** that touches the app runs `.github/workflows/dylkit.yml`, which calls DylKit's reusable `app.yml` workflow with `secrets: inherit`: `release-kit` versions, bundles, signs, writes the appcast and uploads it all to the store with `BLOB_READ_WRITE_TOKEN`, then a second job waits for photos.gattey.com to serve the new version and icons. DylKit's `apple-release` skill documents each step and how to run them by hand on a Mac.
 
 No release branch and no manual steps.
 
@@ -29,7 +29,7 @@ GitHub fills new PR bodies from `.github/pull_request_template.md`, which ends w
 
 Check exactly one box before you merge. From 1.0.16, a patch release is 1.0.17, a minor release is 1.1.0, and a major release is 2.0.0. Only boxes under the `Release info` heading count, so a checked item under `What changed?` does not change the version.
 
-The `pr-check` workflow fails a PR that doesn't check exactly one box. `release-kit version` reads the checkbox from the merged PR, falling back to the merge commit message. Rerun the workflow by hand with an explicit **release_type** if neither has one. The current version comes from the tags and the published feeds (photos.gattey.com's and the store's).
+The `dylkit` workflow fails a PR that doesn't check exactly one box. `release-kit version` reads the checkbox from the merged PR, falling back to the merge commit message. Rerun the workflow by hand with an explicit **release_type** if neither has one. The current version comes from the tags and the published feeds (photos.gattey.com's and the store's).
 
 ## One-time setup
 
