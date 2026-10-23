@@ -1,1 +1,1 @@
-export { GET } from "../icons/[name]/route";
+export { icon as GET } from "@dylkit/web/routes";

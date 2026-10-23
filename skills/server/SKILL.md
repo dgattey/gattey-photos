@@ -10,7 +10,7 @@ description: Change the Gattey Photos Next.js sync API on Vercel (gallery routes
 - `app/page.tsx` — `GET /` download page from `@dylkit/web`, built from `[site]` in `../DylApp.toml` and the Blob store's `release.json` (revalidated every minute)
 - `app/appcast.xml/route.ts`, `app/download/macos/route.ts` — installed apps' `SUFeedURL` and the download redirect, both read from the release Blob store (`[release] assets`)
 - `app/icons/[name]/route.ts` — `/icons/*`, re-exported at `/icon.png`, `/apple-touch-icon.png` and `/favicon.ico`: the icons each release uploads, served cross-origin for dylangattey.com
-- `next.config.ts` — traces `../DylApp.toml` and the screenshots into the functions, since `loadSite()` reads them at request time
+- `next.config.ts` — `withDylKit` from `@dylkit/web/config` reads `../DylApp.toml` and the screenshots' sizes when Next builds, so no route reads them at request time
 - `app/api/gallery/route.ts` — GET manifest
 - `app/api/gallery/photos/route.ts` — POST upload
 - `app/api/gallery/photos/[id]/route.ts` — DELETE
