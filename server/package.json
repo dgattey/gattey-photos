@@ -9,7 +9,7 @@
     "test": "tsx --test lib/auth.test.ts lib/api-error.test.ts lib/gallery.test.ts lib/gallery-mutation.test.ts lib/photo-orientation.test.ts lib/devices/registry.test.ts"
   },
   "dependencies": {
-    "@dylkit/web": "https://frmtw5gxqbom2ooh.public.blob.vercel-storage.com/releases/v0.3.1/dylkit-web-0.3.1.tgz",
+    "@dylkit/web": "https://frmtw5gxqbom2ooh.public.blob.vercel-storage.com/releases/v0.3.2/dylkit-web-0.3.2.tgz",
     "@vercel/blob": "^2.4.0",
     "@vercel/edge-config": "^1.4.0",
     "next": "^15.3.0",
