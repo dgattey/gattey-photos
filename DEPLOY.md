@@ -9,13 +9,13 @@
 
 Vercel only deploys `server/` when root directory is set. No monorepo rewrite is needed.
 
-macOS releases are GitHub Releases published by `.github/workflows/release-macos.yml`, not files in `server/public/`. The site redirects `/appcast.xml` to the latest release's appcast and reads it for the download page, so a release needs no redeploy. See `docs/DISTRIBUTION.md`.
+macOS releases don't deploy the site. `.github/workflows/dylkit.yml` (DylKit's reusable `app.yml` workflow) uploads each one to the public `gattey-photos-releases` Blob store, and the download page, `/appcast.xml`, `/download/macos` and the icon routes read that store at request time. `server/vercel.json`'s `ignoreCommand` also redeploys when `DylApp.toml` changes, since the site build reads it. See `docs/DISTRIBUTION.md`.
 
 ## Environment variables (Production)
 
 | Variable | Purpose |
 |----------|---------|
-| `BLOB_READ_WRITE_TOKEN` | Vercel Blob (auto-added if Blob is linked) |
+| `BLOB_READ_WRITE_TOKEN` | The private `gattey-photos` gallery store (auto-added when it's linked) |
 | `SYNC_PASSWORD` | Family sync password (not in the app binary) |
 | `CRON_SECRET` | Protects `GET /api/cron/advance-current` (Vercel Cron sends `Authorization: Bearer …`) |
 | `EDGE_CONFIG` | Optional; use Edge Config key `syncPassword` instead of env |
@@ -56,6 +56,6 @@ curl -s -H "Authorization: Bearer $CRON_SECRET" http://127.0.0.1:3000/api/cron/a
 ./scripts/dev.sh
 ```
 
-Seeds macOS settings (first run), builds and opens the app. Start the sync API with `./scripts/start-server.sh` (`GATTEY_LOCAL_STORAGE=1`, data in `server/.data/`). When `CRON_SECRET` is in `server/.env.local`, `start-server.sh` also starts `./scripts/local-advance-cron.sh` in the background (default **3600s** / 1 hour; override with `ADVANCE_CURRENT_INTERVAL_SECONDS`). `stop-server.sh` stops that loop too.
+Starts the sync API, then builds and opens the app with `swift run devkit relaunch`. Start the sync API with `./scripts/start-server.sh` (`GATTEY_LOCAL_STORAGE=1`, data in `server/.data/`). When `CRON_SECRET` is in `server/.env.local`, `start-server.sh` also starts `./scripts/local-advance-cron.sh` in the background (default **3600s** / 1 hour; override with `ADVANCE_CURRENT_INTERVAL_SECONDS`). `stop-server.sh` stops that loop too.
 
 The Mac app only shows a new current photo after it syncs; the cron updates the manifest on the server.

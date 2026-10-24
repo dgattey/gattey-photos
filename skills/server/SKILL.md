@@ -7,11 +7,10 @@ description: Change the Gattey Photos Next.js sync API on Vercel (gallery routes
 
 ## Entry points
 
-- `app/page.tsx` — `GET /` photos.gattey.com landing page (version and What's new from the latest GitHub release's appcast, revalidated every minute; download via `/download/macos`)
-- `lib/brand.ts` — web copies of the app brand greens; `lib/site-media.ts` — every image the landing page renders
-- `lib/site-assets.test.ts` — fails when web icons, brand colors, or landing images drift from `macos/AppIcon.icon`, `AppBrandColor.swift`, or `server/public/`. Fix by updating the page, not the test (see **Design sync** in `AGENTS.md`).
-- `app/download/macos/route.ts` — redirect to the zip named in the latest GitHub release's appcast
-- `lib/macos-release.ts` — fetches and parses that appcast (`LATEST_APPCAST_URL`); `next.config.ts` redirects `/appcast.xml` (Sparkle's `SUFeedURL`) to it
+- `app/page.tsx` — `GET /` download page from `@dylkit/web`, built from `[site]` in `../DylApp.toml` and the Blob store's `release.json` (revalidated every minute)
+- `app/appcast.xml/route.ts`, `app/download/macos/route.ts` — installed apps' `SUFeedURL` and the download redirect, both read from the release Blob store (`[release] assets`)
+- `app/icons/[name]/route.ts` — `/icons/*`, re-exported at `/icon.png`, `/apple-touch-icon.png` and `/favicon.ico`: the icons each release uploads, served cross-origin for dylangattey.com
+- `next.config.ts` — `withDylKit` from `@dylkit/web/config` reads `../DylApp.toml` and the screenshots' sizes when Next builds, so no route reads them at request time
 - `app/api/gallery/route.ts` — GET manifest
 - `app/api/gallery/photos/route.ts` — POST upload
 - `app/api/gallery/photos/[id]/route.ts` — DELETE

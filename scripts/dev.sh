@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# Dev: local sync API + Swift .app + open dist/Gattey Photos.app.
+# Dev: local sync API, then build and open build/Gattey Photos Dev.app in the background.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-CONFIG_DIR="$HOME/Library/Application Support/GatteyPhotos"
+CONFIG_DIR="$HOME/Library/Application Support/GatteyPhotos Dev"
 mkdir -p "$CONFIG_DIR"
-echo "$ROOT" >"$CONFIG_DIR/repo-root.txt"
 if [[ ! -f "$CONFIG_DIR/config.json" ]]; then
   cat >"$CONFIG_DIR/config.json" <<EOF
 {
@@ -15,8 +14,8 @@ if [[ ! -f "$CONFIG_DIR/config.json" ]]; then
 EOF
 fi
 
-chmod +x "$ROOT/scripts/start-server.sh" "$ROOT/scripts/package-macos.sh"
-# dev.sh sequences start -> package -> open, so the launcher must return even
+# dev.sh sequences start -> relaunch, so the launcher must return even
 # headless; the supervisor it spawns keeps running in the background.
 GATTEY_FOREGROUND_HOLD=0 "$ROOT/scripts/start-server.sh"
-"$ROOT/scripts/package-macos.sh"
+cd "$ROOT"
+swift run devkit relaunch
