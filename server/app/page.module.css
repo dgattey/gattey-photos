@@ -1,0 +1,193 @@
+.framed {
+  position: relative;
+  width: min(100%, 400px);
+  margin: 0 auto;
+}
+
+.frameOuter {
+  padding: 22px;
+  background: #141414;
+  box-shadow:
+    0 7px 14px rgb(0 0 0 / 0.18),
+    0 30px 60px -12px rgb(0 0 0 / 0.28);
+}
+
+/* The bezel is nearly the page color in dark mode; a faint rim keeps its edge. */
+@media (prefers-color-scheme: dark) {
+  .frameOuter {
+    box-shadow:
+      0 0 0 1px rgb(255 255 255 / 0.1),
+      0 30px 60px -12px rgb(0 0 0 / 0.6);
+  }
+}
+
+.frameMat {
+  padding: 16px;
+  background: #fff;
+}
+
+.frameScreen {
+  position: relative;
+  aspect-ratio: 680 / 1024;
+  overflow: hidden;
+  background: #000;
+}
+
+.frameScreen img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.frameScreen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to bottom, rgb(0 0 0 / 0.14), transparent 28px),
+    linear-gradient(to top, rgb(0 0 0 / 0.06), transparent 18px),
+    linear-gradient(to right, rgb(0 0 0 / 0.11), transparent 22px),
+    linear-gradient(to left, rgb(0 0 0 / 0.07), transparent 18px);
+}
+
+.nowShowing {
+  position: absolute;
+  left: -52px;
+  bottom: -28px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px 22px 15px 18px;
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--paper) 82%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  backdrop-filter: blur(20px) saturate(1.6);
+  border: 1px solid var(--line);
+  box-shadow: 0 14px 36px rgb(0 0 0 / 0.16);
+}
+
+.eyebrow {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.nowShowingTitle {
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.nowShowingDetail {
+  font-size: 0.9375rem;
+  color: var(--ink-muted);
+}
+
+.glyphGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 28px);
+  gap: 5px;
+}
+
+.glyphGrid span {
+  height: 28px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.glyphGrid .glyphAdd {
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.glyphBadges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.todayChip,
+.dateBadge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.todayChip {
+  background: #fff;
+  color: var(--accent-light);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.14);
+}
+
+.dateBadge {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.glyphFrame {
+  position: relative;
+  width: 46px;
+  height: 58px;
+  padding: 5px;
+  background: #141414;
+  box-shadow: 0 3px 8px rgb(0 0 0 / 0.2);
+}
+
+.glyphFrameMat {
+  display: block;
+  height: 100%;
+  border: 4px solid #fff;
+  background: linear-gradient(160deg, #5e9f85, #2e5c45);
+}
+
+.glyphSyncDot {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--paper);
+}
+
+@media (max-width: 900px) {
+  .framed {
+    width: min(100%, 320px);
+  }
+
+  .nowShowing {
+    position: relative;
+    left: auto;
+    bottom: auto;
+    width: fit-content;
+    min-width: 72%;
+    margin: -40px auto 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .framed {
+    width: min(100%, 280px);
+  }
+
+  .frameOuter {
+    padding: 16px;
+  }
+
+  .frameMat {
+    padding: 12px;
+  }
+}

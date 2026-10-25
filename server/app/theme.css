@@ -1,0 +1,20 @@
+/* Gattey Photos' neutral paper and ink in place of the kit's warm canvas. */
+:root {
+  --canvas: #f2f2f0;
+  --paper: #fbfbfa;
+  --ink: #1c1c1e;
+  --ink-muted: rgb(60 60 67 / 0.76);
+  --line: rgb(60 60 67 / 0.13);
+  --shadow: rgb(0 0 0 / 0.14);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas: #141416;
+    --paper: #1d1d20;
+    --ink: #f5f5f7;
+    --ink-muted: rgb(235 235 245 / 0.68);
+    --line: rgb(235 235 245 / 0.11);
+    --shadow: rgb(0 0 0 / 0.5);
+  }
+}

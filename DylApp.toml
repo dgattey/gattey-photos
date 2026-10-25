@@ -25,6 +25,8 @@ artifacts-dir = "server/public"
 [site]
 tagline = "The macOS app for your family gallery: upload photos, manage frames, and keep Bloomin8 displays in sync."
 accent = { light = "#467e61", dark = "#6fae8c" }
+heading-font = "serif"
 screenshots = [
-    { src = "unlock-welcome.png", alt = "A family photo on the Gattey Photos welcome screen" },
+    { src = "showcase-macos-light.webp", dark-src = "showcase-macos-dark.webp", alt = "Gattey Photos welcome window on macOS with a framed photo and the sign-in form" },
+    { src = "showcase-iphone.webp", alt = "Gattey Photos welcome screen on iPhone", frame = "iphone" },
 ]
