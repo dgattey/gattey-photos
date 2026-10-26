@@ -1,12 +1,12 @@
 {
-  "originHash" : "141cfd815a0094a43b67086c91570f4d324090e644da2d6330ec4d187bbce376",
+  "originHash" : "214515b5337204d9bf8d5daea157748de7c25c952d21bc7fdeea142b087ecd27",
   "pins" : [
     {
       "identity" : "dyl-kit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/dgattey/dyl-kit",
       "state" : {
-        "revision" : "facb7feb389dee1fd20695d6b2a16099fcdbe8e7"
+        "revision" : "f0c1e619ed78c7a0aec245e9b94450fb5584dc2c"
       }
     },
     {
@@ -43,6 +43,15 @@
       "state" : {
         "revision" : "2dacb6e514be19379c605a5a11564d0f3fea89d9",
         "version" : "0.10.5"
+      }
+    },
+    {
+      "identity" : "yams",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/jpsim/Yams",
+      "state" : {
+        "revision" : "a27b21e0c81c5bf42049b897a62aaf387e80f279",
+        "version" : "6.2.2"
       }
     }
   ],
