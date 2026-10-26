@@ -40,11 +40,13 @@ swift build
 ./scripts/generate-sparkle-key.sh
 ```
 
-Commit `sparkle-public-key.txt`. Back up the private key (1Password, etc.):
+The script keeps the private key in the login Keychain account `com.gattey.photos`, not Sparkle's shared `ed25519` one, and writes the public key to `sparkle-public-key.txt`. Commit `sparkle-public-key.txt`. Back up the private key (1Password, etc.) to a file outside the repo:
 
 ```bash
-.build/artifacts/sparkle/Sparkle/bin/generate_keys -x sparkle_private.key
+.build/artifacts/sparkle/Sparkle/bin/generate_keys --account com.gattey.photos -x <backup file>
 ```
+
+While `sparkle-public-key.txt` names a key the Keychain account doesn't hold, the script refuses to generate a new one, since installed copies only trust that key. Import the existing key into the account instead with `generate_keys --account com.gattey.photos -f <exported key>`, then delete the exported file. If the key is only in Sparkle's shared account, export it first with `generate_keys -x <file>`. Run locally, `release-kit appcast` signs only with that Keychain account (or a file passed with `--ed-key-file`) and reads no other key files.
 
 ### GitHub secrets
 
@@ -55,7 +57,7 @@ gh auth login   # once
 ./scripts/export-ci-secrets.sh
 ```
 
-That pushes `SPARKLE_ED_PRIVATE_KEY_BASE64` with `gh secret set` on **this** repository. Do not paste base64 into the GitHub UI by hand. Add `BLOB_READ_WRITE_TOKEN` from the `gattey-photos-releases` store's **Quickstart → `.env.local`** tab under **Settings → Secrets and variables → Actions**, as DylKit's `adopt-dylkit` skill describes. It is not the gallery store's token in the Vercel project.
+That exports the private key from the `com.gattey.photos` Keychain account, or reads the file `--sparkle-key-file` names, and pushes it as `SPARKLE_ED_PRIVATE_KEY_BASE64` with `gh secret set` on **this** repository. It reads no other key files. Do not paste base64 into the GitHub UI by hand. Add `BLOB_READ_WRITE_TOKEN` from the `gattey-photos-releases` store's **Quickstart → `.env.local`** tab under **Settings → Secrets and variables → Actions**, as DylKit's `adopt-dylkit` skill describes. It is not the gallery store's token in the Vercel project.
 
 | Secret | Purpose |
 |--------|---------|
