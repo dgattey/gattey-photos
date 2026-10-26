@@ -10,7 +10,10 @@ let package = Package(
         .executable(name: "GatteyPhotos", targets: ["GatteyPhotosApp"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/dgattey/dyl-kit", revision: "3a9e7aac50a6c5f2505a91a9ca6213eb74acf6e9"),
+        .package(
+            url: "https://github.com/dgattey/dyl-kit",
+            revision: "34d28dfccb824dd71ba936779fc787c26a47bcf1"
+        ),
         .package(url: "https://github.com/nalexn/ViewInspector", from: "0.10.3"),
     ],
     targets: [
