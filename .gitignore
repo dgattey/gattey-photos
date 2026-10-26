@@ -19,3 +19,4 @@ sparkle_ed.key
 .dev-advance-cron.pid
 .dev-advance-cron.log
 .chrome-verify/
+/pnpm-lock.yaml
