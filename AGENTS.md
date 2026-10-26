@@ -17,4 +17,4 @@ DylKit ([`dgattey/dyl-kit`](https://github.com/dgattey/dyl-kit)) owns building, 
 
 **Swift UI changes (agents):** Run `swift run devkit relaunch`, which opens `build/Gattey Photos Dev.app` (`com.gattey.photos.dev`) in the background, and check shared UI on the iOS Simulator (`swift run devkit ios --run --capture`). Never launch the staged release, which carries `com.gattey.photos`.
 
-Before `git push`, run `swift run devkit verify` (checks, build, Swift tests) and `npm run typecheck && npm run test && npm run build` in `server/`.
+Before `git push`, run `swift run devkit verify` (checks, build, Swift tests) and `pnpm typecheck && pnpm test && pnpm build` in `server/`.

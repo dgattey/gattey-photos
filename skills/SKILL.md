@@ -26,7 +26,7 @@ description: Work on the Gattey Photos monorepo — macOS SwiftUI app, sync serv
 
 ## Local verify
 
-See **`skills/dev-loop/SKILL.md`** for rebuild, server restart, and `npm run typecheck`. Full stack: `./scripts/dev.sh` (or `npm run dev`).
+See **`skills/dev-loop/SKILL.md`** for rebuild, server restart, and `pnpm typecheck`. Full stack: `./scripts/dev.sh` (or `pnpm dev`).
 
 ## Common tasks
 

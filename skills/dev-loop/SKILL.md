@@ -7,7 +7,7 @@ description: Rebuild, restart, and verify the Gattey Photos local stack after ed
 
 Canonical rebuild/restart steps for agents. Domain skills (`macos`, `server`) describe code layout; this skill owns **how to refresh running processes**.
 
-Tools: **mise** (`mise.toml`) pins Node and SwiftLint. Run `mise install` once. If `npm` is missing, prepend shims:
+Tools: **mise** (`mise.toml`) pins Node and SwiftLint, and `server/package.json`'s `packageManager` pins pnpm. Run `mise install` and `corepack enable pnpm` once. If `node` or `pnpm` is missing, prepend shims:
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -48,13 +48,13 @@ Or restart only the supervisor process if you know it is wedged.
 Manual dev (no supervisor):
 
 ```bash
-cd server && GATTEY_LOCAL_STORAGE=1 npm run dev
+cd server && GATTEY_LOCAL_STORAGE=1 pnpm dev
 ```
 
 After server edits, run:
 
 ```bash
-cd server && npm run typecheck
+cd server && pnpm typecheck
 ```
 
 ### Local `advance-current` cron and the Mac UI
@@ -77,7 +77,7 @@ source server/.env.local
 curl -s -H "Authorization: Bearer $CRON_SECRET" http://127.0.0.1:3000/api/cron/advance-current
 ```
 
-Manual `cd server && npm run dev` does **not** start the advance cron; use `start-server.sh` or run `local-advance-cron.sh` separately.
+Manual `cd server && pnpm dev` does **not** start the advance cron; use `start-server.sh` or run `local-advance-cron.sh` separately.
 
 ## Full local stack
 
@@ -100,7 +100,7 @@ Run the same gates as CI (`verify.yml` on macOS, `site.yml` on ubuntu):
 
 ```bash
 swift run devkit verify
-cd server && npm run typecheck && npm run test && npm run build
+cd server && pnpm typecheck && pnpm test && pnpm build
 ```
 
 ## Agent checklist
@@ -108,6 +108,6 @@ cd server && npm run typecheck && npm run test && npm run build
 | Touched | Before task end (this turn) |
 |---------|-----------------------------|
 | Swift only | `swift run devkit relaunch`, plus the iOS Simulator for shared `GatteyPhotosUI` changes |
-| `server/` only (runtime) | `stop-server.sh` + `start-server.sh`, then `cd server && npm run typecheck` |
+| `server/` only (runtime) | `stop-server.sh` + `start-server.sh`, then `cd server && pnpm typecheck` |
 | Both | Server restart, then rebuild and verify the app |
 | Before push | `swift run devkit verify` and the server checks — required; do not claim deploy-safe without a green build |

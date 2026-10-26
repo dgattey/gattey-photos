@@ -41,7 +41,7 @@ description: Change the Gattey Photos Next.js sync API on Vercel (gallery routes
 ## Local dev
 
 ```bash
-cd server && cp .env.example .env.local && GATTEY_LOCAL_STORAGE=1 npm run dev
+cd server && cp .env.example .env.local && GATTEY_LOCAL_STORAGE=1 pnpm dev
 ```
 
 Do not write to local disk in production handlers except through the storage adapter.

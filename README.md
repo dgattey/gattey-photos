@@ -22,7 +22,7 @@ swift run devkit ios --run --capture
 Run the sync API alone (two-terminal flow):
 
 ```bash
-./scripts/start-server.sh   # or: cd server && GATTEY_LOCAL_STORAGE=1 npm run dev
+./scripts/start-server.sh   # or: cd server && GATTEY_LOCAL_STORAGE=1 pnpm dev
 swift run devkit relaunch   # rebuilds and reopens build/Gattey Photos Dev.app
 ```
 

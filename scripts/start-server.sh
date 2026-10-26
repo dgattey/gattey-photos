@@ -52,7 +52,7 @@ if [[ ! -f "$SERVER/.env.local" ]]; then
   cp "$SERVER/.env.example" "$SERVER/.env.local"
 fi
 cd "$SERVER"
-[[ -d node_modules ]] || npm install
+[[ -d node_modules ]] || pnpm install
 
 nohup "$ROOT/scripts/server-supervisor.sh" >>"$LOG_FILE" 2>&1 &
 SUPERVISOR_PID=$!
