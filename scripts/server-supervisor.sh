@@ -7,7 +7,7 @@ export GATTEY_LOCAL_STORAGE=1
 
 while true; do
   echo "--- sync server start $(date -u +%Y-%m-%dT%H:%M:%SZ) ---" >>"$LOG"
-  npm run dev >>"$LOG" 2>&1 || echo "--- npm run dev exited $? $(date -u +%Y-%m-%dT%H:%M:%SZ) ---" >>"$LOG"
+  pnpm dev >>"$LOG" 2>&1 || echo "--- pnpm dev exited $? $(date -u +%Y-%m-%dT%H:%M:%SZ) ---" >>"$LOG"
   echo "--- restarting in 3s ---" >>"$LOG"
   sleep 3
 done

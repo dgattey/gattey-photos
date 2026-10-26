@@ -10,8 +10,8 @@ if command -v mise >/dev/null 2>&1; then
   eval "$(mise activate bash --shims 2>/dev/null)" || true
 fi
 
-if ! command -v npm >/dev/null 2>&1; then
-  echo "npm not found. Ensure mise provides node (e.g. mise use -g node@22) and ~/.local/share/mise/shims is on PATH." >&2
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "pnpm not found. Run mise install (node from mise.toml), then corepack enable pnpm, with ~/.local/share/mise/shims on PATH." >&2
   exit 1
 fi
 

@@ -1,19 +1,18 @@
-Closes 
+Closes
 
 # Release notes
 
-- 
+<!-- Short, plain-English bullets (aim for 3, up to 5) about what people using the app can see or do, or one sentence for internal plumbing. No file paths, code names, flags or backticks; those go in What changed? -->
+
+-
 
 # What changed?
 
-- 
+-
 
-# Design sync
+# Before merging
 
-If this PR changes the app UI, brand colors, or `macos/AppIcon.icon`:
-
-- [ ] photos.gattey.com (`server/app/`) matches the new design and icons
-- [ ] dylangattey.com (dg project, Contentful) has been asked to update
+- [ ] If the icon or UI design changed, I updated the landing page and the app's dylangattey.com Contentful entry
 
 # Release info
 

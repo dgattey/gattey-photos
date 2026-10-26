@@ -1,0 +1,36 @@
+name: site
+
+on:
+  pull_request:
+    paths:
+      - 'server/**'
+      - 'DylApp.toml'
+
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  site:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6.1.0
+        with:
+          package_json_file: server/package.json
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version-file: server/.node-version
+          cache: pnpm
+          cache-dependency-path: server/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build

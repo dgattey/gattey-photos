@@ -1,0 +1,12 @@
+# pnpm reads .npmrc for auth and registries only, so these live here.
+engineStrict: true
+saveExact: true
+
+overrides:
+  postcss: ^8.5.10
+  undici: ^6.24.0
+
+# Both install scripts only fetch or compile a binary when the platform's prebuilt optional package is missing.
+allowBuilds:
+  esbuild: false
+  sharp: false

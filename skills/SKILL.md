@@ -13,9 +13,9 @@ description: Work on the Gattey Photos monorepo — macOS SwiftUI app, sync serv
 | `server/lib/gallery.ts` | Manifest mutations (order, soft delete, current) |
 | `server/lib/gallery-mutation.ts` | `applyGalleryMutation`, `respondGalleryMutation`, `baseUpdatedAt` |
 | `server/lib/storage/` | `GATTEY_LOCAL_STORAGE=1` → `.data/`; else Vercel Blob |
-| `macos/Sources/GatteyPhotosUI/GalleryStore.swift` | Gallery UI, pull/mutations, 409 retry, backoff |
-| `macos/Sources/GatteyPhotosApp/` | SwiftUI UI only (macOS) |
-| `macos/Sources/GatteyPhotosIOS/` | iOS Simulator scaffold (placeholder UI) |
+| `Sources/GatteyPhotosUI/GalleryStore.swift` | Gallery UI, pull/mutations, 409 retry, backoff |
+| `Sources/GatteyPhotosApp/` | `@main` app for macOS and iOS (macOS `AppDelegate`, menus) |
+| `DylApp.toml` | Bundle, signing, release and download-site settings read by DylKit |
 
 ## Invariants
 
@@ -26,11 +26,11 @@ description: Work on the Gattey Photos monorepo — macOS SwiftUI app, sync serv
 
 ## Local verify
 
-See **`skills/dev-loop/SKILL.md`** for rebuild, server restart, and `npm run typecheck`. Full stack: `./scripts/dev.sh` (or `npm run dev`).
+See **`skills/dev-loop/SKILL.md`** for rebuild, server restart, and `pnpm typecheck`. Full stack: `./scripts/dev.sh`.
 
 ## Common tasks
 
-- **New API field:** Update `server/lib/types.ts`, `macos/.../Models.swift`, and `buildGalleryResponse` if exposed to clients.
+- **New API field:** Update `server/lib/types.ts`, `Sources/GatteyPhotosCore/Models.swift`, and `buildGalleryResponse` if exposed to clients.
 - **UI toolbar:** `GalleryGridView.swift` — `GalleryMainToolbar` on the gallery window.
 - **Deploy:** Vercel project rooted at `server/`; remove `GATTEY_LOCAL_STORAGE`.
 
@@ -45,5 +45,5 @@ Hard-won from past sessions; they bind future agents in this repo.
 - **Delegate intent, not finished code.** A subagent prompt carries the goal, constraints, and success criteria. Pasting the solution turns the subagent into a transcriber, so a wrong interpretation ships unreviewed.
 - **The smallest change must also be reversible.** Prefer the small diff, but binaries, generated artifacts, and secrets committed to git are append-only debt, removable only by a history rewrite. When the small option compounds, the larger-now option is the lazy one.
 - **Security pass before shipping a delivery surface.** Code that signs, authenticates, or auto-updates the app reaches every user's machine. Threat-model it and settle key custody before shipping, do not wait to be asked.
-- **Ship the web pages with the design.** A change to the app UI, brand colors, or `macos/AppIcon.icon` also updates photos.gattey.com (`server/app/`) and asks the `dg` project to update dylangattey.com (Contentful). Steps and the enforcing test are under **Design sync** in `AGENTS.md`.
-- **Release artifacts live in GitHub Releases, never in git.** Do not commit an appcast, a release zip, or `macos/VERSION`. `release-macos.yml` computes the version and build number at release time on `main` from the merged PR's `# Release info` checkbox (`Major` / `Minor` / `Patch`) via `scripts/next-release-version.sh` and publishes the zip and `appcast.xml` as a GitHub Release. It never pushes to `main`, which a pull request ruleset protects.
+- **Ship the web pages with the design.** A change to the app UI, brand colors, or `AppIcon.icon` also updates photos.gattey.com (`[site]` in `DylApp.toml`) and asks the `dg` project to update dylangattey.com (Contentful). Steps are under **Design sync** in `AGENTS.md`.
+- **Never commit release artifacts or version numbers.** A PR only picks the bump under `# Release info` (`Major` / `Minor` / `Patch`). On merge, `dylkit.yml` runs DylKit's `release-kit`, which computes the version and build number and uploads the zip, appcast and site icons to the Blob store (see DylKit's `apple-release`).
